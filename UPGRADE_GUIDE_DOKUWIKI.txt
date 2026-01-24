@@ -1,0 +1,610 @@
+====== Calendar Plugin - Installation & Upgrade Guide ======
+
+===== Fresh Installation (New Plugin) =====
+
+==== Step 1: Upload Plugin Files ====
+
+  - **Extract** the ''calendar-compact.zip'' file
+  - **Upload** the entire ''calendar'' folder to: ''dokuwiki/lib/plugins/calendar/''
+
+==== Step 2: Set Permissions ====
+
+<code bash>
+# Make sure web server can write to data directory
+chmod 755 dokuwiki/lib/plugins/calendar
+chmod -R 755 dokuwiki/data/meta
+
+# Create calendar data directory
+mkdir -p dokuwiki/data/meta/calendar
+chmod 775 dokuwiki/data/meta/calendar
+chown -R www-data:www-data dokuwiki/data/meta/calendar
+</code>
+
+==== Step 3: Clear Cache ====
+
+  - Go to DokuWiki Admin panel
+  - Click **"Clear Cache"**
+  - Or manually delete: ''dokuwiki/data/cache/''
+
+==== Step 4: Use the Plugin ====
+
+Add to any wiki page:
+
+<code>
+{{calendar}}
+</code>
+
+----
+
+===== Upgrading from Previous Version =====
+
+<WRAP center round important 60%>
+**⚠️ IMPORTANT: Backup First!**
+
+Before upgrading, backup your event data to prevent any data loss.
+</WRAP>
+
+==== Backup Your Event Data ====
+
+<code bash>
+# Backup all calendar data
+cp -r dokuwiki/data/meta/calendar /backup/calendar-data-$(date +%Y%m%d)
+
+# Or create archive
+tar -czf calendar-backup-$(date +%Y%m%d).tar.gz dokuwiki/data/meta/calendar/
+</code>
+
+==== Method 1: Overwrite (Recommended) ====
+
+=== Step 1: Extract new version ===
+
+<code bash>
+unzip calendar-compact.zip
+</code>
+
+=== Step 2: Remove old plugin files (KEEP DATA!) ===
+
+<code bash>
+# Delete old plugin files only (NOT data!)
+rm -rf dokuwiki/lib/plugins/calendar/*.php
+rm -rf dokuwiki/lib/plugins/calendar/*.css
+rm -rf dokuwiki/lib/plugins/calendar/*.js
+rm -rf dokuwiki/lib/plugins/calendar/*.txt
+rm -rf dokuwiki/lib/plugins/calendar/*.md
+rm -rf dokuwiki/lib/plugins/calendar/*.html
+</code>
+
+=== Step 3: Upload new files ===
+
+<code bash>
+# Upload entire new calendar folder
+cp -r calendar/* dokuwiki/lib/plugins/calendar/
+</code>
+
+=== Step 4: Set permissions ===
+
+<code bash>
+chmod 755 dokuwiki/lib/plugins/calendar
+chmod -R 644 dokuwiki/lib/plugins/calendar/*
+chmod 755 dokuwiki/lib/plugins/calendar
+</code>
+
+=== Step 5: Clear all caches ===
+
+<code bash>
+# Clear DokuWiki cache
+rm -rf dokuwiki/data/cache/*
+
+# Clear browser cache
+# Press Ctrl+Shift+Delete in browser
+# Or hard refresh: Ctrl+F5
+</code>
+
+=== Step 6: Verify data is intact ===
+
+<code bash>
+# Check your events are still there
+ls -la dokuwiki/data/meta/calendar/
+cat dokuwiki/data/meta/calendar/2026-01.json
+</code>
+
+==== Method 2: Side-by-Side (Safer) ====
+
+=== Step 1: Rename old plugin ===
+
+<code bash>
+mv dokuwiki/lib/plugins/calendar dokuwiki/lib/plugins/calendar-old
+</code>
+
+=== Step 2: Install new version ===
+
+<code bash>
+unzip calendar-compact.zip
+cp -r calendar dokuwiki/lib/plugins/
+</code>
+
+=== Step 3: Copy data from old location (if needed) ===
+
+<code bash>
+# If you had data in the old plugin
+cp -r dokuwiki/lib/plugins/calendar-old/data/* dokuwiki/data/meta/calendar/
+</code>
+
+=== Step 4: Clear cache ===
+
+<code bash>
+rm -rf dokuwiki/data/cache/*
+</code>
+
+=== Step 5: Test and remove old version ===
+
+<code bash>
+# After confirming everything works:
+rm -rf dokuwiki/lib/plugins/calendar-old
+</code>
+
+----
+
+===== Data Migration =====
+
+Your event data is stored separately from the plugin in:
+
+<code>
+dokuwiki/data/meta/calendar/
+</code>
+
+<WRAP center round tip 60%>
+**✅ The data WILL NOT be deleted** when you upgrade the plugin files.
+</WRAP>
+
+==== Data Location Check ====
+
+<code bash>
+# Find all your event files
+find dokuwiki/data/meta -name "*.json" -path "*/calendar/*"
+
+# Example output:
+# dokuwiki/data/meta/calendar/2026-01.json
+# dokuwiki/data/meta/calendar/2026-02.json
+# dokuwiki/data/meta/team/calendar/2026-01.json
+</code>
+
+==== If Data is Missing After Upgrade ====
+
+=== 1. Check backup ===
+
+<code bash>
+ls -la /backup/calendar-data-*/
+</code>
+
+=== 2. Restore from backup ===
+
+<code bash>
+cp -r /backup/calendar-data-20260124/* dokuwiki/data/meta/calendar/
+</code>
+
+=== 3. Fix permissions ===
+
+<code bash>
+chmod -R 775 dokuwiki/data/meta/calendar
+chown -R www-data:www-data dokuwiki/data/meta/calendar
+</code>
+
+----
+
+===== Verification Checklist =====
+
+After installation/upgrade, verify:
+
+  * [ ] Plugin files exist in ''lib/plugins/calendar/''
+  * [ ] Can see ''%%{{calendar}}%%'' on wiki page
+  * [ ] Calendar displays correctly
+  * [ ] Can click "+ Add" button
+  * [ ] Can add new events
+  * [ ] Can edit existing events
+  * [ ] Can delete events
+  * [ ] Old events still visible
+  * [ ] Checkboxes work for tasks
+  * [ ] Edit/delete buttons in top right
+  * [ ] Time bars show in calendar cells
+  * [ ] No JavaScript errors (F12 console)
+
+----
+
+===== Troubleshooting Upgrade Issues =====
+
+==== Problem: Calendar not showing ====
+
+**Solution:**
+
+<code bash>
+# Clear all caches
+rm -rf dokuwiki/data/cache/*
+
+# Hard refresh browser
+# Ctrl+Shift+F5 (Windows/Linux)
+# Cmd+Shift+R (Mac)
+</code>
+
+==== Problem: Events disappeared ====
+
+**Solution:**
+
+<code bash>
+# Check if data files exist
+ls -la dokuwiki/data/meta/calendar/
+
+# If empty, restore from backup
+cp -r /backup/calendar-data-20260124/* dokuwiki/data/meta/calendar/
+
+# Fix permissions
+chmod -R 775 dokuwiki/data/meta/calendar
+chown -R www-data:www-data dokuwiki/data/meta/calendar
+</code>
+
+==== Problem: Can't add/edit events ====
+
+**Solution:**
+
+<code bash>
+# Check write permissions
+ls -la dokuwiki/data/meta/calendar/
+
+# Should show: drwxrwxr-x (775)
+# If not, fix it:
+chmod -R 775 dokuwiki/data/meta/calendar
+chown -R www-data:www-data dokuwiki/data/meta/calendar
+</code>
+
+==== Problem: Old styling/features ====
+
+**Solution:**
+
+<code bash>
+# Browser cache - clear it!
+# In browser: Ctrl+Shift+Delete
+
+# Also clear server cache
+rm -rf dokuwiki/data/cache/*
+
+# Force reload CSS/JS
+# Add ?v=2 to end of calendar page URL
+# Example: http://wiki.com/calendar?v=2
+</code>
+
+==== Problem: JavaScript errors ====
+
+**Solution:**
+
+  - Open browser console (F12)
+  - Look for errors
+  - Common fix:
+
+<code bash>
+# Make sure script.js is uploaded
+ls -la dokuwiki/lib/plugins/calendar/script.js
+
+# Should be ~25KB
+# If missing or wrong size, re-upload
+</code>
+
+----
+
+===== File List (Verify All Present) =====
+
+After installation, you should have:
+
+<code>
+dokuwiki/lib/plugins/calendar/
+├── action.php              (AJAX handler)
+├── syntax.php              (Main rendering)
+├── script.js               (JavaScript functions)
+├── style.css               (All styling)
+├── plugin.info.txt         (Plugin metadata)
+├── README.md               (Documentation)
+├── EXAMPLES_DOKUWIKI.txt   (Usage examples)
+├── NEW_FEATURES.md         (Feature list)
+├── TESTING_DATE_EDIT.md    (Testing guide)
+├── UPGRADE_GUIDE.md        (This guide)
+├── debug_html.php          (Debug tool)
+└── test_date_field.html    (Browser test)
+</code>
+
+**Verify files:**
+
+<code bash>
+cd dokuwiki/lib/plugins/calendar
+ls -lh *.php *.js *.css *.txt *.md *.html
+</code>
+
+----
+
+===== What's New in Latest Version =====
+
+==== New Features ====
+
+  * ✅ **Super compact interface** - smaller fonts, tighter spacing
+  * ✅ **Task checkboxes on RIGHT** - positioned in top right corner
+  * ✅ **Edit/Delete buttons** - top right of each event
+  * ✅ **Colored time bars** - instead of dots on calendar
+  * ✅ **12-hour time format** - displays as "2:00 PM"
+  * ✅ **Multi-day events** - span across multiple days
+  * ✅ **Task management** - check off completed tasks
+  * ✅ **Namespace badges** - shows which namespace you're viewing
+  * ✅ **Draggable dialogs** - move popup windows
+  * ✅ **Mobile responsive** - works on phones/tablets
+
+==== Breaking Changes ====
+
+<WRAP center round info 60%>
+**None!** Your existing events will work with the new version.
+</WRAP>
+
+==== Data Format ====
+
+Still uses the same JSON format, but with optional new fields:
+
+  * ''isTask'' (boolean)
+  * ''completed'' (boolean)
+  * ''endDate'' (string)
+
+Old events without these fields will work fine.
+
+----
+
+===== Backup Strategy =====
+
+==== Before Every Upgrade ====
+
+<code bash>
+#!/bin/bash
+# Quick backup script
+
+DATE=$(date +%Y%m%d-%H%M%S)
+BACKUP_DIR="/backup/dokuwiki-calendar"
+
+# Create backup directory
+mkdir -p $BACKUP_DIR
+
+# Backup event data
+cp -r dokuwiki/data/meta/calendar $BACKUP_DIR/data-$DATE
+
+# Backup plugin files
+cp -r dokuwiki/lib/plugins/calendar $BACKUP_DIR/plugin-$DATE
+
+echo "Backup saved to: $BACKUP_DIR"
+ls -lh $BACKUP_DIR
+</code>
+
+==== Automated Backups ====
+
+<code bash>
+# Add to crontab for daily backups
+0 2 * * * /path/to/backup-script.sh
+</code>
+
+----
+
+===== Rollback (If Needed) =====
+
+If the new version has issues:
+
+<code bash>
+# 1. Remove new version
+rm -rf dokuwiki/lib/plugins/calendar
+
+# 2. Restore from backup
+cp -r /backup/dokuwiki-calendar/plugin-20260124 dokuwiki/lib/plugins/calendar
+
+# 3. Clear cache
+rm -rf dokuwiki/data/cache/*
+
+# 4. Reload page
+# Hard refresh: Ctrl+F5
+</code>
+
+----
+
+===== Support & Debug =====
+
+==== Debug Mode ====
+
+  - Open ''debug_html.php'' in your browser:\\ ''%%http://yoursite.com/lib/plugins/calendar/debug_html.php%%''
+  - Check browser console (F12) for errors
+  - Verify file permissions:
+
+<code bash>
+ls -la dokuwiki/lib/plugins/calendar/
+ls -la dokuwiki/data/meta/calendar/
+</code>
+
+==== Common Issues ====
+
+^ Problem ^ Solution ^
+| Events not saving | Check write permissions on ''data/meta/calendar/'' |
+| Calendar not showing | Clear browser cache (Ctrl+Shift+Delete) |
+| Old appearance | Clear server cache (''rm data/cache/*'') |
+| JavaScript errors | Check ''script.js'' uploaded correctly |
+| Buttons misaligned | Clear browser cache completely |
+
+----
+
+===== Quick Upgrade Command =====
+
+<WRAP center round important 60%>
+**For experienced users with SSH access:**
+</WRAP>
+
+<code bash>
+# One-line upgrade (be careful!)
+cd dokuwiki/lib/plugins && \
+  tar -czf calendar-backup-$(date +%Y%m%d).tar.gz calendar && \
+  rm -rf calendar/*.php calendar/*.js calendar/*.css && \
+  unzip /path/to/calendar-compact.zip && \
+  cp -r calendar/* calendar/ && \
+  rm -rf dokuwiki/data/cache/* && \
+  echo "Upgrade complete! Clear browser cache now."
+</code>
+
+<WRAP center round alert 60%>
+**Always backup first!**
+</WRAP>
+
+----
+
+===== Post-Upgrade Testing =====
+
+==== 1. View existing event ====
+
+  - Open calendar page
+  - Check if old events display
+
+==== 2. Add new event ====
+
+  - Click "+ Add"
+  - Fill form
+  - Save
+
+==== 3. Edit event ====
+
+  - Click ✏️ on an event
+  - Modify details
+  - Save
+
+==== 4. Delete event ====
+
+  - Click 🗑️ on an event
+  - Confirm deletion
+
+==== 5. Task checkbox ====
+
+  - Create task (check "📋 This is a task")
+  - Click checkbox to complete
+  - Verify strikethrough
+
+==== 6. Multi-day event ====
+
+  - Create event with end date
+  - Verify shows date range
+
+<WRAP center round tip 60%>
+All working? ✅ **Upgrade successful!**
+</WRAP>
+
+----
+
+===== Visual Guide =====
+
+==== Event Item Layout ====
+
+**After upgrade, your events should look like this:**
+
+<code>
+┌─────────────────────────────────────────┐
+│ 📝 Team Meeting           ☑ ✏️ 🗑️      │ ← Buttons in top right!
+│ Jan 22 • 2:00 PM                        │
+│ Weekly standup meeting...               │
+└─────────────────────────────────────────┘
+</code>
+
+==== Calendar Cell with Time Bars ====
+
+<code>
+┌─────┐
+│ 22  │ ← Day number
+│ │   │ ← Blue bar at 10am
+│ ││  │ ← Red bar at 2pm
+│││   │ ← Green bar (no time = bottom)
+└─────┘
+</code>
+
+==== Full Calendar View ====
+
+<code>
+┌────────────────┬─────────────────────────┐
+│   January 2026 │ Events [team] [+ Add]   │
+├────────────────┼─────────────────────────┤
+│  Su Mo Tu We   │ 📝 Meeting    ☑ ✏️ 🗑️   │
+│      1  2  3   │ Jan 22 • 2:00 PM        │
+│  4  5  6  7    │                         │
+│  8  9 10 11    │ 🎯 Review       ✏️ 🗑️   │
+│ 12 13 14 15    │ Jan 25 • 4:00 PM        │
+│ 16 17 18 19    │                         │
+│ 20 21 22│23    │ ✅ Report    ☑  ✏️ 🗑️   │
+│ 24 25│26 27    │ Jan 28 (completed)      │
+└────────────────┴─────────────────────────┘
+</code>
+
+----
+
+===== Installation Video Guide =====
+
+==== Step-by-Step Visual ====
+
+  - **Download** ''calendar-compact.zip''
+  - **Extract** to local folder
+  - **Connect** to server via FTP/SFTP
+  - **Navigate** to ''dokuwiki/lib/plugins/''
+  - **Upload** entire ''calendar'' folder
+  - **Set permissions** (755 for folders, 644 for files)
+  - **Go to Admin** → Clear Cache
+  - **Test** by adding ''%%{{calendar}}%%'' to a page
+  - **Add event** to verify it works
+
+==== Common FTP Clients ====
+
+  * FileZilla (Windows/Mac/Linux)
+  * WinSCP (Windows)
+  * Cyberduck (Mac)
+  * Command line: ''scp -r calendar user@server:/path/to/dokuwiki/lib/plugins/''
+
+----
+
+===== Need Help? =====
+
+==== Before Asking for Help ====
+
+  - [ ] Read this entire guide
+  - [ ] Checked troubleshooting section
+  - [ ] Cleared browser cache (Ctrl+Shift+Delete)
+  - [ ] Cleared server cache (''rm -rf data/cache/*'')
+  - [ ] Checked browser console for errors (F12)
+  - [ ] Verified file permissions
+  - [ ] Confirmed backup exists
+
+==== Information to Provide ====
+
+When asking for help, include:
+
+  * DokuWiki version
+  * PHP version
+  * Browser and version
+  * Error messages (from browser console)
+  * What you were trying to do
+  * What actually happened
+  * Steps you've already tried
+
+==== Useful Debug Commands ====
+
+<code bash>
+# Check PHP version
+php -v
+
+# Check file permissions
+ls -la dokuwiki/lib/plugins/calendar/
+ls -la dokuwiki/data/meta/calendar/
+
+# Check for errors in PHP logs
+tail -f /var/log/apache2/error.log
+# or
+tail -f /var/log/php-fpm/error.log
+
+# Test if files are accessible
+curl http://yoursite.com/lib/plugins/calendar/script.js
+</code>
+
+----
+
+**Last Updated:** January 24, 2026\\
+**Plugin Version:** 3.0 (Compact Edition)\\
+**Compatible With:** DokuWiki 2020-07-29 "Hogfather" or newer

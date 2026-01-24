@@ -1,0 +1,711 @@
+====== Calendar Plugin Examples - DokuWiki Syntax ======
+
+Copy and paste these examples directly into your DokuWiki pages.
+
+===== Basic Usage =====
+
+==== Simple Current Month Calendar ====
+
+<code>
+====== Office Calendar ======
+
+{{calendar}}
+</code>
+
+This displays a compact 800x600 calendar for the current month with an integrated event list on the right.
+
+==== Specific Month and Year ====
+
+<code>
+====== June 2026 Planning ======
+
+{{calendar year=2026 month=6}}
+</code>
+
+==== Multiple Months on One Page ====
+
+<code>
+====== Q1 2026 Calendar ======
+
+===== January =====
+{{calendar year=2026 month=1}}
+
+===== February =====
+{{calendar year=2026 month=2}}
+
+===== March =====
+{{calendar year=2026 month=3}}
+</code>
+
+==== Event Panel Only (Right Panel) ====
+
+<code>
+====== Team Events Panel ======
+
+{{eventpanel namespace=team}}
+</code>
+
+Display just the 320px wide event management panel without the calendar grid. Perfect for sidebars!
+
+==== Event Panel with Navigation ====
+
+<code>
+====== Marketing Events ======
+
+{{eventpanel year=2026 month=6 namespace=marketing}}
+
+**Features**:
+  * Navigate months with ◄ ► buttons
+  * Add, edit, delete events
+  * Compact 320px width
+  * Full event details
+</code>
+
+==== Sidebar Layout with Event Panel ====
+
+<code>
+====== Project Dashboard ======
+
+<columns>
+<column 65%>
+===== Project Alpha Status =====
+
+**Status**: Development Phase\\
+**Team**: 8 members\\
+**Progress**: 67%\\
+**Deadline**: March 31, 2026
+
+**Recent Updates**:
+  * Design phase complete ✓
+  * Development in progress ⏳
+  * Testing scheduled for Feb 15
+
+**Quick Links**:
+  * [[projects:alpha:docs|Documentation]]
+  * [[projects:alpha:team|Team Info]]
+  * [[projects:alpha:tasks|Task Board]]
+</column>
+
+<column 35%>
+{{eventpanel namespace=projects:alpha}}
+</column>
+</columns>
+</code>
+
+----
+
+===== Team Calendars =====
+
+==== Development Team ====
+
+<code>
+====== Development Team Calendar ======
+
+**Team Members**: Alice, Bob, Charlie, Diana
+
+{{calendar namespace=team:dev}}
+
+**Color Code**:
+  * 🔵 Blue - Meetings
+  * 🟢 Green - Deadlines
+  * 🟡 Yellow - Code Reviews
+  * 🔴 Red - Releases
+
+**How to Use**:
+  - Click any day to see that day's events
+  - Click **+ Add** to create new events
+  - Events appear in the panel on the right
+  - Orange dot means day has events
+</code>
+
+==== Marketing Team ====
+
+<code>
+====== Marketing Campaign Calendar ======
+
+**Campaign**: Q1 Social Media Blitz
+
+{{calendar namespace=marketing year=2026 month=2}}
+
+**Key Activities**:
+  * Feb 1-7: Valentine's Day Campaign
+  * Feb 14: Launch Day
+  * Feb 15-21: Engagement Week
+  * Feb 28: Campaign Review
+
+**Event Types**:
+  * 📧 Email campaigns (Blue)
+  * 📱 Social posts (Green)
+  * 🎯 Ad launches (Red)
+  * 📊 Analytics reviews (Yellow)
+</code>
+
+==== Sales Team ====
+
+<code>
+====== Sales Team Schedule ======
+
+{{calendar namespace=sales}}
+
+**This Month's Goals**:
+  * 15 client meetings
+  * 5 product demos
+  * 3 contract closings
+
+**Quick Links**:
+  * [[sales:pipeline|Sales Pipeline]]
+  * [[sales:contacts|Contact List]]
+  * [[sales:targets|Monthly Targets]]
+</code>
+
+----
+
+===== Project Management =====
+
+==== Project Timeline ====
+
+<code>
+====== Phoenix Project - January 2026 ======
+
+**Project Status**: On Track ✓\\
+**Team Lead**: Alice Johnson\\
+**Deadline**: March 31, 2026
+
+{{calendar namespace=projects:phoenix year=2026 month=1}}
+
+**January Milestones**:
+  * Jan 5: Project Kickoff Meeting
+  * Jan 10: Requirements Finalized
+  * Jan 15: Design Review
+  * Jan 20: Architecture Approval
+  * Jan 31: Development Phase Start
+
+**Resources**:
+  * [[projects:phoenix:charter|Project Charter]]
+  * [[projects:phoenix:team|Team Directory]]
+  * [[projects:phoenix:docs|Documentation]]
+</code>
+
+==== Multi-Project Dashboard ====
+
+<code>
+====== Project Dashboard - January 2026 ======
+
+==== Project Alpha ====
+**Status**: Development Phase\\
+{{calendar namespace=projects:alpha year=2026 month=1}}
+
+==== Project Beta ====
+**Status**: Planning Phase\\
+{{calendar namespace=projects:beta year=2026 month=1}}
+
+==== Project Gamma ====
+**Status**: Testing Phase\\
+{{calendar namespace=projects:gamma year=2026 month=1}}
+
+**Cross-Project Notes**:
+  * Alpha blocks Beta start
+  * Gamma and Alpha share resources
+  * All projects due end of Q1
+</code>
+
+==== Sprint Planning ====
+
+<code>
+====== Sprint 24 Calendar ======
+
+**Sprint Duration**: Jan 20 - Feb 2, 2026\\
+**Team**: Scrum Team Alpha\\
+**Sprint Goal**: Complete user authentication module
+
+{{calendar namespace=sprints:sprint24 year=2026 month=1}}
+
+**Sprint Events**:
+  * 🟦 Sprint Planning (Jan 20, 9 AM)
+  * 🟢 Daily Standup (Weekdays, 9:30 AM)
+  * 🟡 Backlog Refinement (Jan 27, 2 PM)
+  * 🟠 Sprint Review (Feb 2, 3 PM)
+  * 🔴 Sprint Retrospective (Feb 2, 4 PM)
+
+**Sprint Backlog**: [[sprints:sprint24:backlog|View Items]]
+</code>
+
+----
+
+===== Personal Calendars =====
+
+==== Individual Schedule ====
+
+<code>
+====== My Work Calendar ======
+
+**Name**: John Doe\\
+**Team**: Engineering\\
+**Manager**: Jane Smith
+
+{{calendar namespace=personal:johndoe}}
+
+**Regular Schedule**:
+  * **Monday**: 9:30 AM - Team Standup
+  * **Tuesday**: 2:00 PM - Project Sync
+  * **Wednesday**: All day - Focus time (no meetings)
+  * **Thursday**: 3:00 PM - 1-on-1 with Manager
+  * **Friday**: 1:00 PM - Code Review Session
+
+**Color Coding**:
+  * Blue: Regular meetings
+  * Green: Focus/work blocks
+  * Yellow: Important deadlines
+  * Red: Out of office
+</code>
+
+==== Time Off Tracking ====
+
+<code>
+====== Team Absence Calendar ======
+
+Track vacation days and time off for the team.
+
+{{calendar namespace=team:timeoff}}
+
+**How to Use**:
+  - Add your time off in advance
+  - Use your full name as the event title
+  - Mark as RED for easy visibility
+  - Include coverage notes in description
+
+**Current Absences**:
+  * Alice: Jan 10-14 (Vacation - Bob covering)
+  * Charlie: Jan 20 (Personal day)
+  * Diana: Feb 1-5 (Conference in Austin)
+
+**Time Off Policy**: [[hr:timeoff-policy|View Policy]]
+</code>
+
+----
+
+===== Event Planning =====
+
+==== Conference Planning ====
+
+<code>
+====== TechCon 2026 Planning ======
+
+**Event Date**: March 15-17, 2026\\
+**Venue**: Convention Center Downtown\\
+**Expected Attendees**: 500+\\
+**Budget**: $150,000
+
+{{calendar namespace=events:techcon year=2026 month=3}}
+
+**Pre-Event Tasks** (January-February):
+  * Finalize speaker lineup
+  * Send sponsor packages
+  * Book catering services
+  * Order conference materials
+  * Setup registration system
+
+**Event Schedule**:
+  * **Day 1** (Mar 15): Keynote and Workshops
+  * **Day 2** (Mar 16): Technical Sessions
+  * **Day 3** (Mar 17): Closing and Networking
+
+**Resources**:
+  * [[events:techcon:speakers|Speaker List]]
+  * [[events:techcon:sponsors|Sponsor Info]]
+  * [[events:techcon:logistics|Logistics]]
+</code>
+
+==== Company Events ====
+
+<code>
+====== Company Events Calendar ======
+
+**2026 Event Schedule**
+
+{{calendar namespace=company:events}}
+
+**Event Categories**:
+  * 🎉 Red: Major company events
+  * 🎓 Blue: Training sessions
+  * 🍕 Green: Social gatherings
+  * 📢 Yellow: Company announcements
+  * 🏆 Orange: Awards and recognition
+
+**Upcoming Highlights**:
+  * Jan 15: All-Hands Meeting
+  * Feb 1: Leadership Training
+  * Feb 14: Team Building Event
+  * Mar 1: Q1 Town Hall
+
+**Event Guidelines**: [[hr:events-policy|View Policy]]
+</code>
+
+----
+
+===== Resource Management =====
+
+==== Conference Room Booking ====
+
+<code>
+====== Conference Room Schedule ======
+
+**Room**: Main Conference Room (4th Floor)\\
+**Capacity**: 20 people\\
+**Equipment**: Projector, Whiteboard, Video Conferencing
+
+{{calendar namespace=resources:room-main}}
+
+**Booking Instructions**:
+  - Click a day to see bookings
+  - Click **+ Add** to book the room
+  - Include: Meeting name, time, attendee count
+  - Add dial-in details in description
+  - Use color coding by department:
+    * Red: Engineering
+    * Blue: Sales
+    * Green: Marketing
+    * Yellow: HR
+
+**Availability**: Mon-Fri, 8 AM - 6 PM\\
+**Contact**: facilities@company.com
+</code>
+
+==== Equipment Checkout ====
+
+<code>
+====== Video Equipment Calendar ======
+
+**Equipment**: Professional Camera Kit\\
+**Includes**: Camera, Tripod, Lighting, Microphone\\
+**Location**: Media Room
+
+{{calendar namespace=resources:camera-kit}}
+
+**Checkout Process**:
+  - Reserve your dates on calendar
+  - Pickup from Media Room (2nd floor)
+  - Return by end of business day
+  - Report any issues to IT
+
+**Booking Policy**: Max 3 days per reservation
+</code>
+
+----
+
+===== Training and Development =====
+
+==== Training Schedule ====
+
+<code>
+====== Employee Training Calendar ======
+
+**Q1 2026 Training Programs**
+
+{{calendar namespace=hr:training year=2026 month=1}}
+
+**Available Courses**:
+  * **Technical Skills**
+    * Git & Version Control (Jan 10)
+    * Docker Basics (Jan 17)
+    * API Development (Jan 24)
+  * **Soft Skills**
+    * Effective Communication (Jan 12)
+    * Time Management (Jan 19)
+    * Leadership Fundamentals (Jan 26)
+  * **Compliance**
+    * Security Awareness (Jan 15)
+    * Data Privacy (Jan 22)
+
+**Registration**: Contact HR or click **+ Add** on your preferred date
+
+**Training Policies**: [[hr:training-policy|View Guidelines]]
+</code>
+
+----
+
+===== Standalone Event Lists =====
+
+==== Today's Schedule ====
+
+<code>
+====== Today's Schedule - January 22, 2026 ======
+
+{{eventlist date=2026-01-22 namespace=personal:johndoe}}
+
+**Notes**:
+  * Check meeting links 5 minutes before
+  * Lunch break: 12:00-1:00 PM
+  * End of day wrap-up: 4:30 PM
+</code>
+
+==== Weekly Schedule ====
+
+<code>
+====== This Week's Events ======
+
+**Week of January 20-26, 2026**
+
+{{eventlist daterange=2026-01-20:2026-01-26 namespace=team:engineering}}
+
+**This Week's Priorities**:
+  - Complete Sprint 23
+  - Prepare for Sprint 24 planning
+  - Code review backlog
+  - Update documentation
+
+**Next Week Preview**: [[calendar:week-04|Week 04 Schedule]]
+</code>
+
+==== Monthly Event Report ====
+
+<code>
+====== January 2026 Events Summary ======
+
+**Team**: Engineering\\
+**Month**: January 2026\\
+**Total Events**: 24
+
+{{eventlist daterange=2026-01-01:2026-01-31 namespace=team:engineering}}
+
+**Event Breakdown**:
+  * Team Meetings: 8
+  * Sprint Events: 6
+  * Training Sessions: 3
+  * Client Meetings: 4
+  * Social Events: 3
+
+**February Preview**: [[calendar:2026-02|View Next Month]]
+</code>
+
+==== Project Milestones Report ====
+
+<code>
+====== Q1 2026 Milestones ======
+
+**Project**: Phoenix Redesign\\
+**Quarter**: Q1 2026\\
+**Status**: On Track
+
+{{eventlist daterange=2026-01-01:2026-03-31 namespace=projects:phoenix}}
+
+**Key Deliverables**:
+  * ✅ Jan 15: Requirements Complete
+  * ✅ Jan 30: Design Approved
+  * ⏳ Feb 15: Alpha Release
+  * ⏳ Mar 1: Beta Testing
+  * ⏳ Mar 31: Production Launch
+
+**Project Dashboard**: [[projects:phoenix:dashboard|View Details]]
+</code>
+
+----
+
+===== Combined Layouts =====
+
+==== Project Status Page ====
+
+<code>
+====== Phoenix Project Status ======
+
+**Overview**: AI-powered redesign of main platform\\
+**Team Size**: 8 developers\\
+**Budget**: $500K\\
+**Timeline**: Jan-Mar 2026
+
+===== Project Calendar =====
+{{calendar namespace=projects:phoenix year=2026 month=1}}
+
+===== Upcoming Milestones =====
+{{eventlist daterange=2026-01-22:2026-02-28 namespace=projects:phoenix}}
+
+===== Quick Stats =====
+  * Tasks Completed: 23/45
+  * Sprint Progress: 67%
+  * Budget Used: 45%
+  * Days Remaining: 68
+
+**Resources**:
+  * [[projects:phoenix:team|Team Directory]]
+  * [[projects:phoenix:docs|Documentation]]
+  * [[projects:phoenix:status|Weekly Status Reports]]
+</code>
+
+==== Team Dashboard ====
+
+<code>
+====== Engineering Team Dashboard ======
+
+**Team**: Core Engineering\\
+**Members**: 12\\
+**Current Sprint**: Sprint 24
+
+<columns>
+<column 60%>
+===== Team Calendar =====
+{{calendar namespace=team:engineering}}
+</column>
+
+<column 40%>
+===== Quick Links =====
+  * [[team:standup|Standup Notes]]
+  * [[team:oncall|On-Call Schedule]]
+  * [[team:metrics|Team Metrics]]
+
+===== This Week =====
+{{eventlist daterange=2026-01-22:2026-01-28 namespace=team:engineering}}
+</column>
+</columns>
+</code>
+
+==== Personal Workspace ====
+
+<code>
+====== My Workspace ======
+
+**Welcome, John Doe**\\
+**Today**: {{CURRENTDATE}}
+
+===== My Calendar =====
+{{calendar namespace=personal:johndoe}}
+
+===== Today's Agenda =====
+{{eventlist date=2026-01-22 namespace=personal:johndoe}}
+
+===== This Week =====
+{{eventlist daterange=2026-01-22:2026-01-28 namespace=personal:johndoe}}
+
+===== Quick Actions =====
+  * [[personal:tasks|My Tasks]]
+  * [[personal:notes|My Notes]]
+  * [[team:shared-calendar|Team Calendar]]
+  * [[company:directory|Company Directory]]
+</code>
+
+----
+
+===== Tips for Best Results =====
+
+==== Color Coding Standards ====
+
+<code>
+**Recommended Color Codes**:
+
+**By Priority**:
+  * 🔴 Red (#e74c3c): Critical/Urgent
+  * 🟠 Orange (#f39c12): Important
+  * 🟡 Yellow (#f1c40f): Medium
+  * 🟢 Green (#2ecc71): Low priority
+  * 🔵 Blue (#3498db): Informational
+
+**By Event Type**:
+  * 🔵 Blue (#3498db): Meetings
+  * 🟢 Green (#2ecc71): Deadlines
+  * 🟡 Yellow (#f1c40f): Milestones
+  * 🔴 Red (#e74c3c): Releases
+  * 🟣 Purple (#9b59b6): Training
+
+**By Department**:
+  * 🔴 Red (#e74c3c): Engineering
+  * 🔵 Blue (#3498db): Sales
+  * 🟢 Green (#2ecc71): Marketing
+  * 🟡 Yellow (#f1c40f): HR
+  * 🟠 Orange (#e67e22): Operations
+</code>
+
+==== Namespace Organization ====
+
+<code>
+**Recommended Namespace Structure**:
+
+''team:engineering'' - Engineering team events
+''team:sales'' - Sales team events
+''team:marketing'' - Marketing team events
+
+''projects:alpha'' - Project Alpha timeline
+''projects:beta'' - Project Beta timeline
+
+''personal:johndoe'' - Personal calendars
+''personal:janedoe''
+
+''resources:room-a'' - Room bookings
+''resources:equipment''
+
+''company:events'' - Company-wide events
+''company:holidays''
+</code>
+
+----
+
+===== Example Complete Page =====
+
+Here's a complete example page you can use as a template:
+
+<code>
+====== Team Calendar - Engineering ======
+
+**Team Name**: Core Engineering Team\\
+**Team Lead**: Alice Johnson\\
+**Members**: 12 developers\\
+**Location**: Building A, 3rd Floor
+
+===== This Month's Calendar =====
+
+{{calendar namespace=team:engineering}}
+
+**How to Use This Calendar**:
+  - Click any day to see events for that day
+  - Orange dot means the day has scheduled events
+  - Events appear in the panel on the right
+  - Click **+ Add** to create new events
+  - Click **Edit** or **Delete** to manage events
+
+===== Color Coding =====
+
+  * 🔵 **Blue**: Team meetings and standups
+  * 🟢 **Green**: Deadlines and deliverables
+  * 🟡 **Yellow**: Code reviews and planning
+  * 🔴 **Red**: Releases and critical events
+  * 🟣 **Purple**: Training and learning sessions
+
+===== This Week's Schedule =====
+
+{{eventlist daterange=2026-01-22:2026-01-28 namespace=team:engineering}}
+
+===== Regular Events =====
+
+**Weekly Recurring**:
+  * Monday 9:30 AM - Team Standup
+  * Tuesday 2:00 PM - Architecture Review
+  * Wednesday 10:00 AM - Sprint Planning (bi-weekly)
+  * Thursday 3:00 PM - Tech Talk
+  * Friday 1:00 PM - Sprint Retrospective (bi-weekly)
+
+===== Quick Links =====
+
+  * [[team:engineering:standup|Standup Notes]]
+  * [[team:engineering:oncall|On-Call Schedule]]
+  * [[team:engineering:docs|Team Documentation]]
+  * [[team:engineering:metrics|Team Metrics]]
+  * [[projects:current|Current Projects]]
+
+===== Contact =====
+
+**Team Lead**: alice.johnson@company.com\\
+**Slack Channel**: #engineering\\
+**Meeting Room**: Conference Room B (4th Floor)
+
+----
+
+**Last Updated**: {{CURRENTDATE}}
+</code>
+
+----
+
+**Pro Tips**:
+  * Use consistent namespaces across your wiki
+  * Create color coding standards and document them
+  * Set up template pages for common calendar types
+  * Link calendars to related wiki pages
+  * Use event descriptions for additional details and links
+  * Regular maintenance: remove old events monthly
