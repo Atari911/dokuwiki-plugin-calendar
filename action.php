@@ -57,9 +57,23 @@ class action_plugin_calendar extends DokuWiki_Action_Plugin {
         $isTask = $INPUT->bool('isTask', false);
         $completed = $INPUT->bool('completed', false);
         $endDate = $INPUT->str('endDate', '');
+        $isRecurring = $INPUT->bool('isRecurring', false);
+        $recurrenceType = $INPUT->str('recurrenceType', 'weekly');
+        $recurrenceEnd = $INPUT->str('recurrenceEnd', '');
         
         if (!$date || !$title) {
             echo json_encode(['success' => false, 'error' => 'Missing required fields']);
+            return;
+        }
+        
+        // Generate event ID if new
+        $generatedId = $eventId ?: uniqid();
+        
+        // If recurring, generate multiple events
+        if ($isRecurring) {
+            $this->createRecurringEvents($namespace, $date, $endDate, $title, $time, $description, 
+                                        $color, $isTask, $recurrenceType, $recurrenceEnd, $generatedId);
+            echo json_encode(['success' => true]);
             return;
         }
         
@@ -108,7 +122,7 @@ class action_plugin_calendar extends DokuWiki_Action_Plugin {
         }
         
         $eventData = [
-            'id' => $eventId ?: uniqid(),
+            'id' => $generatedId,
             'title' => $title,
             'time' => $time,
             'description' => $description,
@@ -223,12 +237,63 @@ class action_plugin_calendar extends DokuWiki_Action_Plugin {
         }
         $dataDir .= 'calendar/';
         
-        $eventFile = $dataDir . sprintf('%04d-%02d.json', $year, $month);
+        error_log("Calendar loadMonth: Loading $year-$month");
         
+        // Load current month
+        $eventFile = $dataDir . sprintf('%04d-%02d.json', $year, $month);
         $events = [];
         if (file_exists($eventFile)) {
-            $events = json_decode(file_get_contents($eventFile), true);
+            $contents = file_get_contents($eventFile);
+            $decoded = json_decode($contents, true);
+            if (json_last_error() === JSON_ERROR_NONE) {
+                $events = $decoded;
+                error_log("Calendar loadMonth: Loaded " . count($events) . " dates from $eventFile");
+            } else {
+                error_log('Calendar: JSON decode error in ' . $eventFile . ': ' . json_last_error_msg());
+            }
+        } else {
+            error_log("Calendar loadMonth: File not found: $eventFile");
         }
+        
+        // Load previous month to catch events spanning into current month
+        $prevMonth = $month - 1;
+        $prevYear = $year;
+        if ($prevMonth < 1) {
+            $prevMonth = 12;
+            $prevYear--;
+        }
+        $prevEventFile = $dataDir . sprintf('%04d-%02d.json', $prevYear, $prevMonth);
+        if (file_exists($prevEventFile)) {
+            $contents = file_get_contents($prevEventFile);
+            $decoded = json_decode($contents, true);
+            if (json_last_error() === JSON_ERROR_NONE) {
+                error_log("Calendar loadMonth: Loaded " . count($decoded) . " dates from $prevEventFile");
+                $events = array_merge($events, $decoded);
+            } else {
+                error_log('Calendar: JSON decode error in ' . $prevEventFile . ': ' . json_last_error_msg());
+            }
+        }
+        
+        // Load next month to catch events spanning from current month
+        $nextMonth = $month + 1;
+        $nextYear = $year;
+        if ($nextMonth > 12) {
+            $nextMonth = 1;
+            $nextYear++;
+        }
+        $nextEventFile = $dataDir . sprintf('%04d-%02d.json', $nextYear, $nextMonth);
+        if (file_exists($nextEventFile)) {
+            $contents = file_get_contents($nextEventFile);
+            $decoded = json_decode($contents, true);
+            if (json_last_error() === JSON_ERROR_NONE) {
+                error_log("Calendar loadMonth: Loaded " . count($decoded) . " dates from $nextEventFile");
+                $events = array_merge($events, $decoded);
+            } else {
+                error_log('Calendar: JSON decode error in ' . $nextEventFile . ': ' . json_last_error_msg());
+            }
+        }
+        
+        error_log("Calendar loadMonth: Total dates returned: " . count($events));
         
         echo json_encode(['success' => true, 'events' => $events, 'year' => $year, 'month' => $month]);
     }
@@ -269,6 +334,93 @@ class action_plugin_calendar extends DokuWiki_Action_Plugin {
         }
         
         echo json_encode(['success' => false, 'error' => 'Event not found']);
+    }
+    
+    private function createRecurringEvents($namespace, $startDate, $endDate, $title, $time, 
+                                          $description, $color, $isTask, $recurrenceType, 
+                                          $recurrenceEnd, $baseId) {
+        $dataDir = DOKU_INC . 'data/meta/';
+        if ($namespace) {
+            $dataDir .= str_replace(':', '/', $namespace) . '/';
+        }
+        $dataDir .= 'calendar/';
+        
+        if (!is_dir($dataDir)) {
+            mkdir($dataDir, 0755, true);
+        }
+        
+        // Calculate recurrence interval
+        $interval = '';
+        switch ($recurrenceType) {
+            case 'daily': $interval = '+1 day'; break;
+            case 'weekly': $interval = '+1 week'; break;
+            case 'monthly': $interval = '+1 month'; break;
+            case 'yearly': $interval = '+1 year'; break;
+            default: $interval = '+1 week';
+        }
+        
+        // Set maximum end date if not specified (1 year from start)
+        $maxEnd = $recurrenceEnd ?: date('Y-m-d', strtotime($startDate . ' +1 year'));
+        
+        // Calculate event duration for multi-day events
+        $eventDuration = 0;
+        if ($endDate && $endDate !== $startDate) {
+            $start = new DateTime($startDate);
+            $end = new DateTime($endDate);
+            $eventDuration = $start->diff($end)->days;
+        }
+        
+        // Generate recurring events
+        $currentDate = new DateTime($startDate);
+        $endLimit = new DateTime($maxEnd);
+        $counter = 0;
+        $maxOccurrences = 100; // Prevent infinite loops
+        
+        while ($currentDate <= $endLimit && $counter < $maxOccurrences) {
+            $dateKey = $currentDate->format('Y-m-d');
+            list($year, $month, $day) = explode('-', $dateKey);
+            
+            // Calculate end date for this occurrence if multi-day
+            $occurrenceEndDate = '';
+            if ($eventDuration > 0) {
+                $occurrenceEnd = clone $currentDate;
+                $occurrenceEnd->modify('+' . $eventDuration . ' days');
+                $occurrenceEndDate = $occurrenceEnd->format('Y-m-d');
+            }
+            
+            // Load month file
+            $eventFile = $dataDir . sprintf('%04d-%02d.json', $year, $month);
+            $events = [];
+            if (file_exists($eventFile)) {
+                $events = json_decode(file_get_contents($eventFile), true);
+            }
+            
+            if (!isset($events[$dateKey])) {
+                $events[$dateKey] = [];
+            }
+            
+            // Create event for this occurrence
+            $eventData = [
+                'id' => $baseId . '-' . $counter,
+                'title' => $title,
+                'time' => $time,
+                'description' => $description,
+                'color' => $color,
+                'isTask' => $isTask,
+                'completed' => false,
+                'endDate' => $occurrenceEndDate,
+                'recurring' => true,
+                'recurringId' => $baseId,
+                'created' => date('Y-m-d H:i:s')
+            ];
+            
+            $events[$dateKey][] = $eventData;
+            file_put_contents($eventFile, json_encode($events, JSON_PRETTY_PRINT));
+            
+            // Move to next occurrence
+            $currentDate->modify($interval);
+            $counter++;
+        }
     }
 
     public function addAssets(Doku_Event $event, $param) {

@@ -9,21 +9,110 @@ function navCalendar(calId, year, month, namespace) {
         action: 'load_month',
         year: year,
         month: month,
-        namespace: namespace
+        namespace: namespace,
+        _: new Date().getTime() // Cache buster
     });
     
     fetch(DOKU_BASE + 'lib/exe/ajax.php', {
         method: 'POST',
-        headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+        headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+            'Cache-Control': 'no-cache, no-store, must-revalidate',
+            'Pragma': 'no-cache'
+        },
         body: params.toString()
     })
     .then(r => r.json())
     .then(data => {
+        console.log('Month navigation data:', data);
         if (data.success) {
+            console.log('Rebuilding calendar for', year, month, 'with', Object.keys(data.events || {}).length, 'date entries');
             rebuildCalendar(calId, data.year, data.month, data.events, namespace);
+        } else {
+            console.error('Failed to load month:', data.error);
         }
     })
-    .catch(err => console.error('Error:', err));
+    .catch(err => {
+        console.error('Error loading month:', err);
+    });
+}
+
+// Jump to current month
+function jumpToToday(calId, namespace) {
+    const today = new Date();
+    const year = today.getFullYear();
+    const month = today.getMonth() + 1; // JavaScript months are 0-indexed
+    navCalendar(calId, year, month, namespace);
+}
+
+// Jump to today for event panel
+function jumpTodayPanel(calId, namespace) {
+    const today = new Date();
+    const year = today.getFullYear();
+    const month = today.getMonth() + 1;
+    navEventPanel(calId, year, month, namespace);
+}
+
+// Open month picker dialog
+function openMonthPicker(calId, currentYear, currentMonth, namespace) {
+    console.log('openMonthPicker called:', calId, currentYear, currentMonth, namespace);
+    
+    const overlay = document.getElementById('month-picker-overlay-' + calId);
+    console.log('Overlay element:', overlay);
+    
+    const monthSelect = document.getElementById('month-picker-month-' + calId);
+    console.log('Month select:', monthSelect);
+    
+    const yearSelect = document.getElementById('month-picker-year-' + calId);
+    console.log('Year select:', yearSelect);
+    
+    if (!overlay) {
+        console.error('Month picker overlay not found! ID:', 'month-picker-overlay-' + calId);
+        return;
+    }
+    
+    if (!monthSelect || !yearSelect) {
+        console.error('Select elements not found!');
+        return;
+    }
+    
+    // Set current values
+    monthSelect.value = currentMonth;
+    yearSelect.value = currentYear;
+    
+    // Show overlay
+    overlay.style.display = 'flex';
+    console.log('Overlay display set to flex');
+}
+
+// Open month picker dialog for event panel
+function openMonthPickerPanel(calId, currentYear, currentMonth, namespace) {
+    openMonthPicker(calId, currentYear, currentMonth, namespace);
+}
+
+// Close month picker dialog
+function closeMonthPicker(calId) {
+    const overlay = document.getElementById('month-picker-overlay-' + calId);
+    overlay.style.display = 'none';
+}
+
+// Jump to selected month
+function jumpToSelectedMonth(calId, namespace) {
+    const monthSelect = document.getElementById('month-picker-month-' + calId);
+    const yearSelect = document.getElementById('month-picker-year-' + calId);
+    
+    const month = parseInt(monthSelect.value);
+    const year = parseInt(yearSelect.value);
+    
+    closeMonthPicker(calId);
+    
+    // Check if this is a calendar or event panel
+    const container = document.getElementById(calId);
+    if (container && container.classList.contains('event-panel-standalone')) {
+        navEventPanel(calId, year, month, namespace);
+    } else {
+        navCalendar(calId, year, month, namespace);
+    }
 }
 
 // Rebuild calendar grid after navigation
@@ -73,6 +162,70 @@ function rebuildCalendar(calId, year, month, events, namespace) {
     const daysInMonth = new Date(year, month, 0).getDate();
     const dayOfWeek = firstDay.getDay();
     
+    // Calculate month boundaries
+    const monthStart = new Date(year, month - 1, 1);
+    const monthEnd = new Date(year, month - 1, daysInMonth);
+    
+    // Build a map of all events with their date ranges
+    const eventRanges = {};
+    for (const [dateKey, dayEvents] of Object.entries(events)) {
+        // Only process events that could possibly overlap with this month/year
+        const dateYear = parseInt(dateKey.split('-')[0]);
+        const dateMonth = parseInt(dateKey.split('-')[1]);
+        
+        // Skip events from completely different years (unless they're very long multi-day events)
+        if (Math.abs(dateYear - year) > 1) {
+            continue;
+        }
+        
+        for (const evt of dayEvents) {
+            const startDate = dateKey;
+            const endDate = evt.endDate || dateKey;
+            
+            // Check if event overlaps with current month
+            const eventStart = new Date(startDate + 'T00:00:00');
+            const eventEnd = new Date(endDate + 'T00:00:00');
+            
+            // Skip if event doesn't overlap with current month
+            if (eventEnd < monthStart || eventStart > monthEnd) {
+                continue;
+            }
+            
+            // Create entry for each day the event spans
+            const start = new Date(startDate + 'T00:00:00');
+            const end = new Date(endDate + 'T00:00:00');
+            const current = new Date(start);
+            
+            while (current <= end) {
+                const currentKey = current.toISOString().split('T')[0];
+                
+                // Check if this date is in current month
+                const currentDate = new Date(currentKey + 'T00:00:00');
+                if (currentDate.getFullYear() === year && currentDate.getMonth() === month - 1) {
+                    if (!eventRanges[currentKey]) {
+                        eventRanges[currentKey] = [];
+                    }
+                    
+                    // Add event with span information
+                    const eventCopy = {...evt};
+                    eventCopy._span_start = startDate;
+                    eventCopy._span_end = endDate;
+                    eventCopy._is_first_day = (currentKey === startDate);
+                    eventCopy._is_last_day = (currentKey === endDate);
+                    eventCopy._original_date = dateKey;
+                    
+                    // Check if event continues from previous month or to next month
+                    eventCopy._continues_from_prev = (eventStart < monthStart);
+                    eventCopy._continues_to_next = (eventEnd > monthEnd);
+                    
+                    eventRanges[currentKey].push(eventCopy);
+                }
+                
+                current.setDate(current.getDate() + 1);
+            }
+        }
+    }
+    
     let html = '';
     let currentDay = 1;
     const rowCount = Math.ceil((daysInMonth + dayOfWeek) / 7);
@@ -84,9 +237,13 @@ function rebuildCalendar(calId, year, month, events, namespace) {
                 html += '<td class="cal-empty"></td>';
             } else {
                 const dateKey = `${year}-${String(month).padStart(2, '0')}-${String(currentDay).padStart(2, '0')}`;
-                const today = new Date().toISOString().split('T')[0];
+                
+                // Get today's date in local timezone
+                const todayObj = new Date();
+                const today = `${todayObj.getFullYear()}-${String(todayObj.getMonth() + 1).padStart(2, '0')}-${String(todayObj.getDate()).padStart(2, '0')}`;
+                
                 const isToday = dateKey === today;
-                const hasEvents = events[dateKey] && events[dateKey].length > 0;
+                const hasEvents = eventRanges[dateKey] && eventRanges[dateKey].length > 0;
                 
                 let classes = 'cal-day';
                 if (isToday) classes += ' cal-today';
@@ -97,7 +254,7 @@ function rebuildCalendar(calId, year, month, events, namespace) {
                 
                 if (hasEvents) {
                     // Sort events by time (no time first, then by time)
-                    const sortedEvents = [...events[dateKey]].sort((a, b) => {
+                    const sortedEvents = [...eventRanges[dateKey]].sort((a, b) => {
                         const timeA = a.time || '';
                         const timeB = b.time || '';
                         
@@ -117,12 +274,20 @@ function rebuildCalendar(calId, year, month, events, namespace) {
                         const eventColor = evt.color || '#3498db';
                         const eventTime = evt.time || '';
                         const eventTitle = evt.title || 'Event';
-                        const barClass = !eventTime ? 'event-bar-no-time' : 'event-bar-timed';
+                        const originalDate = evt._original_date || dateKey;
+                        const isFirstDay = evt._is_first_day !== undefined ? evt._is_first_day : true;
+                        const isLastDay = evt._is_last_day !== undefined ? evt._is_last_day : true;
+                        
+                        let barClass = !eventTime ? 'event-bar-no-time' : 'event-bar-timed';
+                        
+                        // Add classes for multi-day spanning
+                        if (!isFirstDay) barClass += ' event-bar-continues';
+                        if (!isLastDay) barClass += ' event-bar-continuing';
                         
                         html += `<span class="event-bar ${barClass}" `;
                         html += `style="background: ${eventColor};" `;
                         html += `title="${escapeHtml(eventTitle)}${eventTime ? ' @ ' + eventTime : ''}" `;
-                        html += `onclick="event.stopPropagation(); highlightEvent('${calId}', '${eventId}', '${dateKey}');"></span>`;
+                        html += `onclick="event.stopPropagation(); highlightEvent('${calId}', '${eventId}', '${originalDate}');"></span>`;
                     }
                     html += '</div>';
                 }
@@ -136,9 +301,33 @@ function rebuildCalendar(calId, year, month, events, namespace) {
     
     tbody.innerHTML = html;
     
-    // Rebuild event list
+    // Rebuild event list - show events that overlap with current month
+    const currentMonthEvents = {};
+    
+    for (const [dateKey, dayEvents] of Object.entries(events)) {
+        for (const event of dayEvents) {
+            const startDate = dateKey;
+            const endDate = event.endDate || dateKey;
+            
+            // Check if event overlaps with current month
+            // Event starts before month ends AND ends after month starts
+            const eventStartObj = new Date(startDate);
+            const eventEndObj = new Date(endDate);
+            const monthFirstDay = new Date(year, month - 1, 1);
+            const monthLastDay = new Date(year, month - 1, daysInMonth);
+            
+            // Include if event overlaps this month at all
+            if (eventEndObj >= monthFirstDay && eventStartObj <= monthLastDay) {
+                if (!currentMonthEvents[dateKey]) {
+                    currentMonthEvents[dateKey] = [];
+                }
+                currentMonthEvents[dateKey].push(event);
+            }
+        }
+    }
+    
     const eventList = container.querySelector('.event-list-compact');
-    eventList.innerHTML = renderEventListFromData(events, calId, namespace);
+    eventList.innerHTML = renderEventListFromData(currentMonthEvents, calId, namespace);
     
     // Update title
     const title = container.querySelector('#eventlist-title-' + calId);
@@ -146,7 +335,7 @@ function rebuildCalendar(calId, year, month, events, namespace) {
 }
 
 // Render event list from data
-function renderEventListFromData(events, calId, namespace) {
+function renderEventListFromData(events, calId, namespace, year, month) {
     if (!events || Object.keys(events).length === 0) {
         return '<p class="no-events-msg">No events this month</p>';
     }
@@ -154,11 +343,27 @@ function renderEventListFromData(events, calId, namespace) {
     let html = '';
     const sortedDates = Object.keys(events).sort();
     
+    // Filter events to only current month if year/month provided
+    const monthStart = year && month ? new Date(year, month - 1, 1) : null;
+    const monthEnd = year && month ? new Date(year, month, 0, 23, 59, 59) : null;
+    
     for (const dateKey of sortedDates) {
+        // Skip events not in current month if filtering
+        if (monthStart && monthEnd) {
+            const eventDate = new Date(dateKey + 'T00:00:00');
+            if (eventDate < monthStart || eventDate > monthEnd) {
+                continue;
+            }
+        }
+        
         const dayEvents = events[dateKey];
         for (const event of dayEvents) {
             html += renderEventItem(event, dateKey, calId, namespace);
         }
+    }
+    
+    if (!html) {
+        return '<p class="no-events-msg">No events this month</p>';
     }
     
     return html;
@@ -300,9 +505,10 @@ function showDayEvents(calId, date, namespace) {
 
 // Render a single event item
 function renderEventItem(event, date, calId, namespace) {
-    // Format date display
+    // Format date display with day of week
     const dateObj = new Date(date + 'T00:00:00');
     const displayDate = dateObj.toLocaleDateString('en-US', { 
+        weekday: 'short',
         month: 'short', 
         day: 'numeric' 
     });
@@ -327,6 +533,7 @@ function renderEventItem(event, date, calId, namespace) {
     if (event.endDate && event.endDate !== date) {
         const endObj = new Date(event.endDate + 'T00:00:00');
         multiDay = ' → ' + endObj.toLocaleDateString('en-US', { 
+            weekday: 'short',
             month: 'short', 
             day: 'numeric' 
         });
@@ -408,9 +615,20 @@ function renderDescription(description) {
             return '<a href="' + link + '" target="_blank" rel="noopener noreferrer">' + text + '</a>';
         }
         
-        // Handle internal DokuWiki links
-        const wikiUrl = DOKU_BASE + 'doku.php?id=' + encodeURIComponent(link);
-        return '<a href="' + wikiUrl + '">' + text + '</a>';
+        // Handle internal DokuWiki links with section anchors
+        // Split page and section (e.g., "page#section" or "namespace:page#section")
+        const hashIndex = link.indexOf('#');
+        let pagePart = link;
+        let sectionPart = '';
+        
+        if (hashIndex !== -1) {
+            pagePart = link.substring(0, hashIndex);
+            sectionPart = link.substring(hashIndex); // Includes the #
+        }
+        
+        // Build URL with properly encoded page and unencoded section anchor
+        const wikiUrl = DOKU_BASE + 'doku.php?id=' + encodeURIComponent(pagePart) + sectionPart;
+        return '<a href="' + wikiUrl + '">' + escapeHtml(text) + '</a>';
     });
     
     // Convert markdown-style links [text](url) to HTML
@@ -449,8 +667,15 @@ function openAddEvent(calId, namespace, date) {
     form.reset();
     document.getElementById('event-id-' + calId).value = '';
     
-    // Set date
-    const defaultDate = date || new Date().toISOString().split('T')[0];
+    // Set date - use local date, not UTC
+    let defaultDate = date;
+    if (!defaultDate) {
+        const today = new Date();
+        const year = today.getFullYear();
+        const month = String(today.getMonth() + 1).padStart(2, '0');
+        const day = String(today.getDate()).padStart(2, '0');
+        defaultDate = `${year}-${month}-${day}`;
+    }
     dateField.value = defaultDate;
     dateField.removeAttribute('data-original-date');
     
@@ -559,6 +784,9 @@ function saveEventCompact(calId, namespace) {
     const description = document.getElementById('event-desc-' + calId).value;
     const isTask = document.getElementById('event-is-task-' + calId).checked;
     const completed = false; // New tasks are not completed
+    const isRecurring = document.getElementById('event-recurring-' + calId).checked;
+    const recurrenceType = document.getElementById('event-recurrence-type-' + calId).value;
+    const recurrenceEnd = document.getElementById('event-recurrence-end-' + calId).value;
     
     if (!title) {
         alert('Please enter a title');
@@ -583,7 +811,10 @@ function saveEventCompact(calId, namespace) {
         color: color,
         description: description,
         isTask: isTask ? '1' : '0',
-        completed: completed ? '1' : '0'
+        completed: completed ? '1' : '0',
+        isRecurring: isRecurring ? '1' : '0',
+        recurrenceType: recurrenceType,
+        recurrenceEnd: recurrenceEnd
     });
     
     fetch(DOKU_BASE + 'lib/exe/ajax.php', {
@@ -595,6 +826,12 @@ function saveEventCompact(calId, namespace) {
     .then(data => {
         if (data.success) {
             closeEventDialog(calId);
+            
+            // For recurring events, do a full page reload to show all occurrences
+            if (isRecurring) {
+                location.reload();
+                return;
+            }
             
             // Extract year and month from the NEW date (in case date was changed)
             const [year, month] = date.split('-').map(Number);
@@ -618,12 +855,17 @@ function reloadCalendarData(calId, year, month, namespace) {
         action: 'load_month',
         year: year,
         month: month,
-        namespace: namespace
+        namespace: namespace,
+        _: new Date().getTime() // Cache buster
     });
     
     fetch(DOKU_BASE + 'lib/exe/ajax.php', {
         method: 'POST',
-        headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+        headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+            'Cache-Control': 'no-cache, no-store, must-revalidate',
+            'Pragma': 'no-cache'
+        },
         body: params.toString()
     })
     .then(r => r.json())
@@ -684,6 +926,16 @@ function highlightEvent(calId, eventId, date) {
     }, 3000);
 }
 
+// Toggle recurring event options
+function toggleRecurringOptions(calId) {
+    const checkbox = document.getElementById('event-recurring-' + calId);
+    const options = document.getElementById('recurring-options-' + calId);
+    
+    if (checkbox && options) {
+        options.style.display = checkbox.checked ? 'block' : 'none';
+    }
+}
+
 // Close dialog on escape key
 document.addEventListener('keydown', function(e) {
     if (e.key === 'Escape') {
@@ -726,9 +978,18 @@ function rebuildEventPanel(calId, year, month, events, namespace) {
     const monthNames = ['January', 'February', 'March', 'April', 'May', 'June',
                        'July', 'August', 'September', 'October', 'November', 'December'];
     
-    // Update header
+    // Update header - preserve the onclick and classes
+    const headerContent = container.querySelector('.panel-header-content');
     const header = container.querySelector('.panel-standalone-header h3');
-    header.textContent = monthNames[month - 1] + ' ' + year + ' Events';
+    if (header) {
+        header.textContent = monthNames[month - 1] + ' ' + year + ' Events';
+        header.className = 'calendar-month-picker';
+        header.setAttribute('onclick', `openMonthPickerPanel('${calId}', ${year}, ${month}, '${namespace}')`);
+        header.setAttribute('title', 'Click to jump to month');
+    }
+    
+    // Update namespace badge if needed (preserve existing one)
+    // The namespace badge should already exist and doesn't need updating
     
     // Update nav buttons
     let prevMonth = month - 1;
@@ -746,17 +1007,30 @@ function rebuildEventPanel(calId, year, month, events, namespace) {
     }
     
     const navBtns = container.querySelectorAll('.cal-nav-btn');
-    navBtns[0].setAttribute('onclick', `navEventPanel('${calId}', ${prevYear}, ${prevMonth}, '${namespace}')`);
-    navBtns[1].setAttribute('onclick', `navEventPanel('${calId}', ${nextYear}, ${nextMonth}, '${namespace}')`);
+    if (navBtns[0]) navBtns[0].setAttribute('onclick', `navEventPanel('${calId}', ${prevYear}, ${prevMonth}, '${namespace}')`);
+    if (navBtns[1]) navBtns[1].setAttribute('onclick', `navEventPanel('${calId}', ${nextYear}, ${nextMonth}, '${namespace}')`);
+    
+    // Update Today button
+    const todayBtn = container.querySelector('.cal-today-btn');
+    if (todayBtn) {
+        todayBtn.setAttribute('onclick', `jumpTodayPanel('${calId}', '${namespace}')`);
+    }
     
     // Rebuild event list
     const eventList = container.querySelector('.event-list-compact');
-    eventList.innerHTML = renderEventListFromData(events, calId, namespace);
+    if (eventList) {
+        eventList.innerHTML = renderEventListFromData(events, calId, namespace, year, month);
+    }
 }
 
 // Open add event for panel
 function openAddEventPanel(calId, namespace) {
-    openAddEvent(calId, namespace, new Date().toISOString().split('T')[0]);
+    const today = new Date();
+    const year = today.getFullYear();
+    const month = String(today.getMonth() + 1).padStart(2, '0');
+    const day = String(today.getDate()).padStart(2, '0');
+    const localDate = `${year}-${month}-${day}`;
+    openAddEvent(calId, namespace, localDate);
 }
 
 // Toggle task completion

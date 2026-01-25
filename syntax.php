@@ -56,6 +56,9 @@ class syntax_plugin_calendar extends DokuWiki_Syntax_Plugin {
                 if (strpos($pair, '=') !== false) {
                     list($key, $value) = explode('=', $pair, 2);
                     $params[trim($key)] = trim($value);
+                } else {
+                    // Handle standalone flags like "today"
+                    $params[trim($pair)] = true;
                 }
             }
         }
@@ -113,8 +116,9 @@ class syntax_plugin_calendar extends DokuWiki_Syntax_Plugin {
         // Header with navigation
         $html .= '<div class="calendar-compact-header">';
         $html .= '<button class="cal-nav-btn" onclick="navCalendar(\'' . $calId . '\', ' . $prevYear . ', ' . $prevMonth . ', \'' . $namespace . '\')">‹</button>';
-        $html .= '<h3>' . $monthName . '</h3>';
+        $html .= '<h3 class="calendar-month-picker" onclick="openMonthPicker(\'' . $calId . '\', ' . $year . ', ' . $month . ', \'' . $namespace . '\')" title="Click to jump to month">' . $monthName . '</h3>';
         $html .= '<button class="cal-nav-btn" onclick="navCalendar(\'' . $calId . '\', ' . $nextYear . ', ' . $nextMonth . ', \'' . $namespace . '\')">›</button>';
+        $html .= '<button class="cal-today-btn" onclick="jumpToToday(\'' . $calId . '\', \'' . $namespace . '\')">Today</button>';
         $html .= '</div>';
         
         // Calendar grid
@@ -127,6 +131,77 @@ class syntax_plugin_calendar extends DokuWiki_Syntax_Plugin {
         $daysInMonth = date('t', $firstDay);
         $dayOfWeek = date('w', $firstDay);
         
+        // Load events from previous and next months to catch spanning events
+        $prevMonth = $month - 1;
+        $prevYear = $year;
+        if ($prevMonth < 1) {
+            $prevMonth = 12;
+            $prevYear--;
+        }
+        
+        $nextMonth = $month + 1;
+        $nextYear = $year;
+        if ($nextMonth > 12) {
+            $nextMonth = 1;
+            $nextYear++;
+        }
+        
+        $prevMonthEvents = $this->loadEvents($namespace, $prevYear, $prevMonth);
+        $nextMonthEvents = $this->loadEvents($namespace, $nextYear, $nextMonth);
+        
+        // Combine all events for processing
+        $allEvents = array_merge($events, $prevMonthEvents, $nextMonthEvents);
+        
+        // Build a map of all events with their date ranges
+        $eventRanges = array();
+        foreach ($allEvents as $dateKey => $dayEvents) {
+            foreach ($dayEvents as $evt) {
+                $eventId = isset($evt['id']) ? $evt['id'] : '';
+                $startDate = $dateKey;
+                $endDate = isset($evt['endDate']) && $evt['endDate'] ? $evt['endDate'] : $dateKey;
+                
+                // Only process events that touch this month
+                $eventStart = new DateTime($startDate);
+                $eventEnd = new DateTime($endDate);
+                $monthStart = new DateTime(sprintf('%04d-%02d-01', $year, $month));
+                $monthEnd = new DateTime(sprintf('%04d-%02d-%02d', $year, $month, $daysInMonth));
+                
+                // Skip if event doesn't overlap with current month
+                if ($eventEnd < $monthStart || $eventStart > $monthEnd) {
+                    continue;
+                }
+                
+                // Create entry for each day the event spans
+                $current = clone $eventStart;
+                while ($current <= $eventEnd) {
+                    $currentKey = $current->format('Y-m-d');
+                    
+                    // Check if this date is in current month
+                    $currentDate = DateTime::createFromFormat('Y-m-d', $currentKey);
+                    if ($currentDate && $currentDate->format('Y-m') === sprintf('%04d-%02d', $year, $month)) {
+                        if (!isset($eventRanges[$currentKey])) {
+                            $eventRanges[$currentKey] = array();
+                        }
+                        
+                        // Add event with span information
+                        $evt['_span_start'] = $startDate;
+                        $evt['_span_end'] = $endDate;
+                        $evt['_is_first_day'] = ($currentKey === $startDate);
+                        $evt['_is_last_day'] = ($currentKey === $endDate);
+                        $evt['_original_date'] = $dateKey; // Keep track of original date
+                        
+                        // Check if event continues from previous month or to next month
+                        $evt['_continues_from_prev'] = ($eventStart < $monthStart);
+                        $evt['_continues_to_next'] = ($eventEnd > $monthEnd);
+                        
+                        $eventRanges[$currentKey][] = $evt;
+                    }
+                    
+                    $current->modify('+1 day');
+                }
+            }
+        }
+        
         $currentDay = 1;
         $rowCount = ceil(($daysInMonth + $dayOfWeek) / 7);
         
@@ -138,7 +213,7 @@ class syntax_plugin_calendar extends DokuWiki_Syntax_Plugin {
                 } else {
                     $dateKey = sprintf('%04d-%02d-%02d', $year, $month, $currentDay);
                     $isToday = ($dateKey === date('Y-m-d'));
-                    $hasEvents = isset($events[$dateKey]) && !empty($events[$dateKey]);
+                    $hasEvents = isset($eventRanges[$dateKey]) && !empty($eventRanges[$dateKey]);
                     
                     $classes = 'cal-day';
                     if ($isToday) $classes .= ' cal-today';
@@ -149,7 +224,7 @@ class syntax_plugin_calendar extends DokuWiki_Syntax_Plugin {
                     
                     if ($hasEvents) {
                         // Sort events by time (no time first, then by time)
-                        $sortedEvents = $events[$dateKey];
+                        $sortedEvents = $eventRanges[$dateKey];
                         usort($sortedEvents, function($a, $b) {
                             $timeA = isset($a['time']) ? $a['time'] : '';
                             $timeB = isset($b['time']) ? $b['time'] : '';
@@ -170,13 +245,20 @@ class syntax_plugin_calendar extends DokuWiki_Syntax_Plugin {
                             $eventColor = isset($evt['color']) ? htmlspecialchars($evt['color']) : '#3498db';
                             $eventTime = isset($evt['time']) ? $evt['time'] : '';
                             $eventTitle = isset($evt['title']) ? htmlspecialchars($evt['title']) : 'Event';
+                            $originalDate = isset($evt['_original_date']) ? $evt['_original_date'] : $dateKey;
+                            $isFirstDay = isset($evt['_is_first_day']) ? $evt['_is_first_day'] : true;
+                            $isLastDay = isset($evt['_is_last_day']) ? $evt['_is_last_day'] : true;
                             
                             $barClass = empty($eventTime) ? 'event-bar-no-time' : 'event-bar-timed';
+                            
+                            // Add classes for multi-day spanning
+                            if (!$isFirstDay) $barClass .= ' event-bar-continues';
+                            if (!$isLastDay) $barClass .= ' event-bar-continuing';
                             
                             $html .= '<span class="event-bar ' . $barClass . '" ';
                             $html .= 'style="background: ' . $eventColor . ';" ';
                             $html .= 'title="' . $eventTitle . ($eventTime ? ' @ ' . $eventTime : '') . '" ';
-                            $html .= 'onclick="event.stopPropagation(); highlightEvent(\'' . $calId . '\', \'' . $eventId . '\', \'' . $dateKey . '\');">';
+                            $html .= 'onclick="event.stopPropagation(); highlightEvent(\'' . $calId . '\', \'' . $eventId . '\', \'' . $originalDate . '\');">';
                             $html .= '</span>';
                         }
                         $html .= '</div>';
@@ -212,6 +294,9 @@ class syntax_plugin_calendar extends DokuWiki_Syntax_Plugin {
         
         // Event dialog
         $html .= $this->renderEventDialog($calId, $namespace);
+        
+        // Month/Year picker dialog (at container level for proper overlay)
+        $html .= $this->renderMonthPicker($calId, $year, $month, $namespace);
         
         $html .= '</div>'; // End container
         
@@ -251,15 +336,15 @@ class syntax_plugin_calendar extends DokuWiki_Syntax_Plugin {
                     }
                 }
                 
-                // Format date display
+                // Format date display with day of week
                 $dateObj = new DateTime($dateKey);
-                $displayDate = $dateObj->format('M j');
+                $displayDate = $dateObj->format('D, M j'); // e.g., "Mon, Jan 24"
                 
                 // Multi-day indicator
                 $multiDay = '';
                 if ($endDate && $endDate !== $dateKey) {
                     $endObj = new DateTime($endDate);
-                    $multiDay = ' → ' . $endObj->format('M j');
+                    $multiDay = ' → ' . $endObj->format('D, M j');
                 }
                 
                 $completedClass = $completed ? ' event-completed' : '';
@@ -307,6 +392,12 @@ class syntax_plugin_calendar extends DokuWiki_Syntax_Plugin {
         $year = (int)$data['year'];
         $month = (int)$data['month'];
         $namespace = $data['namespace'];
+        $height = isset($data['height']) ? $data['height'] : '400px';
+        
+        // Validate height format (must be px, em, rem, vh, or %)
+        if (!preg_match('/^\d+(\.\d+)?(px|em|rem|vh|%)$/', $height)) {
+            $height = '400px'; // Default fallback
+        }
         
         $events = $this->loadEvents($namespace, $year, $month);
         $calId = 'panel_' . md5(serialize($data) . microtime());
@@ -327,24 +418,34 @@ class syntax_plugin_calendar extends DokuWiki_Syntax_Plugin {
             $nextYear++;
         }
         
-        $html = '<div class="event-panel-standalone" id="' . $calId . '">';
+        $html = '<div class="event-panel-standalone" id="' . $calId . '" data-height="' . htmlspecialchars($height) . '" data-namespace="' . htmlspecialchars($namespace) . '">';
         
         // Header with navigation
         $html .= '<div class="panel-standalone-header">';
         $html .= '<button class="cal-nav-btn" onclick="navEventPanel(\'' . $calId . '\', ' . $prevYear . ', ' . $prevMonth . ', \'' . $namespace . '\')">‹</button>';
-        $html .= '<h3>' . $monthName . ' Events</h3>';
+        $html .= '<div class="panel-header-content">';
+        $html .= '<h3 class="calendar-month-picker" onclick="openMonthPickerPanel(\'' . $calId . '\', ' . $year . ', ' . $month . ', \'' . $namespace . '\')" title="Click to jump to month">' . $monthName . ' Events</h3>';
+        if ($namespace) {
+            $namespaceUrl = DOKU_BASE . 'doku.php?id=' . str_replace(':', ':', $namespace);
+            $html .= '<a href="' . $namespaceUrl . '" class="namespace-badge" title="Go to namespace page">' . htmlspecialchars($namespace) . '</a>';
+        }
+        $html .= '</div>';
         $html .= '<button class="cal-nav-btn" onclick="navEventPanel(\'' . $calId . '\', ' . $nextYear . ', ' . $nextMonth . ', \'' . $namespace . '\')">›</button>';
+        $html .= '<button class="cal-today-btn" onclick="jumpTodayPanel(\'' . $calId . '\', \'' . $namespace . '\')">Today</button>';
         $html .= '</div>';
         
         $html .= '<div class="panel-standalone-actions">';
         $html .= '<button class="add-event-compact" onclick="openAddEventPanel(\'' . $calId . '\', \'' . $namespace . '\')">+ Add Event</button>';
         $html .= '</div>';
         
-        $html .= '<div class="event-list-compact" id="eventlist-' . $calId . '">';
+        $html .= '<div class="event-list-compact" id="eventlist-' . $calId . '" style="max-height: ' . htmlspecialchars($height) . ';">';
         $html .= $this->renderEventListContent($events, $calId, $namespace);
         $html .= '</div>';
         
         $html .= $this->renderEventDialog($calId, $namespace);
+        
+        // Month/Year picker for event panel
+        $html .= $this->renderMonthPicker($calId, $year, $month, $namespace);
         
         $html .= '</div>';
         
@@ -355,8 +456,23 @@ class syntax_plugin_calendar extends DokuWiki_Syntax_Plugin {
         $namespace = $data['namespace'];
         $daterange = $data['daterange'];
         $date = $data['date'];
+        $width = isset($data['width']) ? $data['width'] : '300px';
+        $height = isset($data['height']) ? $data['height'] : '400px';
+        $today = isset($data['today']) ? true : false;
         
-        if ($daterange) {
+        // Validate width/height format
+        if (!preg_match('/^\d+(\.\d+)?(px|em|rem|vh|vw|%)$/', $width)) {
+            $width = '300px';
+        }
+        if (!preg_match('/^\d+(\.\d+)?(px|em|rem|vh|%)$/', $height)) {
+            $height = '400px';
+        }
+        
+        // Handle "today" parameter
+        if ($today) {
+            $startDate = date('Y-m-d');
+            $endDate = date('Y-m-d');
+        } elseif ($daterange) {
             list($startDate, $endDate) = explode(':', $daterange);
         } elseif ($date) {
             $startDate = $date;
@@ -394,42 +510,76 @@ class syntax_plugin_calendar extends DokuWiki_Syntax_Plugin {
             }
         }
         
-        $html = '<div class="eventlist-standalone">';
-        $html .= '<h3>Events: ' . date('M j', strtotime($startDate)) . ' - ' . date('M j, Y', strtotime($endDate)) . '</h3>';
+        // Compact container with custom size
+        $html = '<div class="eventlist-compact-widget" style="width: ' . htmlspecialchars($width) . '; max-height: ' . htmlspecialchars($height) . ';">';
+        
+        // Compact header
+        if ($today) {
+            $html .= '<div class="eventlist-widget-header">';
+            $html .= '<h4>📅 Today\'s Events</h4>';
+            $html .= '</div>';
+        } else {
+            $html .= '<div class="eventlist-widget-header">';
+            $html .= '<h4>' . date('M j', strtotime($startDate));
+            if ($startDate !== $endDate) {
+                $html .= ' - ' . date('M j', strtotime($endDate));
+            }
+            $html .= '</h4>';
+            $html .= '</div>';
+        }
+        
+        // Scrollable event list
+        $html .= '<div class="eventlist-widget-content">';
         
         if (empty($allEvents)) {
-            $html .= '<p class="no-events-msg">No events in this date range</p>';
+            $html .= '<p class="eventlist-widget-empty">No events</p>';
         } else {
             foreach ($allEvents as $dateKey => $dayEvents) {
-                $displayDate = date('l, F j, Y', strtotime($dateKey));
-                
-                $html .= '<div class="eventlist-day-group">';
-                $html .= '<h4 class="eventlist-date">' . $displayDate . '</h4>';
+                // Compact date header (only if not "today" mode or multi-day range)
+                if (!$today && $startDate !== $endDate) {
+                    $dateObj = new DateTime($dateKey);
+                    $html .= '<div class="eventlist-widget-date">' . $dateObj->format('D, M j') . '</div>';
+                }
                 
                 foreach ($dayEvents as $event) {
                     $title = isset($event['title']) ? htmlspecialchars($event['title']) : 'Untitled';
-                    $time = isset($event['time']) ? htmlspecialchars($event['time']) : '';
+                    $time = isset($event['time']) ? $event['time'] : '';
                     $color = isset($event['color']) ? htmlspecialchars($event['color']) : '#3498db';
-                    $description = isset($event['description']) ? htmlspecialchars($event['description']) : '';
+                    $description = isset($event['description']) ? $event['description'] : '';
                     
-                    $html .= '<div class="eventlist-item">';
-                    $html .= '<div class="event-color-bar" style="background: ' . $color . ';"></div>';
-                    $html .= '<div class="eventlist-content">';
+                    // Convert time to 12-hour format
+                    $displayTime = '';
                     if ($time) {
-                        $html .= '<span class="eventlist-time">' . $time . '</span>';
+                        $timeParts = explode(':', $time);
+                        if (count($timeParts) === 2) {
+                            $hour = (int)$timeParts[0];
+                            $minute = $timeParts[1];
+                            $ampm = $hour >= 12 ? 'PM' : 'AM';
+                            $hour = $hour % 12;
+                            if ($hour === 0) $hour = 12;
+                            $displayTime = $hour . ':' . $minute . ' ' . $ampm;
+                        } else {
+                            $displayTime = $time;
+                        }
                     }
-                    $html .= '<span class="eventlist-title">' . $title . '</span>';
+                    
+                    // Compact event item
+                    $html .= '<div class="eventlist-widget-item" style="border-left-color: ' . $color . ';">';
+                    $html .= '<div class="eventlist-widget-title">' . $title . '</div>';
+                    if ($displayTime) {
+                        $html .= '<div class="eventlist-widget-time">' . $displayTime . '</div>';
+                    }
                     if ($description) {
-                        $html .= '<div class="eventlist-desc">' . nl2br($description) . '</div>';
+                        $renderedDesc = $this->renderDescription($description);
+                        $html .= '<div class="eventlist-widget-desc">' . $renderedDesc . '</div>';
                     }
-                    $html .= '</div></div>';
+                    $html .= '</div>';
                 }
-                
-                $html .= '</div>';
             }
         }
         
-        $html .= '</div>';
+        $html .= '</div>'; // End content
+        $html .= '</div>'; // End container
         
         return $html;
     }
@@ -478,6 +628,36 @@ class syntax_plugin_calendar extends DokuWiki_Syntax_Plugin {
         
         $html .= '</div>';
         
+        // Recurring event section
+        $html .= '<div class="form-field form-field-checkbox">';
+        $html .= '<label class="checkbox-label">';
+        $html .= '<input type="checkbox" id="event-recurring-' . $calId . '" name="isRecurring" class="recurring-toggle" onchange="toggleRecurringOptions(\'' . $calId . '\')">';
+        $html .= '<span>🔄 Repeating Event</span>';
+        $html .= '</label>';
+        $html .= '</div>';
+        
+        // Recurring options (hidden by default)
+        $html .= '<div id="recurring-options-' . $calId . '" class="recurring-options" style="display:none;">';
+        
+        // Recurrence pattern
+        $html .= '<div class="form-field">';
+        $html .= '<label class="field-label">Repeat Every</label>';
+        $html .= '<select id="event-recurrence-type-' . $calId . '" name="recurrenceType" class="input-sleek">';
+        $html .= '<option value="daily">Daily</option>';
+        $html .= '<option value="weekly">Weekly</option>';
+        $html .= '<option value="monthly">Monthly</option>';
+        $html .= '<option value="yearly">Yearly</option>';
+        $html .= '</select>';
+        $html .= '</div>';
+        
+        // Recurrence end date
+        $html .= '<div class="form-field">';
+        $html .= '<label class="field-label">📅 Repeat Until (optional)</label>';
+        $html .= '<input type="date" id="event-recurrence-end-' . $calId . '" name="recurrenceEnd" class="input-sleek input-date">';
+        $html .= '</div>';
+        
+        $html .= '</div>';
+        
         // Time field
         $html .= '<div class="form-field">';
         $html .= '<label class="field-label">🕐 Time (optional)</label>';
@@ -512,6 +692,40 @@ class syntax_plugin_calendar extends DokuWiki_Syntax_Plugin {
         $html .= '</div>';
         
         $html .= '</form>';
+        $html .= '</div>';
+        $html .= '</div>';
+        
+        return $html;
+    }
+    
+    private function renderMonthPicker($calId, $year, $month, $namespace) {
+        $html = '<div class="month-picker-overlay" id="month-picker-overlay-' . $calId . '" style="display:none;" onclick="closeMonthPicker(\'' . $calId . '\')">';
+        $html .= '<div class="month-picker-dialog" onclick="event.stopPropagation();">';
+        $html .= '<h4>Jump to Month</h4>';
+        
+        $html .= '<div class="month-picker-selects">';
+        $html .= '<select id="month-picker-month-' . $calId . '" class="month-picker-select">';
+        $monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+        for ($m = 1; $m <= 12; $m++) {
+            $selected = ($m == $month) ? ' selected' : '';
+            $html .= '<option value="' . $m . '"' . $selected . '>' . $monthNames[$m - 1] . '</option>';
+        }
+        $html .= '</select>';
+        
+        $html .= '<select id="month-picker-year-' . $calId . '" class="month-picker-select">';
+        $currentYear = (int)date('Y');
+        for ($y = $currentYear - 5; $y <= $currentYear + 5; $y++) {
+            $selected = ($y == $year) ? ' selected' : '';
+            $html .= '<option value="' . $y . '"' . $selected . '>' . $y . '</option>';
+        }
+        $html .= '</select>';
+        $html .= '</div>';
+        
+        $html .= '<div class="month-picker-actions">';
+        $html .= '<button class="btn-sleek btn-cancel-sleek" onclick="closeMonthPicker(\'' . $calId . '\')">Cancel</button>';
+        $html .= '<button class="btn-sleek btn-save-sleek" onclick="jumpToSelectedMonth(\'' . $calId . '\', \'' . $namespace . '\')">Go</button>';
+        $html .= '</div>';
+        
         $html .= '</div>';
         $html .= '</div>';
         
@@ -557,8 +771,14 @@ class syntax_plugin_calendar extends DokuWiki_Syntax_Plugin {
                     return '<a href="' . htmlspecialchars($link) . '" target="_blank" rel="noopener noreferrer">' . htmlspecialchars($text) . '</a>';
                 }
                 
-                // Handle internal DokuWiki links
-                $wikiUrl = DOKU_BASE . 'doku.php?id=' . rawurlencode($link);
+                // Handle internal DokuWiki links with section anchors
+                // Split page and section (e.g., "page#section" or "namespace:page#section")
+                $parts = explode('#', $link, 2);
+                $pagePart = $parts[0];
+                $sectionPart = isset($parts[1]) ? '#' . $parts[1] : '';
+                
+                // Build URL with properly encoded page and unencoded section anchor
+                $wikiUrl = DOKU_BASE . 'doku.php?id=' . rawurlencode($pagePart) . $sectionPart;
                 return '<a href="' . $wikiUrl . '">' . htmlspecialchars($text) . '</a>';
             },
             $rendered
