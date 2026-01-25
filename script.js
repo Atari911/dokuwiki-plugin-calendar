@@ -416,15 +416,31 @@ function showDayPopup(calId, date, namespace) {
         html += '<div class="popup-events-list">';
         dayEvents.forEach(event => {
             const color = event.color || '#3498db';
+            
+            // Convert to 12-hour format
+            let displayTime = '';
+            if (event.time) {
+                const timeParts = event.time.split(':');
+                if (timeParts.length === 2) {
+                    let hour = parseInt(timeParts[0]);
+                    const minute = timeParts[1];
+                    const ampm = hour >= 12 ? 'PM' : 'AM';
+                    hour = hour % 12 || 12;
+                    displayTime = hour + ':' + minute + ' ' + ampm;
+                } else {
+                    displayTime = event.time;
+                }
+            }
+            
             html += '<div class="popup-event-item">';
             html += '<div class="event-color-bar" style="background: ' + color + ';"></div>';
             html += '<div class="popup-event-content">';
             html += '<div class="popup-event-title">' + escapeHtml(event.title) + '</div>';
-            if (event.time) {
-                html += '<div class="popup-event-time">🕐 ' + escapeHtml(event.time) + '</div>';
+            if (displayTime) {
+                html += '<div class="popup-event-time">🕐 ' + displayTime + '</div>';
             }
             if (event.description) {
-                html += '<div class="popup-event-desc">' + escapeHtml(event.description).replace(/\n/g, '<br>') + '</div>';
+                html += '<div class="popup-event-desc">' + renderDescription(event.description) + '</div>';
             }
             html += '<div class="popup-event-actions">';
             html += '<button class="event-edit-btn" onclick="editEvent(\'' + calId + '\', \'' + event.id + '\', \'' + date + '\', \'' + namespace + '\'); closeDayPopup(\'' + calId + '\')">Edit</button>';
@@ -585,68 +601,122 @@ function renderEventItem(event, date, calId, namespace) {
 function renderDescription(description) {
     if (!description) return '';
     
-    let rendered = escapeHtml(description);
+    // First, convert DokuWiki/Markdown syntax to placeholder tokens (before escaping)
+    // Use a format that won't be affected by HTML escaping: \x00TOKEN_N\x00
     
-    // Convert newlines to <br>
-    rendered = rendered.replace(/\n/g, '<br>');
+    let rendered = description;
+    const tokens = [];
+    let tokenIndex = 0;
     
-    // Convert DokuWiki image syntax {{image.jpg}} to HTML
+    // Convert DokuWiki image syntax {{image.jpg}} to tokens
     rendered = rendered.replace(/\{\{([^}|]+?)(?:\|([^}]+))?\}\}/g, function(match, imagePath, alt) {
         imagePath = imagePath.trim();
         alt = alt ? alt.trim() : '';
         
+        let imageHtml;
         // Handle external URLs
         if (imagePath.match(/^https?:\/\//)) {
-            return '<img src="' + imagePath + '" alt="' + alt + '" class="event-image" />';
+            imageHtml = '<img src="' + imagePath + '" alt="' + escapeHtml(alt) + '" class="event-image" />';
+        } else {
+            // Handle internal DokuWiki images
+            const imageUrl = DOKU_BASE + 'lib/exe/fetch.php?media=' + encodeURIComponent(imagePath);
+            imageHtml = '<img src="' + imageUrl + '" alt="' + escapeHtml(alt) + '" class="event-image" />';
         }
         
-        // Handle internal DokuWiki images
-        const imageUrl = DOKU_BASE + 'lib/exe/fetch.php?media=' + encodeURIComponent(imagePath);
-        return '<img src="' + imageUrl + '" alt="' + alt + '" class="event-image" />';
+        const token = '\x00TOKEN' + tokenIndex + '\x00';
+        tokens[tokenIndex] = imageHtml;
+        tokenIndex++;
+        return token;
     });
     
-    // Convert DokuWiki link syntax [[link|text]] to HTML
+    // Convert DokuWiki link syntax [[link|text]] to tokens
     rendered = rendered.replace(/\[\[([^|\]]+?)(?:\|([^\]]+))?\]\]/g, function(match, link, text) {
         link = link.trim();
         text = text ? text.trim() : link;
         
+        let linkHtml;
         // Handle external URLs
         if (link.match(/^https?:\/\//)) {
-            return '<a href="' + link + '" target="_blank" rel="noopener noreferrer">' + text + '</a>';
+            linkHtml = '<a href="' + escapeHtml(link) + '" target="_blank" rel="noopener noreferrer">' + escapeHtml(text) + '</a>';
+        } else {
+            // Handle internal DokuWiki links with section anchors
+            const hashIndex = link.indexOf('#');
+            let pagePart = link;
+            let sectionPart = '';
+            
+            if (hashIndex !== -1) {
+                pagePart = link.substring(0, hashIndex);
+                sectionPart = link.substring(hashIndex); // Includes the #
+            }
+            
+            const wikiUrl = DOKU_BASE + 'doku.php?id=' + encodeURIComponent(pagePart) + sectionPart;
+            linkHtml = '<a href="' + wikiUrl + '">' + escapeHtml(text) + '</a>';
         }
         
-        // Handle internal DokuWiki links with section anchors
-        // Split page and section (e.g., "page#section" or "namespace:page#section")
-        const hashIndex = link.indexOf('#');
-        let pagePart = link;
-        let sectionPart = '';
-        
-        if (hashIndex !== -1) {
-            pagePart = link.substring(0, hashIndex);
-            sectionPart = link.substring(hashIndex); // Includes the #
-        }
-        
-        // Build URL with properly encoded page and unencoded section anchor
-        const wikiUrl = DOKU_BASE + 'doku.php?id=' + encodeURIComponent(pagePart) + sectionPart;
-        return '<a href="' + wikiUrl + '">' + escapeHtml(text) + '</a>';
+        const token = '\x00TOKEN' + tokenIndex + '\x00';
+        tokens[tokenIndex] = linkHtml;
+        tokenIndex++;
+        return token;
     });
     
-    // Convert markdown-style links [text](url) to HTML
+    // Convert markdown-style links [text](url) to tokens
     rendered = rendered.replace(/\[([^\]]+)\]\(([^)]+)\)/g, function(match, text, url) {
         text = text.trim();
         url = url.trim();
         
+        let linkHtml;
         if (url.match(/^https?:\/\//)) {
-            return '<a href="' + url + '" target="_blank" rel="noopener noreferrer">' + text + '</a>';
+            linkHtml = '<a href="' + escapeHtml(url) + '" target="_blank" rel="noopener noreferrer">' + escapeHtml(text) + '</a>';
+        } else {
+            linkHtml = '<a href="' + escapeHtml(url) + '">' + escapeHtml(text) + '</a>';
         }
         
-        return '<a href="' + url + '">' + text + '</a>';
+        const token = '\x00TOKEN' + tokenIndex + '\x00';
+        tokens[tokenIndex] = linkHtml;
+        tokenIndex++;
+        return token;
     });
     
-    // Convert plain URLs to clickable links
+    // Convert plain URLs to tokens
     rendered = rendered.replace(/(https?:\/\/[^\s<]+)/g, function(match, url) {
-        return '<a href="' + url + '" target="_blank" rel="noopener noreferrer">' + url + '</a>';
+        const linkHtml = '<a href="' + escapeHtml(url) + '" target="_blank" rel="noopener noreferrer">' + escapeHtml(url) + '</a>';
+        const token = '\x00TOKEN' + tokenIndex + '\x00';
+        tokens[tokenIndex] = linkHtml;
+        tokenIndex++;
+        return token;
     });
+    
+    // NOW escape the remaining text (tokens are protected with null bytes)
+    rendered = escapeHtml(rendered);
+    
+    // Convert newlines to <br>
+    rendered = rendered.replace(/\n/g, '<br>');
+    
+    // DokuWiki text formatting (on escaped text)
+    // Bold: **text** or __text__
+    rendered = rendered.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+    rendered = rendered.replace(/__(.+?)__/g, '<strong>$1</strong>');
+    
+    // Italic: //text//
+    rendered = rendered.replace(/\/\/(.+?)\/\//g, '<em>$1</em>');
+    
+    // Strikethrough: <del>text</del>
+    rendered = rendered.replace(/&lt;del&gt;(.+?)&lt;\/del&gt;/g, '<del>$1</del>');
+    
+    // Monospace: ''text''
+    rendered = rendered.replace(/&#39;&#39;(.+?)&#39;&#39;/g, '<code>$1</code>');
+    
+    // Subscript: <sub>text</sub>
+    rendered = rendered.replace(/&lt;sub&gt;(.+?)&lt;\/sub&gt;/g, '<sub>$1</sub>');
+    
+    // Superscript: <sup>text</sup>
+    rendered = rendered.replace(/&lt;sup&gt;(.+?)&lt;\/sup&gt;/g, '<sup>$1</sup>');
+    
+    // Restore tokens (replace with actual HTML)
+    for (let i = 0; i < tokens.length; i++) {
+        const tokenPattern = new RegExp('\x00TOKEN' + i + '\x00', 'g');
+        rendered = rendered.replace(tokenPattern, tokens[i]);
+    }
     
     return rendered;
 }
