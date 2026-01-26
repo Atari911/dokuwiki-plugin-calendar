@@ -66,6 +66,22 @@ class action_plugin_calendar extends DokuWiki_Action_Plugin {
             return;
         }
         
+        // If editing, find the event's stored namespace first (before normalizing)
+        $storedNamespace = '';
+        if ($eventId) {
+            $storedNamespace = $this->findEventNamespace($eventId, $date, $namespace);
+        }
+        
+        // Use stored namespace if editing, otherwise normalize wildcards to empty
+        if ($eventId && $storedNamespace !== null) {
+            $namespace = $storedNamespace;
+        } else {
+            // Normalize namespace: treat wildcards and multi-namespace as empty (default) for NEW events
+            if (!empty($namespace) && (strpos($namespace, '*') !== false || strpos($namespace, ';') !== false)) {
+                $namespace = '';
+            }
+        }
+        
         // Generate event ID if new
         $generatedId = $eventId ?: uniqid();
         
@@ -104,9 +120,9 @@ class action_plugin_calendar extends DokuWiki_Action_Plugin {
             if (file_exists($oldEventFile)) {
                 $oldEvents = json_decode(file_get_contents($oldEventFile), true);
                 if (isset($oldEvents[$oldDate])) {
-                    $oldEvents[$oldDate] = array_filter($oldEvents[$oldDate], function($evt) use ($eventId) {
+                    $oldEvents[$oldDate] = array_values(array_filter($oldEvents[$oldDate], function($evt) use ($eventId) {
                         return $evt['id'] !== $eventId;
-                    });
+                    }));
                     
                     if (empty($oldEvents[$oldDate])) {
                         unset($oldEvents[$oldDate]);
@@ -119,8 +135,13 @@ class action_plugin_calendar extends DokuWiki_Action_Plugin {
         
         if (!isset($events[$date])) {
             $events[$date] = [];
+        } elseif (!is_array($events[$date])) {
+            // Fix corrupted data - ensure it's an array
+            error_log("Calendar saveEvent: Fixing corrupted data at $date - was not an array");
+            $events[$date] = [];
         }
         
+        // Store the namespace with the event
         $eventData = [
             'id' => $generatedId,
             'title' => $title,
@@ -130,6 +151,7 @@ class action_plugin_calendar extends DokuWiki_Action_Plugin {
             'isTask' => $isTask,
             'completed' => $completed,
             'endDate' => $endDate,
+            'namespace' => $namespace, // Store namespace with event
             'created' => date('Y-m-d H:i:s')
         ];
         
@@ -152,6 +174,74 @@ class action_plugin_calendar extends DokuWiki_Action_Plugin {
         
         file_put_contents($eventFile, json_encode($events, JSON_PRETTY_PRINT));
         
+        // If event spans multiple months, add it to the first day of each subsequent month
+        if ($endDate && $endDate !== $date) {
+            $startDateObj = new DateTime($date);
+            $endDateObj = new DateTime($endDate);
+            
+            // Get the month/year of the start date
+            $startMonth = $startDateObj->format('Y-m');
+            
+            // Iterate through each month the event spans
+            $currentDate = clone $startDateObj;
+            $currentDate->modify('first day of next month'); // Jump to first of next month
+            
+            while ($currentDate <= $endDateObj) {
+                $currentMonth = $currentDate->format('Y-m');
+                $firstDayOfMonth = $currentDate->format('Y-m-01');
+                
+                list($currentYear, $currentMonthNum, $currentDay) = explode('-', $firstDayOfMonth);
+                
+                // Get the file for this month
+                $currentEventFile = $dataDir . sprintf('%04d-%02d.json', $currentYear, $currentMonthNum);
+                
+                $currentEvents = [];
+                if (file_exists($currentEventFile)) {
+                    $contents = file_get_contents($currentEventFile);
+                    $decoded = json_decode($contents, true);
+                    if (json_last_error() === JSON_ERROR_NONE && is_array($decoded)) {
+                        $currentEvents = $decoded;
+                    } else {
+                        error_log("Calendar saveEvent: JSON decode error in $currentEventFile: " . json_last_error_msg());
+                    }
+                }
+                
+                // Add entry for the first day of this month
+                if (!isset($currentEvents[$firstDayOfMonth])) {
+                    $currentEvents[$firstDayOfMonth] = [];
+                } elseif (!is_array($currentEvents[$firstDayOfMonth])) {
+                    // Fix corrupted data - ensure it's an array
+                    error_log("Calendar saveEvent: Fixing corrupted data at $firstDayOfMonth - was not an array");
+                    $currentEvents[$firstDayOfMonth] = [];
+                }
+                
+                // Create a copy with the original start date preserved
+                $eventDataForMonth = $eventData;
+                $eventDataForMonth['originalStartDate'] = $date; // Preserve the actual start date
+                
+                // Check if event already exists (when editing)
+                $found = false;
+                if ($eventId) {
+                    foreach ($currentEvents[$firstDayOfMonth] as $key => $evt) {
+                        if ($evt['id'] === $eventId) {
+                            $currentEvents[$firstDayOfMonth][$key] = $eventDataForMonth;
+                            $found = true;
+                            break;
+                        }
+                    }
+                }
+                
+                if (!$found) {
+                    $currentEvents[$firstDayOfMonth][] = $eventDataForMonth;
+                }
+                
+                file_put_contents($currentEventFile, json_encode($currentEvents, JSON_PRETTY_PRINT));
+                
+                // Move to next month
+                $currentDate->modify('first day of next month');
+            }
+        }
+        
         echo json_encode(['success' => true, 'events' => $events, 'eventId' => $eventData['id']]);
     }
 
@@ -161,6 +251,17 @@ class action_plugin_calendar extends DokuWiki_Action_Plugin {
         $namespace = $INPUT->str('namespace', '');
         $date = $INPUT->str('date');
         $eventId = $INPUT->str('eventId');
+        
+        // Find where the event actually lives
+        $storedNamespace = $this->findEventNamespace($eventId, $date, $namespace);
+        
+        if ($storedNamespace === null) {
+            echo json_encode(['success' => false, 'error' => 'Event not found']);
+            return;
+        }
+        
+        // Use the found namespace
+        $namespace = $storedNamespace;
         
         list($year, $month, $day) = explode('-', $date);
         
@@ -172,19 +273,65 @@ class action_plugin_calendar extends DokuWiki_Action_Plugin {
         
         $eventFile = $dataDir . sprintf('%04d-%02d.json', $year, $month);
         
+        // First, get the event to check if it spans multiple months
+        $eventToDelete = null;
         if (file_exists($eventFile)) {
             $events = json_decode(file_get_contents($eventFile), true);
             
             if (isset($events[$date])) {
-                $events[$date] = array_filter($events[$date], function($event) use ($eventId) {
+                foreach ($events[$date] as $event) {
+                    if ($event['id'] === $eventId) {
+                        $eventToDelete = $event;
+                        break;
+                    }
+                }
+                
+                $events[$date] = array_values(array_filter($events[$date], function($event) use ($eventId) {
                     return $event['id'] !== $eventId;
-                });
+                }));
                 
                 if (empty($events[$date])) {
                     unset($events[$date]);
                 }
                 
                 file_put_contents($eventFile, json_encode($events, JSON_PRETTY_PRINT));
+            }
+        }
+        
+        // If event spans multiple months, delete it from the first day of each subsequent month
+        if ($eventToDelete && isset($eventToDelete['endDate']) && $eventToDelete['endDate'] && $eventToDelete['endDate'] !== $date) {
+            $startDateObj = new DateTime($date);
+            $endDateObj = new DateTime($eventToDelete['endDate']);
+            
+            // Iterate through each month the event spans
+            $currentDate = clone $startDateObj;
+            $currentDate->modify('first day of next month'); // Jump to first of next month
+            
+            while ($currentDate <= $endDateObj) {
+                $firstDayOfMonth = $currentDate->format('Y-m-01');
+                list($currentYear, $currentMonth, $currentDay) = explode('-', $firstDayOfMonth);
+                
+                // Get the file for this month
+                $currentEventFile = $dataDir . sprintf('%04d-%02d.json', $currentYear, $currentMonth);
+                
+                if (file_exists($currentEventFile)) {
+                    $currentEvents = json_decode(file_get_contents($currentEventFile), true);
+                    
+                    if (isset($currentEvents[$firstDayOfMonth])) {
+                        $currentEvents[$firstDayOfMonth] = array_values(array_filter($currentEvents[$firstDayOfMonth], function($event) use ($eventId) {
+                            return $event['id'] !== $eventId;
+                        }));
+                        
+                        if (empty($currentEvents[$firstDayOfMonth])) {
+                            unset($currentEvents[$firstDayOfMonth]);
+                        }
+                        
+                        file_put_contents($currentEventFile, json_encode($currentEvents, JSON_PRETTY_PRINT));
+                    }
+                }
+                
+                // Move to next month
+                $currentDate->modify('first day of next month');
             }
         }
         
@@ -197,6 +344,17 @@ class action_plugin_calendar extends DokuWiki_Action_Plugin {
         $namespace = $INPUT->str('namespace', '');
         $date = $INPUT->str('date');
         $eventId = $INPUT->str('eventId');
+        
+        // Find where the event actually lives
+        $storedNamespace = $this->findEventNamespace($eventId, $date, $namespace);
+        
+        if ($storedNamespace === null) {
+            echo json_encode(['success' => false, 'error' => 'Event not found']);
+            return;
+        }
+        
+        // Use the found namespace
+        $namespace = $storedNamespace;
         
         list($year, $month, $day) = explode('-', $date);
         
@@ -227,19 +385,50 @@ class action_plugin_calendar extends DokuWiki_Action_Plugin {
     private function loadMonth() {
         global $INPUT;
         
+        // Prevent caching of AJAX responses
+        header('Cache-Control: no-cache, no-store, must-revalidate');
+        header('Pragma: no-cache');
+        header('Expires: 0');
+        
         $namespace = $INPUT->str('namespace', '');
         $year = $INPUT->int('year');
         $month = $INPUT->int('month');
         
+        error_log("=== Calendar loadMonth DEBUG ===");
+        error_log("Requested: year=$year, month=$month, namespace='$namespace'");
+        
+        // Check if multi-namespace or wildcard
+        $isMultiNamespace = !empty($namespace) && (strpos($namespace, ';') !== false || strpos($namespace, '*') !== false);
+        
+        error_log("isMultiNamespace: " . ($isMultiNamespace ? 'true' : 'false'));
+        
+        if ($isMultiNamespace) {
+            $events = $this->loadEventsMultiNamespace($namespace, $year, $month);
+        } else {
+            $events = $this->loadEventsSingleNamespace($namespace, $year, $month);
+        }
+        
+        error_log("Returning " . count($events) . " date keys");
+        foreach ($events as $dateKey => $dayEvents) {
+            error_log("  dateKey=$dateKey has " . count($dayEvents) . " events");
+        }
+        
+        echo json_encode([
+            'success' => true,
+            'year' => $year,
+            'month' => $month,
+            'events' => $events
+        ]);
+    }
+    
+    private function loadEventsSingleNamespace($namespace, $year, $month) {
         $dataDir = DOKU_INC . 'data/meta/';
         if ($namespace) {
             $dataDir .= str_replace(':', '/', $namespace) . '/';
         }
         $dataDir .= 'calendar/';
         
-        error_log("Calendar loadMonth: Loading $year-$month");
-        
-        // Load current month
+        // Load ONLY current month
         $eventFile = $dataDir . sprintf('%04d-%02d.json', $year, $month);
         $events = [];
         if (file_exists($eventFile)) {
@@ -247,55 +436,105 @@ class action_plugin_calendar extends DokuWiki_Action_Plugin {
             $decoded = json_decode($contents, true);
             if (json_last_error() === JSON_ERROR_NONE) {
                 $events = $decoded;
-                error_log("Calendar loadMonth: Loaded " . count($events) . " dates from $eventFile");
-            } else {
-                error_log('Calendar: JSON decode error in ' . $eventFile . ': ' . json_last_error_msg());
-            }
-        } else {
-            error_log("Calendar loadMonth: File not found: $eventFile");
-        }
-        
-        // Load previous month to catch events spanning into current month
-        $prevMonth = $month - 1;
-        $prevYear = $year;
-        if ($prevMonth < 1) {
-            $prevMonth = 12;
-            $prevYear--;
-        }
-        $prevEventFile = $dataDir . sprintf('%04d-%02d.json', $prevYear, $prevMonth);
-        if (file_exists($prevEventFile)) {
-            $contents = file_get_contents($prevEventFile);
-            $decoded = json_decode($contents, true);
-            if (json_last_error() === JSON_ERROR_NONE) {
-                error_log("Calendar loadMonth: Loaded " . count($decoded) . " dates from $prevEventFile");
-                $events = array_merge($events, $decoded);
-            } else {
-                error_log('Calendar: JSON decode error in ' . $prevEventFile . ': ' . json_last_error_msg());
             }
         }
         
-        // Load next month to catch events spanning from current month
-        $nextMonth = $month + 1;
-        $nextYear = $year;
-        if ($nextMonth > 12) {
-            $nextMonth = 1;
-            $nextYear++;
+        return $events;
+    }
+    
+    private function loadEventsMultiNamespace($namespaces, $year, $month) {
+        // Check for wildcard pattern
+        if (preg_match('/^(.+):\*$/', $namespaces, $matches)) {
+            $baseNamespace = $matches[1];
+            return $this->loadEventsWildcard($baseNamespace, $year, $month);
         }
-        $nextEventFile = $dataDir . sprintf('%04d-%02d.json', $nextYear, $nextMonth);
-        if (file_exists($nextEventFile)) {
-            $contents = file_get_contents($nextEventFile);
-            $decoded = json_decode($contents, true);
-            if (json_last_error() === JSON_ERROR_NONE) {
-                error_log("Calendar loadMonth: Loaded " . count($decoded) . " dates from $nextEventFile");
-                $events = array_merge($events, $decoded);
-            } else {
-                error_log('Calendar: JSON decode error in ' . $nextEventFile . ': ' . json_last_error_msg());
+        
+        // Check for root wildcard
+        if ($namespaces === '*') {
+            return $this->loadEventsWildcard('', $year, $month);
+        }
+        
+        // Parse namespace list (semicolon separated)
+        $namespaceList = array_map('trim', explode(';', $namespaces));
+        
+        // Load events from all namespaces
+        $allEvents = [];
+        foreach ($namespaceList as $ns) {
+            $ns = trim($ns);
+            if (empty($ns)) continue;
+            
+            $events = $this->loadEventsSingleNamespace($ns, $year, $month);
+            
+            // Add namespace tag to each event
+            foreach ($events as $dateKey => $dayEvents) {
+                if (!isset($allEvents[$dateKey])) {
+                    $allEvents[$dateKey] = [];
+                }
+                foreach ($dayEvents as $event) {
+                    $event['_namespace'] = $ns;
+                    $allEvents[$dateKey][] = $event;
+                }
             }
         }
         
-        error_log("Calendar loadMonth: Total dates returned: " . count($events));
+        return $allEvents;
+    }
+    
+    private function loadEventsWildcard($baseNamespace, $year, $month) {
+        $dataDir = DOKU_INC . 'data/meta/';
+        if ($baseNamespace) {
+            $dataDir .= str_replace(':', '/', $baseNamespace) . '/';
+        }
         
-        echo json_encode(['success' => true, 'events' => $events, 'year' => $year, 'month' => $month]);
+        $allEvents = [];
+        
+        // First, load events from the base namespace itself
+        $events = $this->loadEventsSingleNamespace($baseNamespace, $year, $month);
+        
+        foreach ($events as $dateKey => $dayEvents) {
+            if (!isset($allEvents[$dateKey])) {
+                $allEvents[$dateKey] = [];
+            }
+            foreach ($dayEvents as $event) {
+                $event['_namespace'] = $baseNamespace;
+                $allEvents[$dateKey][] = $event;
+            }
+        }
+        
+        // Recursively find all subdirectories
+        $this->findSubNamespaces($dataDir, $baseNamespace, $year, $month, $allEvents);
+        
+        return $allEvents;
+    }
+    
+    private function findSubNamespaces($dir, $baseNamespace, $year, $month, &$allEvents) {
+        if (!is_dir($dir)) return;
+        
+        $items = scandir($dir);
+        foreach ($items as $item) {
+            if ($item === '.' || $item === '..') continue;
+            
+            $path = $dir . $item;
+            if (is_dir($path) && $item !== 'calendar') {
+                // This is a namespace directory
+                $namespace = $baseNamespace ? $baseNamespace . ':' . $item : $item;
+                
+                // Load events from this namespace
+                $events = $this->loadEventsSingleNamespace($namespace, $year, $month);
+                foreach ($events as $dateKey => $dayEvents) {
+                    if (!isset($allEvents[$dateKey])) {
+                        $allEvents[$dateKey] = [];
+                    }
+                    foreach ($dayEvents as $event) {
+                        $event['_namespace'] = $namespace;
+                        $allEvents[$dateKey][] = $event;
+                    }
+                }
+                
+                // Recurse into subdirectories
+                $this->findSubNamespaces($path . '/', $namespace, $year, $month, $allEvents);
+            }
+        }
     }
 
     private function toggleTaskComplete() {
@@ -305,6 +544,17 @@ class action_plugin_calendar extends DokuWiki_Action_Plugin {
         $date = $INPUT->str('date');
         $eventId = $INPUT->str('eventId');
         $completed = $INPUT->bool('completed', false);
+        
+        // Find where the event actually lives
+        $storedNamespace = $this->findEventNamespace($eventId, $date, $namespace);
+        
+        if ($storedNamespace === null) {
+            echo json_encode(['success' => false, 'error' => 'Event not found']);
+            return;
+        }
+        
+        // Use the found namespace
+        $namespace = $storedNamespace;
         
         list($year, $month, $day) = explode('-', $date);
         
@@ -434,5 +684,88 @@ class action_plugin_calendar extends DokuWiki_Action_Plugin {
             'type' => 'text/javascript',
             'src' => DOKU_BASE . 'lib/plugins/calendar/script.js'
         );
+    }
+    // Helper function to find an event's stored namespace
+    private function findEventNamespace($eventId, $date, $searchNamespace) {
+        list($year, $month, $day) = explode('-', $date);
+        
+        // List of namespaces to check
+        $namespacesToCheck = [''];
+        
+        // If searchNamespace is a wildcard or multi, we need to search multiple locations
+        if (!empty($searchNamespace)) {
+            if (strpos($searchNamespace, ';') !== false) {
+                // Multi-namespace - check each one
+                $namespacesToCheck = array_map('trim', explode(';', $searchNamespace));
+                $namespacesToCheck[] = ''; // Also check default
+            } elseif (strpos($searchNamespace, '*') !== false) {
+                // Wildcard - need to scan directories
+                $baseNs = trim(str_replace('*', '', $searchNamespace), ':');
+                $namespacesToCheck = $this->findAllNamespaces($baseNs);
+                $namespacesToCheck[] = ''; // Also check default
+            } else {
+                // Single namespace
+                $namespacesToCheck = [$searchNamespace, '']; // Check specified and default
+            }
+        }
+        
+        // Search for the event in all possible namespaces
+        foreach ($namespacesToCheck as $ns) {
+            $dataDir = DOKU_INC . 'data/meta/';
+            if ($ns) {
+                $dataDir .= str_replace(':', '/', $ns) . '/';
+            }
+            $dataDir .= 'calendar/';
+            
+            $eventFile = $dataDir . sprintf('%04d-%02d.json', $year, $month);
+            
+            if (file_exists($eventFile)) {
+                $events = json_decode(file_get_contents($eventFile), true);
+                if (isset($events[$date])) {
+                    foreach ($events[$date] as $evt) {
+                        if ($evt['id'] === $eventId) {
+                            // Found the event! Return its stored namespace
+                            return isset($evt['namespace']) ? $evt['namespace'] : $ns;
+                        }
+                    }
+                }
+            }
+        }
+        
+        return null; // Event not found
+    }
+    
+    // Helper to find all namespaces under a base namespace
+    private function findAllNamespaces($baseNamespace) {
+        $dataDir = DOKU_INC . 'data/meta/';
+        if ($baseNamespace) {
+            $dataDir .= str_replace(':', '/', $baseNamespace) . '/';
+        }
+        
+        $namespaces = [];
+        if ($baseNamespace) {
+            $namespaces[] = $baseNamespace;
+        }
+        
+        $this->scanForNamespaces($dataDir, $baseNamespace, $namespaces);
+        
+        return $namespaces;
+    }
+    
+    // Recursive scan for namespaces
+    private function scanForNamespaces($dir, $baseNamespace, &$namespaces) {
+        if (!is_dir($dir)) return;
+        
+        $items = scandir($dir);
+        foreach ($items as $item) {
+            if ($item === '.' || $item === '..' || $item === 'calendar') continue;
+            
+            $path = $dir . $item;
+            if (is_dir($path)) {
+                $namespace = $baseNamespace ? $baseNamespace . ':' . $item : $item;
+                $namespaces[] = $namespace;
+                $this->scanForNamespaces($path . '/', $namespace, $namespaces);
+            }
+        }
     }
 }

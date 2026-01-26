@@ -24,7 +24,11 @@ function navCalendar(calId, year, month, namespace) {
     })
     .then(r => r.json())
     .then(data => {
-        console.log('Month navigation data:', data);
+        console.log('=== navCalendar AJAX Response ===');
+        console.log('Requested year:', year, 'month:', month);
+        console.log('Response:', data);
+        console.log('Response year:', data.year, 'month:', data.month);
+        console.log('Event date keys:', Object.keys(data.events || {}));
         if (data.success) {
             console.log('Rebuilding calendar for', year, month, 'with', Object.keys(data.events || {}).length, 'date entries');
             rebuildCalendar(calId, data.year, data.month, data.events, namespace);
@@ -117,9 +121,18 @@ function jumpToSelectedMonth(calId, namespace) {
 
 // Rebuild calendar grid after navigation
 function rebuildCalendar(calId, year, month, events, namespace) {
+    console.log('=== rebuildCalendar DEBUG ===');
+    console.log('Requested:', {year, month, namespace});
+    console.log('Event date keys received:', Object.keys(events));
+    console.log('Events object:', events);
+    
     const container = document.getElementById(calId);
     const monthNames = ['January', 'February', 'March', 'April', 'May', 'June',
                        'July', 'August', 'September', 'October', 'November', 'December'];
+    
+    // Update container data attributes for current month/year
+    container.setAttribute('data-year', year);
+    container.setAttribute('data-month', month);
     
     // Update embedded events data
     let eventsDataEl = document.getElementById('events-data-' + calId);
@@ -169,6 +182,12 @@ function rebuildCalendar(calId, year, month, events, namespace) {
     // Build a map of all events with their date ranges
     const eventRanges = {};
     for (const [dateKey, dayEvents] of Object.entries(events)) {
+        // Defensive check: ensure dayEvents is an array
+        if (!Array.isArray(dayEvents)) {
+            console.error('dayEvents is not an array for dateKey:', dateKey, 'value:', dayEvents);
+            continue;
+        }
+        
         // Only process events that could possibly overlap with this month/year
         const dateYear = parseInt(dateKey.split('-')[0]);
         const dateMonth = parseInt(dateKey.split('-')[1]);
@@ -301,33 +320,17 @@ function rebuildCalendar(calId, year, month, events, namespace) {
     
     tbody.innerHTML = html;
     
-    // Rebuild event list - show events that overlap with current month
-    const currentMonthEvents = {};
-    
-    for (const [dateKey, dayEvents] of Object.entries(events)) {
-        for (const event of dayEvents) {
-            const startDate = dateKey;
-            const endDate = event.endDate || dateKey;
-            
-            // Check if event overlaps with current month
-            // Event starts before month ends AND ends after month starts
-            const eventStartObj = new Date(startDate);
-            const eventEndObj = new Date(endDate);
-            const monthFirstDay = new Date(year, month - 1, 1);
-            const monthLastDay = new Date(year, month - 1, daysInMonth);
-            
-            // Include if event overlaps this month at all
-            if (eventEndObj >= monthFirstDay && eventStartObj <= monthLastDay) {
-                if (!currentMonthEvents[dateKey]) {
-                    currentMonthEvents[dateKey] = [];
-                }
-                currentMonthEvents[dateKey].push(event);
-            }
-        }
-    }
-    
+    // Rebuild event list - server already filtered to current month
     const eventList = container.querySelector('.event-list-compact');
-    eventList.innerHTML = renderEventListFromData(currentMonthEvents, calId, namespace);
+    eventList.innerHTML = renderEventListFromData(events, calId, namespace, year, month);
+    
+    // Auto-scroll to first future event (past events will be above viewport)
+    setTimeout(() => {
+        const firstFuture = eventList.querySelector('[data-first-future="true"]');
+        if (firstFuture) {
+            firstFuture.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+    }, 100);
     
     // Update title
     const title = container.querySelector('#eventlist-title-' + calId);
@@ -351,12 +354,20 @@ function renderEventListFromData(events, calId, namespace, year, month) {
         // Skip events not in current month if filtering
         if (monthStart && monthEnd) {
             const eventDate = new Date(dateKey + 'T00:00:00');
+            
             if (eventDate < monthStart || eventDate > monthEnd) {
                 continue;
             }
         }
         
+        // Sort events within this day by time
         const dayEvents = events[dateKey];
+        dayEvents.sort((a, b) => {
+            const timeA = a.time || '00:00';
+            const timeB = b.time || '00:00';
+            return timeA.localeCompare(timeB);
+        });
+        
         for (const event of dayEvents) {
             html += renderEventItem(event, dateKey, calId, namespace);
         }
@@ -417,6 +428,9 @@ function showDayPopup(calId, date, namespace) {
         dayEvents.forEach(event => {
             const color = event.color || '#3498db';
             
+            // Use individual event namespace if available (for multi-namespace support)
+            const eventNamespace = event._namespace !== undefined ? event._namespace : namespace;
+            
             // Convert to 12-hour format
             let displayTime = '';
             if (event.time) {
@@ -432,20 +446,45 @@ function showDayPopup(calId, date, namespace) {
                 }
             }
             
+            // Multi-day indicator
+            let multiDay = '';
+            if (event.endDate && event.endDate !== date) {
+                const endObj = new Date(event.endDate + 'T00:00:00');
+                multiDay = ' → ' + endObj.toLocaleDateString('en-US', { 
+                    month: 'short', 
+                    day: 'numeric' 
+                });
+            }
+            
             html += '<div class="popup-event-item">';
             html += '<div class="event-color-bar" style="background: ' + color + ';"></div>';
             html += '<div class="popup-event-content">';
-            html += '<div class="popup-event-title">' + escapeHtml(event.title) + '</div>';
+            
+            // Single line with title, time, date range, namespace, and actions
+            html += '<div class="popup-event-main-row">';
+            html += '<div class="popup-event-info-inline">';
+            html += '<span class="popup-event-title">' + escapeHtml(event.title) + '</span>';
             if (displayTime) {
-                html += '<div class="popup-event-time">🕐 ' + displayTime + '</div>';
+                html += '<span class="popup-event-time">🕐 ' + displayTime + '</span>';
             }
+            if (multiDay) {
+                html += '<span class="popup-event-multiday">' + multiDay + '</span>';
+            }
+            if (eventNamespace) {
+                html += '<span class="popup-event-namespace">' + escapeHtml(eventNamespace) + '</span>';
+            }
+            html += '</div>';
+            html += '<div class="popup-event-actions">';
+            html += '<button class="event-edit-btn" onclick="editEvent(\'' + calId + '\', \'' + event.id + '\', \'' + date + '\', \'' + eventNamespace + '\'); closeDayPopup(\'' + calId + '\')">✏️</button>';
+            html += '<button class="event-delete-btn" onclick="deleteEvent(\'' + calId + '\', \'' + event.id + '\', \'' + date + '\', \'' + eventNamespace + '\'); closeDayPopup(\'' + calId + '\')">🗑️</button>';
+            html += '</div>';
+            html += '</div>';
+            
+            // Description on separate line if present
             if (event.description) {
                 html += '<div class="popup-event-desc">' + renderDescription(event.description) + '</div>';
             }
-            html += '<div class="popup-event-actions">';
-            html += '<button class="event-edit-btn" onclick="editEvent(\'' + calId + '\', \'' + event.id + '\', \'' + date + '\', \'' + namespace + '\'); closeDayPopup(\'' + calId + '\')">Edit</button>';
-            html += '<button class="event-delete-btn" onclick="deleteEvent(\'' + calId + '\', \'' + event.id + '\', \'' + date + '\', \'' + namespace + '\'); closeDayPopup(\'' + calId + '\')">Delete</button>';
-            html += '</div>';
+            
             html += '</div></div>';
         });
         html += '</div>';
@@ -478,12 +517,17 @@ function showDayEvents(calId, date, namespace) {
         action: 'load_month',
         year: date.split('-')[0],
         month: parseInt(date.split('-')[1]),
-        namespace: namespace
+        namespace: namespace,
+        _: new Date().getTime() // Cache buster
     });
     
     fetch(DOKU_BASE + 'lib/exe/ajax.php', {
         method: 'POST',
-        headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+        headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+            'Cache-Control': 'no-cache, no-store, must-revalidate',
+            'Pragma': 'no-cache'
+        },
         body: params.toString()
     })
     .then(r => r.json())
@@ -521,8 +565,17 @@ function showDayEvents(calId, date, namespace) {
 
 // Render a single event item
 function renderEventItem(event, date, calId, namespace) {
+    // Check if this event is in the past or today
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const eventDate = new Date(date + 'T00:00:00');
+    const isPast = eventDate < today;
+    const isToday = eventDate.getTime() === today.getTime();
+    
     // Format date display with day of week
-    const dateObj = new Date(date + 'T00:00:00');
+    // Use originalStartDate if this is a multi-month event continuation
+    const displayDateKey = event.originalStartDate || date;
+    const dateObj = new Date(displayDateKey + 'T00:00:00');
     const displayDate = dateObj.toLocaleDateString('en-US', { 
         weekday: 'short',
         month: 'short', 
@@ -546,7 +599,7 @@ function renderEventItem(event, date, calId, namespace) {
     
     // Multi-day indicator
     let multiDay = '';
-    if (event.endDate && event.endDate !== date) {
+    if (event.endDate && event.endDate !== displayDateKey) {
         const endObj = new Date(event.endDate + 'T00:00:00');
         multiDay = ' → ' + endObj.toLocaleDateString('en-US', { 
             weekday: 'short',
@@ -556,40 +609,78 @@ function renderEventItem(event, date, calId, namespace) {
     }
     
     const completedClass = event.completed ? ' event-completed' : '';
+    const pastClass = isPast ? ' event-past' : '';
     const color = event.color || '#3498db';
     const isTask = event.isTask || false;
     const completed = event.completed || false;
     
-    let html = '<div class="event-compact-item' + completedClass + '" data-event-id="' + event.id + '" data-date="' + date + '" style="border-left-color: ' + color + ';">';
+    let html = '<div class="event-compact-item' + completedClass + pastClass + '" data-event-id="' + event.id + '" data-date="' + date + '" style="border-left-color: ' + color + ';" onclick="' + (isPast ? 'togglePastEventExpand(this)' : '') + '">';
     
     html += '<div class="event-info">';
     html += '<div class="event-title-row">';
     html += '<span class="event-title-compact">' + escapeHtml(event.title) + '</span>';
     html += '</div>';
     
-    html += '<div class="event-meta-compact">';
-    html += '<span class="event-date-time">' + displayDate + multiDay;
-    if (displayTime) {
-        html += ' • ' + displayTime;
-    }
-    html += '</span>';
-    html += '</div>';
-    
-    if (event.description) {
-        html += '<div class="event-desc-compact">' + renderDescription(event.description) + '</div>';
+    // Only show meta and description for non-past events (collapsed for past)
+    if (!isPast) {
+        html += '<div class="event-meta-compact">';
+        html += '<span class="event-date-time">' + displayDate + multiDay;
+        if (displayTime) {
+            html += ' • ' + displayTime;
+        }
+        // Add TODAY badge for today's events
+        if (isToday) {
+            html += ' <span class="event-today-badge">TODAY</span>';
+        }
+        // Add namespace badge (stored namespace or _namespace for multi-namespace)
+        let eventNamespace = event.namespace || '';
+        if (!eventNamespace && event._namespace !== undefined) {
+            eventNamespace = event._namespace; // Fallback to _namespace for multi-namespace loading
+        }
+        if (eventNamespace) {
+            html += ' <span class="event-namespace-badge">' + escapeHtml(eventNamespace) + '</span>';
+        }
+        html += '</span>';
+        html += '</div>';
+        
+        if (event.description) {
+            html += '<div class="event-desc-compact">' + renderDescription(event.description) + '</div>';
+        }
+    } else {
+        // For past events, store data in hidden divs for expand/collapse
+        html += '<div class="event-meta-compact" style="display: none;">';
+        html += '<span class="event-date-time">' + displayDate + multiDay;
+        if (displayTime) {
+            html += ' • ' + displayTime;
+        }
+        html += '</span>';
+        html += '</div>';
+        
+        if (event.description) {
+            html += '<div class="event-desc-compact" style="display: none;">' + renderDescription(event.description) + '</div>';
+        }
     }
     
     html += '</div>'; // event-info
     
+    // Use stored namespace from event, fallback to _namespace, then passed namespace
+    let buttonNamespace = event.namespace || '';
+    if (!buttonNamespace && event._namespace !== undefined) {
+        buttonNamespace = event._namespace;
+    }
+    if (!buttonNamespace) {
+        buttonNamespace = namespace;
+    }
+    
     html += '<div class="event-actions-compact">';
-    html += '<button class="event-action-btn" onclick="deleteEvent(\'' + calId + '\', \'' + event.id + '\', \'' + date + '\', \'' + namespace + '\')">🗑️</button>';
-    html += '<button class="event-action-btn" onclick="editEvent(\'' + calId + '\', \'' + event.id + '\', \'' + date + '\', \'' + namespace + '\')">✏️</button>';
+    html += '<button class="event-action-btn" onclick="deleteEvent(\'' + calId + '\', \'' + event.id + '\', \'' + date + '\', \'' + buttonNamespace + '\')">🗑️</button>';
+    html += '<button class="event-action-btn" onclick="editEvent(\'' + calId + '\', \'' + event.id + '\', \'' + date + '\', \'' + buttonNamespace + '\')">✏️</button>';
     html += '</div>';
     
     // Checkbox for tasks - ON THE FAR RIGHT
     if (isTask) {
         const checked = completed ? 'checked' : '';
-        html += '<input type="checkbox" class="task-checkbox" ' + checked + ' onclick="toggleTaskComplete(\'' + calId + '\', \'' + event.id + '\', \'' + date + '\', \'' + namespace + '\', this.checked)">';
+        html += '<input type="checkbox" class="task-checkbox" ' + checked + ' onclick="toggleTaskComplete(\'' + calId + '\', \'' + event.id + '\', \'' + date + '\', \'' + buttonNamespace + '\', this.checked)">';
     }
     
     html += '</div>';
@@ -733,21 +824,58 @@ function openAddEvent(calId, namespace, date) {
         return;
     }
     
+    // Check if there's a filtered namespace active
+    const calendar = document.getElementById(calId);
+    const filteredNamespace = calendar.dataset.filteredNamespace;
+    
+    // Use filtered namespace if available, otherwise use the passed namespace
+    const effectiveNamespace = filteredNamespace || namespace;
+    
+    console.log('Opening add event: filtered=' + filteredNamespace + ', passed=' + namespace + ', using=' + effectiveNamespace);
+    
     // Reset form
     form.reset();
     document.getElementById('event-id-' + calId).value = '';
     
+    // Store the effective namespace in a hidden field or data attribute
+    form.dataset.effectiveNamespace = effectiveNamespace;
+    
     // Set date - use local date, not UTC
     let defaultDate = date;
     if (!defaultDate) {
-        const today = new Date();
-        const year = today.getFullYear();
-        const month = String(today.getMonth() + 1).padStart(2, '0');
-        const day = String(today.getDate()).padStart(2, '0');
-        defaultDate = `${year}-${month}-${day}`;
+        // Get the currently displayed month from the calendar container
+        const container = document.getElementById(calId);
+        const displayedYear = parseInt(container.getAttribute('data-year'));
+        const displayedMonth = parseInt(container.getAttribute('data-month'));
+        
+        console.log('Setting default date: year=' + displayedYear + ', month=' + displayedMonth);
+        
+        if (displayedYear && displayedMonth) {
+            // Use first day of the displayed month
+            const year = displayedYear;
+            const month = String(displayedMonth).padStart(2, '0');
+            defaultDate = `${year}-${month}-01`;
+            console.log('Using displayed month:', defaultDate);
+        } else {
+            // Fallback to today if attributes not found
+            const today = new Date();
+            const year = today.getFullYear();
+            const month = String(today.getMonth() + 1).padStart(2, '0');
+            const day = String(today.getDate()).padStart(2, '0');
+            defaultDate = `${year}-${month}-${day}`;
+            console.log('Fallback to today:', defaultDate);
+        }
     }
     dateField.value = defaultDate;
     dateField.removeAttribute('data-original-date');
+    
+    // Also set the end date field to the same default (user can change it)
+    const endDateField = document.getElementById('event-end-date-' + calId);
+    if (endDateField) {
+        endDateField.value = ''; // Empty by default (single-day event)
+        // Set min attribute to help the date picker open on the right month
+        endDateField.setAttribute('min', defaultDate);
+    }
     
     // Set default color
     document.getElementById('event-color-' + calId).value = '#3498db';
@@ -797,7 +925,12 @@ function editEvent(calId, eventId, date, namespace) {
             document.getElementById('event-id-' + calId).value = event.id;
             dateField.value = date;
             dateField.setAttribute('data-original-date', date);
-            document.getElementById('event-end-date-' + calId).value = event.endDate || '';
+            
+            const endDateField = document.getElementById('event-end-date-' + calId);
+            endDateField.value = event.endDate || '';
+            // Set min attribute to help date picker open on the start date's month
+            endDateField.setAttribute('min', date);
+            
             document.getElementById('event-title-' + calId).value = event.title;
             document.getElementById('event-time-' + calId).value = event.time || '';
             document.getElementById('event-color-' + calId).value = event.color || '#3498db';
@@ -843,6 +976,13 @@ function deleteEvent(calId, eventId, date, namespace) {
 
 // Save event (add or edit)
 function saveEventCompact(calId, namespace) {
+    const form = document.getElementById('eventform-' + calId);
+    
+    // Use the effective namespace (filtered namespace if active, otherwise passed namespace)
+    const effectiveNamespace = form.dataset.effectiveNamespace || namespace;
+    
+    console.log('Saving event: passed namespace=' + namespace + ', effective=' + effectiveNamespace);
+    
     const eventId = document.getElementById('event-id-' + calId).value;
     const dateInput = document.getElementById('event-date-' + calId);
     const date = dateInput.value;
@@ -871,7 +1011,7 @@ function saveEventCompact(calId, namespace) {
     const params = new URLSearchParams({
         call: 'plugin_calendar',
         action: 'save_event',
-        namespace: namespace,
+        namespace: effectiveNamespace,
         eventId: eventId,
         date: date,
         oldDate: oldDate,
@@ -1025,12 +1165,17 @@ function navEventPanel(calId, year, month, namespace) {
         action: 'load_month',
         year: year,
         month: month,
-        namespace: namespace
+        namespace: namespace,
+        _: new Date().getTime() // Cache buster
     });
     
     fetch(DOKU_BASE + 'lib/exe/ajax.php', {
         method: 'POST',
-        headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+        headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+            'Cache-Control': 'no-cache, no-store, must-revalidate',
+            'Pragma': 'no-cache'
+        },
         body: params.toString()
     })
     .then(r => r.json())
@@ -1188,3 +1333,114 @@ editEvent = function(calId, eventId, date, namespace) {
     originalEditEvent(calId, eventId, date, namespace);
     setTimeout(() => makeDialogDraggable(calId), 100);
 };
+
+// Toggle expand/collapse for past events
+function togglePastEventExpand(element) {
+    // Stop propagation to prevent any parent click handlers
+    event.stopPropagation();
+    
+    const meta = element.querySelector(".event-meta-compact");
+    const desc = element.querySelector(".event-desc-compact");
+    
+    // Toggle visibility
+    if (meta.style.display === "none") {
+        // Expand
+        meta.style.display = "block";
+        if (desc) desc.style.display = "block";
+        element.classList.add("event-past-expanded");
+    } else {
+        // Collapse
+        meta.style.display = "none";
+        if (desc) desc.style.display = "none";
+        element.classList.remove("event-past-expanded");
+    }
+}
+
+// Filter calendar by namespace when clicking namespace badge
+document.addEventListener('click', function(e) {
+    if (e.target.classList.contains('event-namespace-badge')) {
+        const namespace = e.target.textContent;
+        const eventItem = e.target.closest('.event-compact-item');
+        const eventList = e.target.closest('.event-list-compact');
+        const calendar = e.target.closest('.calendar-compact-container');
+        
+        if (!eventList || !calendar) return;
+        
+        const calId = calendar.id;
+        
+        // Check if already filtered
+        const isFiltered = eventList.classList.contains('namespace-filtered');
+        
+        if (isFiltered && eventList.dataset.filterNamespace === namespace) {
+            // Unfilter - show all
+            eventList.classList.remove('namespace-filtered');
+            delete eventList.dataset.filterNamespace;
+            delete calendar.dataset.filteredNamespace;
+            eventList.querySelectorAll('.event-compact-item').forEach(item => {
+                item.style.display = '';
+            });
+            
+            // Update header to show "all namespaces"
+            updateFilteredNamespaceDisplay(calId, null);
+        } else {
+            // Filter by this namespace
+            eventList.classList.add('namespace-filtered');
+            eventList.dataset.filterNamespace = namespace;
+            calendar.dataset.filteredNamespace = namespace;
+            eventList.querySelectorAll('.event-compact-item').forEach(item => {
+                const itemBadge = item.querySelector('.event-namespace-badge');
+                if (itemBadge && itemBadge.textContent === namespace) {
+                    item.style.display = '';
+                } else {
+                    item.style.display = 'none';
+                }
+            });
+            
+            // Update header to show filtered namespace
+            updateFilteredNamespaceDisplay(calId, namespace);
+        }
+    }
+});
+
+// Update the displayed filtered namespace in event list header
+function updateFilteredNamespaceDisplay(calId, namespace) {
+    const calendar = document.getElementById(calId);
+    if (!calendar) return;
+    
+    const headerContent = calendar.querySelector('.event-list-header-content');
+    if (!headerContent) return;
+    
+    // Remove existing filter badge
+    let filterBadge = headerContent.querySelector('.namespace-filter-badge');
+    if (filterBadge) {
+        filterBadge.remove();
+    }
+    
+    // Add new filter badge if filtering
+    if (namespace) {
+        filterBadge = document.createElement('span');
+        filterBadge.className = 'namespace-badge namespace-filter-badge';
+        filterBadge.innerHTML = escapeHtml(namespace) + ' <button class="filter-clear-inline" onclick="clearNamespaceFilter(\'' + calId + '\'); event.stopPropagation();">✕</button>';
+        headerContent.appendChild(filterBadge);
+    }
+}
+
+// Clear namespace filter
+function clearNamespaceFilter(calId) {
+    const calendar = document.getElementById(calId);
+    if (!calendar) return;
+    
+    const eventList = calendar.querySelector('.event-list-compact');
+    if (!eventList) return;
+    
+    // Clear filter
+    eventList.classList.remove('namespace-filtered');
+    delete eventList.dataset.filterNamespace;
+    delete calendar.dataset.filteredNamespace;
+    eventList.querySelectorAll('.event-compact-item').forEach(item => {
+        item.style.display = '';
+    });
+    
+    // Update header
+    updateFilteredNamespaceDisplay(calId, null);
+}

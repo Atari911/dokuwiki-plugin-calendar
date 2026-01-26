@@ -100,6 +100,37 @@
     border-bottom: 1px solid #e0e0e0;
 }
 
+.namespace-filter-badge {
+    position: relative;
+    padding-right: 24px !important;
+}
+
+.filter-clear-inline {
+    position: absolute;
+    right: 4px;
+    top: 50%;
+    transform: translateY(-50%);
+    background: none;
+    border: none;
+    color: #999;
+    cursor: pointer;
+    font-size: 12px;
+    padding: 0;
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.15s;
+    line-height: 1;
+}
+
+.filter-clear-inline:hover {
+    background: rgba(211, 47, 47, 0.1);
+    color: #d32f2f;
+}
+
 .calendar-compact-header h3 {
     margin: 0;
     font-size: 14px;
@@ -510,6 +541,89 @@
 .event-completed .event-title-compact {
     text-decoration: line-through;
     color: #999;
+}
+
+.event-past {
+    opacity: 0.35;
+    background: #fafafa;
+    font-size: 10px;
+    padding: 3px 6px;
+    margin-bottom: 2px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.event-past:hover {
+    opacity: 0.6;
+    background: #f5f5f5;
+}
+
+.event-past-expanded {
+    opacity: 0.8 !important;
+    background: #f9f9f9 !important;
+    padding: 5px 6px !important;
+    font-size: 12px !important;
+}
+
+.event-past-expanded .event-title-compact {
+    font-size: 12px !important;
+    color: #666 !important;
+}
+
+.event-past-expanded .event-date-time {
+    font-size: 11px !important;
+    color: #888 !important;
+}
+
+.event-past .event-title-compact {
+    font-size: 10px;
+    color: #aaa;
+    font-weight: 400;
+}
+
+.event-past .event-date-time {
+    font-size: 9px;
+    color: #bbb;
+}
+
+.event-past .event-action-btn {
+    font-size: 11px;
+    opacity: 0.3;
+}
+
+.event-past .event-action-btn:hover {
+    opacity: 0.7;
+}
+
+.event-today-badge {
+    background: #9b59b6;
+    color: white;
+    padding: 1px 4px;
+    border-radius: 3px;
+    font-size: 9px;
+    font-weight: 600;
+    letter-spacing: 0.5px;
+    display: inline-block;
+    vertical-align: middle;
+    margin-left: 4px;
+}
+
+.event-namespace-badge {
+    background: #008800;
+    color: white;
+    padding: 1px 4px;
+    border-radius: 3px;
+    font-size: 9px;
+    font-weight: 500;
+    display: inline-block;
+    vertical-align: middle;
+    margin-left: 4px;
+    cursor: pointer;
+    transition: background 0.2s;
+}
+
+.event-namespace-badge:hover {
+    background: #006600;
 }
 
 .event-info {
@@ -1153,7 +1267,7 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 16px 20px;
+    padding: 10px 14px;
     border-bottom: 2px solid #e0e0e0;
     background: #fafafa;
     border-radius: 8px 8px 0 0;
@@ -1161,7 +1275,7 @@
 
 .day-popup-header h4 {
     margin: 0;
-    font-size: 16px;
+    font-size: 15px;
     font-weight: 600;
     color: #2c3e50;
 }
@@ -1169,11 +1283,11 @@
 .popup-close {
     background: none;
     border: none;
-    font-size: 28px;
+    font-size: 24px;
     color: #999;
     cursor: pointer;
-    width: 32px;
-    height: 32px;
+    width: 28px;
+    height: 28px;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -1191,21 +1305,21 @@
 .day-popup-body {
     flex: 1;
     overflow-y: auto;
-    padding: 16px 20px;
+    padding: 10px 14px;
     max-height: 400px;
 }
 
 .popup-events-list {
     display: flex;
     flex-direction: column;
-    gap: 12px;
+    gap: 6px;
 }
 
 .popup-event-item {
     display: flex;
     background: #f8f9fa;
     border: 1px solid #e0e0e0;
-    border-radius: 6px;
+    border-radius: 4px;
     overflow: hidden;
     transition: box-shadow 0.15s;
 }
@@ -1216,37 +1330,102 @@
 
 .popup-event-content {
     flex: 1;
-    padding: 12px;
+    padding: 6px 10px;
+}
+
+.popup-event-main-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+}
+
+.popup-event-info-inline {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex: 1;
+    min-width: 0;
 }
 
 .popup-event-title {
-    font-size: 14px;
+    font-size: 13px;
     font-weight: 600;
     color: #2c3e50;
-    margin-bottom: 6px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    flex-shrink: 1;
 }
 
 .popup-event-time {
-    font-size: 12px;
+    font-size: 11px;
     color: #008800;
     font-weight: 500;
-    margin-bottom: 6px;
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+
+.popup-event-multiday {
+    font-size: 11px;
+    color: #666;
+    font-weight: 500;
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+
+.popup-event-namespace {
+    font-size: 10px;
+    color: #fff;
+    background: #008800;
+    padding: 2px 6px;
+    border-radius: 3px;
+    font-weight: 500;
+    white-space: nowrap;
+    flex-shrink: 0;
 }
 
 .popup-event-desc {
-    font-size: 12px;
+    font-size: 11px;
     color: #666;
-    line-height: 1.5;
-    margin-bottom: 10px;
+    line-height: 1.4;
+    margin-top: 4px;
+    padding-left: 0;
 }
 
 .popup-event-actions {
     display: flex;
-    gap: 8px;
+    gap: 4px;
+    flex-shrink: 0;
+}
+
+.event-edit-btn,
+.event-delete-btn {
+    background: none;
+    border: none;
+    font-size: 16px;
+    cursor: pointer;
+    padding: 4px;
+    border-radius: 3px;
+    transition: background 0.15s;
+    line-height: 1;
+    width: 24px;
+    height: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.event-edit-btn:hover {
+    background: #e8f5e9;
+}
+
+.event-delete-btn:hover {
+    background: #ffebee;
 }
 
 .day-popup-footer {
-    padding: 16px 20px;
+    padding: 10px 14px;
     border-top: 1px solid #e0e0e0;
     background: #fafafa;
     border-radius: 0 0 8px 8px;
@@ -1409,6 +1588,146 @@
     display: flex;
     flex-direction: column;
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+}
+
+/* Simple 2-Line Event List (New Design) */
+.eventlist-simple {
+    width: 100%;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    font-size: 11px;
+    line-height: 1.4;
+}
+
+.eventlist-simple-item {
+    border-bottom: 1px solid #e0e0e0;
+    padding: 0;
+}
+
+.eventlist-simple-item:last-child {
+    border-bottom: none;
+}
+
+.eventlist-simple-today {
+    background: #f3eeff !important;
+    border-left: 3px solid #9b59b6 !important;
+}
+
+.eventlist-simple-today .eventlist-simple-header {
+    background: #e8d9ff !important;
+}
+
+.eventlist-simple-today .eventlist-simple-body {
+    background: #f9f5ff !important;
+}
+
+.eventlist-simple-today-badge {
+    background: #9b59b6;
+    color: white;
+    padding: 1px 4px;
+    border-radius: 3px;
+    font-size: 9px;
+    font-weight: 600;
+    letter-spacing: 0.5px;
+    display: inline-block;
+    vertical-align: middle;
+}
+
+.eventlist-simple-tomorrow {
+    background: #fff9e6 !important;
+}
+
+.eventlist-simple-tomorrow .eventlist-simple-header {
+    background: #fff4cc !important;
+}
+
+.eventlist-simple-tomorrow .eventlist-simple-body {
+    background: #fffbf0 !important;
+}
+
+.eventlist-simple-header {
+    font-weight: 500;
+    color: #2c3e50;
+    padding: 4px 6px;
+    line-height: 1.5;
+    background: #f5fcf5;
+    font-size: 11px;
+}
+
+.eventlist-simple-title {
+    font-weight: 700;
+    color: #ff6600;
+    font-size: 12px;
+}
+
+.eventlist-simple-time {
+    color: #666;
+    font-size: 10px;
+}
+
+.eventlist-simple-date {
+    color: #888;
+    font-size: 10px;
+}
+
+.eventlist-simple-namespace {
+    background: #e8f5e9;
+    color: #388e3c;
+    padding: 1px 4px;
+    border-radius: 3px;
+    font-size: 9px;
+    font-weight: 500;
+    margin-left: 4px;
+}
+
+.eventlist-simple-body {
+    color: #555;
+    font-size: 11px;
+    line-height: 1.5;
+    padding: 4px 6px;
+    background: #fff;
+}
+
+.eventlist-simple-body a {
+    color: #008800;
+    text-decoration: none;
+}
+
+.eventlist-simple-body a:hover {
+    text-decoration: underline;
+}
+
+.eventlist-simple-body strong {
+    font-weight: 600;
+    color: #2c3e50;
+}
+
+.eventlist-simple-body code {
+    background: #f5f5f5;
+    padding: 1px 3px;
+    border-radius: 3px;
+    font-family: 'Courier New', monospace;
+    font-size: 10px;
+}
+
+.eventlist-simple-no-desc {
+    display: none;
+}
+
+.eventlist-simple-empty {
+    padding: 10px 0;
+    color: #999;
+}
+
+.eventlist-simple-empty .eventlist-simple-header {
+    margin-bottom: 4px;
+    background: #f5fcf5;
+}
+
+.eventlist-simple-empty .eventlist-simple-body {
+    color: #999;
+    font-style: italic;
+    padding: 4px 6px;
+    font-size: 11px;
 }
 
 .eventlist-widget-header {
