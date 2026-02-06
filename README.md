@@ -4,14 +4,12 @@ A sleek, space-efficient calendar plugin with integrated event list panel.
 
 ## Design Specifications
 
-- **Dimensions**: 800x600 pixels (compact, fixed-size)
 - **Layout**: Split view with calendar on left (500px) and event list on right (300px)
 - **Cell Size**: Excel-like cells (~65px height, proportional width)
 - **Style**: Clean, modern, professional
 
 ## Features
 
-✨ **Compact Design**: Fits perfectly in 800x600 area  
 📅 **Month View**: Excel-style grid with clean borders  
 📋 **Integrated Event List**: View and manage events in right panel  
 🎛️ **Event Panel Only**: Display just the event panel (320px width)  
@@ -284,14 +282,13 @@ Then refresh calendar page.
 - **DokuWiki**: 2020-07-29 "Hogfather" or newer
 - **JavaScript**: ES6, uses Fetch API
 - **CSS**: Modern flexbox layout
-- **Size**: Exactly 800x600px
 
 ## Browser Support
 
 - Chrome/Edge: ✅
 - Firefox: ✅
 - Safari: ✅
-- Mobile: ⚠️ Fixed size may require horizontal scroll
+- Mobile: ✅
 
 ## License
 
