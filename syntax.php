@@ -2261,9 +2261,12 @@ class syntax_plugin_calendar extends DokuWiki_Syntax_Plugin {
         $html .= '</div>';
         $html .= '</div>';
         
-        // Ultra-thin orange "Add Event" bar between header and week grid (6px max height)
-        $html .= '<div style="background:#ff9800; padding:0; height:6px; line-height:6px; text-align:center; cursor:pointer; border-top:1px solid rgba(255, 152, 0, 0.3); border-bottom:1px solid rgba(255, 152, 0, 0.3); box-shadow:0 0 8px rgba(255, 152, 0, 0.4); transition:all 0.2s; overflow:hidden;" onclick="window.location.href=\'?do=admin&page=calendar&tab=manage\'" onmouseover="this.style.background=\'#ff7700\'; this.style.boxShadow=\'0 0 12px rgba(255, 152, 0, 0.6)\';" onmouseout="this.style.background=\'#ff9800\'; this.style.boxShadow=\'0 0 8px rgba(255, 152, 0, 0.4)\';">';
-        $html .= '<span style="color:#000; font-size:7px; font-weight:700; letter-spacing:0.3px; font-family:system-ui, sans-serif; text-shadow:0 0 2px rgba(255, 255, 255, 0.3); vertical-align:middle;">+ ADD EVENT</span>';
+        // Get today's date for default event date
+        $todayStr = date('Y-m-d');
+        
+        // Thin dark green "Add Event" bar between header and week grid (zero margin, smaller text, text positioned higher)
+        $html .= '<div style="background:#006400; padding:0; margin:0; height:12px; line-height:10px; text-align:center; cursor:pointer; border-top:1px solid rgba(0, 100, 0, 0.3); border-bottom:1px solid rgba(0, 100, 0, 0.3); box-shadow:0 0 8px rgba(0, 100, 0, 0.4); transition:all 0.2s;" onclick="openAddEvent(\'' . $calId . '\', \'' . $namespace . '\', \'' . $todayStr . '\');" onmouseover="this.style.background=\'#004d00\'; this.style.boxShadow=\'0 0 12px rgba(0, 100, 0, 0.6)\';" onmouseout="this.style.background=\'#006400\'; this.style.boxShadow=\'0 0 8px rgba(0, 100, 0, 0.4)\';">';
+        $html .= '<span style="color:#00ff00; font-size:8px; font-weight:700; letter-spacing:0.4px; font-family:system-ui, sans-serif; text-shadow:0 0 3px rgba(0, 255, 0, 0.5); position:relative; top:-1px;">+ ADD EVENT</span>';
         $html .= '</div>';
         
         // Week grid (7 cells)
@@ -2285,6 +2288,9 @@ class syntax_plugin_calendar extends DokuWiki_Syntax_Plugin {
         }
         
         $html .= '</div>';
+        
+        // Add event dialog for sidebar widget
+        $html .= $this->renderEventDialog($calId, $namespace);
         
         return $html;
     }
@@ -2379,12 +2385,12 @@ class syntax_plugin_calendar extends DokuWiki_Syntax_Plugin {
             // Clear content
             content.innerHTML = "";
             
-            // Sort events by time (events with time first, then all-day events)
+            // Sort events by time (all-day events first, then timed events chronologically)
             const sortedEvents = [...eventsData[dateKey]].sort((a, b) => {
-                // Events without time go to the end
+                // All-day events (no time) go to the beginning
                 if (!a.time && !b.time) return 0;
-                if (!a.time) return 1;
-                if (!b.time) return -1;
+                if (!a.time) return -1;  // a is all-day, comes first
+                if (!b.time) return 1;   // b is all-day, comes first
                 
                 // Compare times (format: "HH:MM")
                 const timeA = a.time.split(":").map(Number);
@@ -2395,23 +2401,22 @@ class syntax_plugin_calendar extends DokuWiki_Syntax_Plugin {
                 return minutesA - minutesB;
             });
             
-            // Build events HTML with dual color bars
+            // Build events HTML with single color bar (event color only)
             sortedEvents.forEach(event => {
                 const eventColor = event.color || "#00cc07";
-                const sectionColor = "#3498db"; // Blue for selected day
                 
                 const eventDiv = document.createElement("div");
-                eventDiv.style.cssText = "padding:4px 6px; border-bottom:1px solid rgba(0, 204, 7, 0.2); font-size:10px; display:flex; align-items:start; gap:6px; background:rgba(36, 36, 36, 0.3);";
+                eventDiv.style.cssText = "padding:4px 6px; border-bottom:1px solid rgba(0, 204, 7, 0.2); font-size:10px; display:flex; align-items:stretch; gap:6px; background:rgba(36, 36, 36, 0.3); min-height:20px;";
                 
                 let eventHTML = "";
                 
-                // Section color bar (wider, blue for selected day)
-                eventHTML += "<div style=\\"width:4px; height:100%; background:" + sectionColor + "; border-radius:2px; flex-shrink:0; box-shadow:0 0 4px " + sectionColor + ";\\"></div>";
+                // Event assigned color bar (single bar on left)
+                eventHTML += "<div style=\\"width:3px; align-self:stretch; background:" + eventColor + "; border-radius:1px; flex-shrink:0; box-shadow:0 0 3px " + eventColor + ";\\"></div>";
                 
-                // Event assigned color bar (medium width)
-                eventHTML += "<div style=\\"width:3px; height:100%; background:" + eventColor + "; border-radius:1px; flex-shrink:0; box-shadow:0 0 3px " + eventColor + ";\\"></div>";
+                // Content wrapper
+                eventHTML += "<div style=\\"flex:1; min-width:0; display:flex; justify-content:space-between; align-items:start; gap:4px;\\">";
                 
-                // Content
+                // Left side: event details
                 eventHTML += "<div style=\\"flex:1; min-width:0;\\">";
                 eventHTML += "<div style=\\"font-weight:600; color:#00cc07; word-wrap:break-word; font-family:system-ui, sans-serif; text-shadow:0 0 3px rgba(0, 204, 7, 0.4);\\">";
                 
@@ -2436,7 +2441,14 @@ class syntax_plugin_calendar extends DokuWiki_Syntax_Plugin {
                     eventHTML += "<div style=\\"font-size:9px; color:#00aa00; margin-top:2px;\\">" + descHTML + "</div>";
                 }
                 
-                eventHTML += "</div>";
+                eventHTML += "</div>"; // Close event details
+                
+                // Right side: conflict badge (if present)
+                if (event.conflict) {
+                    eventHTML += "<div style=\\"flex-shrink:0; color:#ff9800; font-size:10px; margin-top:2px; opacity:0.8;\\" title=\\"Time conflict detected\\">⚠</div>";
+                }
+                
+                eventHTML += "</div>"; // Close content wrapper
                 
                 eventDiv.innerHTML = eventHTML;
                 content.appendChild(eventDiv);
@@ -2495,13 +2507,10 @@ class syntax_plugin_calendar extends DokuWiki_Syntax_Plugin {
         // Check for conflicts
         $hasConflict = isset($event['conflicts']) && !empty($event['conflicts']);
         
-        $html = '<div style="padding:4px 6px; border-bottom:1px solid rgba(0, 204, 7, 0.2); font-size:10px; display:flex; align-items:start; gap:6px; background:rgba(36, 36, 36, 0.3);">';
+        $html = '<div style="padding:4px 6px; border-bottom:1px solid rgba(0, 204, 7, 0.2); font-size:10px; display:flex; align-items:stretch; gap:6px; background:rgba(36, 36, 36, 0.3); min-height:20px;">';
         
-        // Section color bar (wider, on the left)
-        $html .= '<div style="width:4px; height:100%; background:' . htmlspecialchars($sectionColor) . '; border-radius:2px; flex-shrink:0; box-shadow:0 0 4px ' . htmlspecialchars($sectionColor) . ';"></div>';
-        
-        // Event's assigned color bar (medium width, next to section bar)
-        $html .= '<div style="width:3px; height:100%; background:' . $eventColor . '; border-radius:1px; flex-shrink:0; box-shadow:0 0 3px ' . $eventColor . ';"></div>';
+        // Event's assigned color bar (single bar on the left)
+        $html .= '<div style="width:3px; align-self:stretch; background:' . $eventColor . '; border-radius:1px; flex-shrink:0; box-shadow:0 0 3px ' . $eventColor . ';"></div>';
         
         // Content
         $html .= '<div style="flex:1; min-width:0;">';

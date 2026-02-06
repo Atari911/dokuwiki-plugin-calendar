@@ -2,7 +2,7 @@ base     calendar
 author   atari911
 email    atari911@gmail.com
 date     2026-02-06
-name     Calendar Plugin - Compact
-desc     A sleek, compact calendar plugin with integrated event list
+name     Calendar Plugin - Matrix Edition
+desc     Matrix-themed calendar with sidebar widget, Outlook sync, and system monitoring
 url      https://www.dokuwiki.org/plugin:calendar
-version  3.10.5
+version  4.0.0

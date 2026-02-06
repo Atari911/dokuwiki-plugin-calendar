@@ -1080,9 +1080,9 @@ window.openAddEvent = function(calId, namespace, date) {
         return;
     }
     
-    // Check if there's a filtered namespace active
+    // Check if there's a filtered namespace active (only for regular calendars)
     const calendar = document.getElementById(calId);
-    const filteredNamespace = calendar.dataset.filteredNamespace;
+    const filteredNamespace = calendar ? calendar.dataset.filteredNamespace : null;
     
     // Use filtered namespace if available, otherwise use the passed namespace
     const effectiveNamespace = filteredNamespace || namespace;

@@ -1,5 +1,458 @@
 # Calendar Plugin Changelog
 
+## Version 4.0.0 (2026-02-06) - MATRIX EDITION RELEASE 🎉
+
+**Major Release**: Complete Matrix-themed calendar plugin with advanced features!
+
+### 🌟 Major Features
+
+#### Sidebar Widget
+- **Week Grid**: Interactive 7-day calendar with click-to-view events
+- **Live System Monitoring**: CPU load, real-time CPU, memory usage with tooltips
+- **Live Clock**: Updates every second with date display
+- **Real-time Weather**: Geolocation-based temperature with icon
+- **Event Sections**: Today (orange), Tomorrow (green), Important (purple)
+- **Add Event Button**: Dark green bar opens full event creation dialog
+- **Matrix Theme**: Green glow effects throughout
+
+#### Event Management
+- **Single Color Bars**: Clean 3px bars showing event's assigned color
+- **All-Day Events First**: Then sorted chronologically by time
+- **Conflict Detection**: Orange ⚠ badge on overlapping events
+- **Rich Content**: Full DokuWiki formatting (**bold**, [[links]], //italic//)
+- **HTML Rendering**: Pre-rendered for JavaScript display
+- **Click-to-View**: Click week grid days to expand event details
+
+#### Admin Interface
+- **Update Plugin Tab** (Default): Version info, changelog, prominent Clear Cache button
+- **Outlook Sync Tab**: Microsoft Azure integration, category mapping, sync settings
+- **Manage Events Tab**: Browse, edit, delete, move events across namespaces
+
+#### Outlook Sync
+- **Bi-directional Sync**: DokuWiki ↔ Microsoft Outlook
+- **Category Mapping**: Map colors to Outlook categories
+- **Conflict Resolution**: Time conflict detection
+- **Import/Export Config**: Encrypted configuration files
+
+### 🎨 Design
+- **Matrix Theme**: Authentic green glow aesthetic
+- **Dark Backgrounds**: #1a1a1a header, rgba(36, 36, 36) sections
+- **Color Scheme**:
+  - Today: Orange #ff9800
+  - Tomorrow: Green #4caf50
+  - Important: Purple #9b59b6
+  - Add Event: Dark green #006400
+  - System bars: Green/Purple/Orange
+
+### 🔧 Technical Highlights
+- **Zero-margin Design**: Perfect flush alignment throughout
+- **Flexbox Layout**: Modern, responsive structure
+- **AJAX Operations**: No page reloads needed
+- **Smart Sorting**: All-day events first, then chronological
+- **Tooltip System**: Detailed stats on hover (working correctly)
+- **Event Dialog**: Full form with drag support
+- **Cache Management**: One-click cache clearing
+
+### 📝 Breaking Changes from v3.x
+- Removed dual color bars (now single event color bar only)
+- Add Event button moved to between header and week grid
+- All-day events now appear FIRST (not last)
+- Update Plugin tab is now the default admin tab
+
+### 🐛 Bug Fixes (v3.10.x → v4.0.0)
+- ✅ Fixed color bars not showing (align-self:stretch vs height:100%)
+- ✅ Fixed tooltip function naming (sanitized calId for JavaScript)
+- ✅ Fixed weather display (added updateWeather function)
+- ✅ Fixed HTML rendering in events (title_html/description_html fields)
+- ✅ Fixed Add Event dialog (null check for calendar element)
+- ✅ Fixed text positioning in Add Event button
+- ✅ Fixed spacing throughout sidebar widget
+
+### 📦 Complete Feature List
+- Full calendar view (month grid)
+- Sidebar widget (week view)
+- Event panel (standalone)
+- Event list (date ranges)
+- Namespace support
+- Color coding
+- Time conflict detection
+- DokuWiki syntax in events
+- Outlook synchronization
+- System monitoring
+- Weather display
+- Live clock
+- Admin interface
+- Cache management
+- Draggable dialogs
+- AJAX save/edit/delete
+- Import/export config
+
+### 🎯 Usage
+
+**Sidebar Widget**:
+```
+{{calendar sidebar}}
+{{calendar sidebar namespace=team}}
+```
+
+**Full Calendar**:
+```
+{{calendar}}
+{{calendar year=2026 month=6 namespace=team}}
+```
+
+**Event Panel**:
+```
+{{eventpanel}}
+```
+
+**Event List**:
+```
+{{eventlist daterange=2026-01-01:2026-01-31}}
+```
+
+### 📊 Stats
+- **40+ versions** developed during v3.x iterations
+- **3.10.0 → 3.11.4**: Polish and refinement
+- **4.0.0**: Production-ready Matrix Edition
+
+### 🙏 Credits
+Massive iteration and refinement session resulting in a polished, feature-complete calendar plugin with authentic Matrix aesthetics and enterprise-grade Outlook integration.
+
+---
+
+## Previous Versions (v3.11.4 and earlier)
+
+## Version 3.11.4 (2026-02-06) - RESTORE HEADER BOTTOM SPACING
+- **Changed:** Restored 2px bottom padding to header (was 0px, now 2px)
+- **Improved:** Small breathing room between system stats bars and Add Event button
+- **Visual:** Better spacing for cleaner appearance
+
+### CSS Change:
+**eventlist-today-header**:
+- `padding: 6px 10px 0 10px` → `padding: 6px 10px 2px 10px`
+
+### Visual Result:
+```
+│  ▓▓▓░░ ▓▓░░░ ▓▓▓▓░  │  ← Stats bars
+│                       │  ← 2px space (restored)
+├───────────────────────┤
+│  + ADD EVENT          │  ← Add Event bar
+├───────────────────────┤
+```
+
+**Before (v3.11.3)**: No space, bars directly touch Add Event button
+**After (v3.11.4)**: 2px breathing room for better visual hierarchy
+
+## Version 3.11.3 (2026-02-06) - FIX ADD EVENT DIALOG & TEXT POSITION
+- **Fixed:** openAddEvent() function now checks if calendar element exists before reading dataset
+- **Fixed:** Add Event button no longer throws "Cannot read properties of null" error
+- **Changed:** Add Event text moved up 1px (position:relative; top:-1px)
+- **Changed:** Line-height reduced from 12px to 10px for better text centering
+- **Improved:** openAddEvent() works for both regular calendars and sidebar widgets
+
+### JavaScript Fix:
+**Problem**: Line 1084-1085 in calendar-main.js
+```javascript
+const calendar = document.getElementById(calId);
+const filteredNamespace = calendar.dataset.filteredNamespace; // ← Null error!
+```
+
+**Solution**: Added null check
+```javascript
+const calendar = document.getElementById(calId);
+const filteredNamespace = calendar ? calendar.dataset.filteredNamespace : null;
+```
+
+**Why This Happened**:
+- Regular calendar has element with id=calId
+- Sidebar widget doesn't have this element (different structure)
+- Code tried to read .dataset on null, causing error
+
+### Text Position Fix:
+**Before**: 
+- line-height: 12px
+- vertical-align: middle
+- Text slightly low
+
+**After**:
+- line-height: 10px
+- position: relative; top: -1px
+- Text perfectly centered
+
+### What Works Now:
+✅ Click "+ ADD EVENT" in sidebar → Dialog opens
+✅ No console errors
+✅ Text properly centered vertically
+✅ Form pre-filled with today's date
+✅ Save works correctly
+
+## Version 3.11.2 (2026-02-06) - ADD EVENT DIALOG IN SIDEBAR
+- **Added:** Event dialog to sidebar widget (same as regular calendar)
+- **Changed:** Add Event button now opens proper event form dialog
+- **Added:** renderEventDialog() called in renderSidebarWidget()
+- **Fixed:** Add Event button calls openAddEvent() with calId, namespace, and today's date
+- **Improved:** Can now add events directly from sidebar widget
+
+### Add Event Button Behavior:
+**Before (v3.11.1)**: Showed alert with instructions
+**After (v3.11.2)**: Opens full event creation dialog
+
+**Dialog Features**:
+- Date field (defaults to today)
+- Title field (required)
+- Time field (optional)
+- End time field (optional)
+- Color picker
+- Category field
+- Description field
+- Save and Cancel buttons
+- Draggable dialog
+
+### Technical Changes:
+- Added `$html .= $this->renderEventDialog($calId, $namespace);` at end of renderSidebarWidget()
+- Changed Add Event onclick from alert to `openAddEvent('calId', 'namespace', 'YYYY-MM-DD')`
+- Dialog uses same structure as regular calendar
+- Uses existing openAddEvent() and saveEventCompact() JavaScript functions
+
+### User Flow:
+1. User clicks "+ ADD EVENT" green bar
+2. Event dialog opens with today's date pre-filled
+3. User fills in event details
+4. User clicks Save
+5. Event saved via AJAX
+6. Dialog closes
+7. Sidebar refreshes to show new event
+
+## Version 3.11.1 (2026-02-06) - FLUSH HEADER & ADD EVENT DIALOG
+- **Fixed:** Removed bottom padding from header (was 2px, now 0)
+- **Fixed:** Removed margin from stats container (was margin-top:2px, now margin:0)
+- **Fixed:** Add Event bar now flush against header with zero gap
+- **Changed:** Add Event button now shows helpful alert dialog instead of navigating to admin
+- **Improved:** Alert provides clear instructions on how to add events
+
+### CSS Changes:
+**eventlist-today-header**:
+- `padding: 6px 10px 2px 10px` → `padding: 6px 10px 0 10px` (removed 2px bottom)
+
+**eventlist-stats-container**:
+- `margin-top: 2px` → `margin: 0` (removed all margins)
+
+### Add Event Button Behavior:
+**Before**: Clicked → Navigated to Admin → Manage Events tab
+**After**: Clicked → Shows alert with instructions
+
+**Alert Message**:
+```
+To add an event, go to:
+Admin → Calendar Management → Manage Events tab
+or use the full calendar view {{calendar}}
+```
+
+### Visual Result:
+```
+│  ▓▓▓░░ ▓▓░░░ ▓▓▓▓░  │  ← Stats (no margin-bottom)
+├────────────────────────┤
+│  + ADD EVENT           │  ← Perfectly flush!
+├────────────────────────┤
+```
+
+No gaps, perfectly aligned!
+
+## Version 3.11.0 (2026-02-06) - ADD EVENT BAR FINAL POSITION & SIZE
+- **Moved:** Add Event bar back to original position (between header and week grid)
+- **Changed:** Font size reduced from 9px to 8px (prevents text cutoff)
+- **Changed:** Letter spacing reduced from 0.5px to 0.4px
+- **Fixed:** Text now fully visible without being cut off
+- **Final:** Optimal position and size determined
+
+### Final Layout:
+```
+┌─────────────────────────────┐
+│  Clock | Weather | Stats    │  ← Header
+├─────────────────────────────┤
+│  + ADD EVENT                 │  ← Bar (back here, smaller text)
+├─────────────────────────────┤
+│  M  T  W  T  F  S  S        │  ← Week Grid
+│  3  4  5  6  7  8  9        │
+├─────────────────────────────┤
+│  Today                       │  ← Event sections
+└─────────────────────────────┘
+```
+
+### Text Size Changes:
+**v3.10.9**: 9px font, 0.5px letter-spacing → Text slightly cut off
+**v3.11.0**: 8px font, 0.4px letter-spacing → Text fully visible
+
+### Why This Position:
+- Separates header from calendar
+- Natural action point after viewing stats
+- Users see stats → decide to add event → view calendar
+- Consistent with original design intent
+
+## Version 3.10.9 (2026-02-06) - ADD EVENT BAR MOVED BELOW WEEK GRID
+- **Moved:** Add Event bar repositioned from between header/grid to below week grid
+- **Improved:** Better visual flow - header → stats → grid → add button → events
+- **Changed:** Add Event bar now acts as separator between calendar and event sections
+
+### New Layout:
+```
+┌─────────────────────────────┐
+│  Clock | Weather | Stats    │  ← Header
+├─────────────────────────────┤
+│  M  T  W  T  F  S  S        │  ← Week Grid
+│  3  4  5  6  7  8  9        │
+├─────────────────────────────┤
+│  + ADD EVENT                 │  ← Add bar (moved here!)
+├─────────────────────────────┤
+│  Today                       │  ← Event sections
+│  Tomorrow                    │
+│  Important Events            │
+└─────────────────────────────┘
+```
+
+### Visual Flow:
+**Before (v3.10.8)**:
+1. Header (clock, weather, stats)
+2. **+ ADD EVENT** bar
+3. Week grid
+4. Event sections
+
+**After (v3.10.9)**:
+1. Header (clock, weather, stats)
+2. Week grid (calendar days)
+3. **+ ADD EVENT** bar
+4. Event sections
+
+### Benefits:
+- Natural reading flow: View calendar → Add event → See events
+- Add button positioned between calendar and event list
+- Acts as visual separator
+- More logical action placement
+
+## Version 3.10.8 (2026-02-06) - SINGLE COLOR BAR & ZERO MARGIN ADD BAR
+- **Removed:** Section color bar (blue/orange/green/purple) - now shows ONLY event color
+- **Changed:** Events now display with single 3px color bar (event's assigned color only)
+- **Fixed:** Add Event bar now has zero margin (margin:0) - touches header perfectly
+- **Simplified:** Cleaner visual with one color bar instead of two
+- **Improved:** More space for event content without extra bar
+
+### Visual Changes:
+
+**Before (v3.10.7)** - Dual color bars:
+```
+├─ [Orange][Green]  Event Title
+├─ [Blue][Purple]   Event Title
+```
+
+**After (v3.10.8)** - Single color bar:
+```
+├─ [Green]  Event Title    ← Only event color!
+├─ [Purple] Event Title    ← Only event color!
+```
+
+### Add Bar Changes:
+- Added `margin:0` to eliminate gaps
+- Now flush against header (no space above)
+- Now flush against week grid (no space below)
+- Perfect seamless connection
+
+### Technical Changes:
+**renderSidebarEvent()**: 
+- Removed section color bar (4px)
+- Kept only event color bar (3px)
+
+**showDayEvents() JavaScript**:
+- Removed section color bar (4px blue)
+- Kept only event color bar (3px)
+
+**Add Event bar**:
+- Added `margin:0` inline style
+- Removed all top/bottom margins
+
+## Version 3.10.7 (2026-02-06) - COLOR BARS FIX FOR SECTIONS & DARK GREEN ADD BAR
+- **Fixed:** Color bars now display in Today/Tomorrow/Important sections (was only showing in clicked day)
+- **Fixed:** Changed Today/Tomorrow/Important event rendering to use `align-self:stretch` instead of `height:100%`
+- **Changed:** Add Event bar color from orange to dark green (#006400)
+- **Changed:** Add Event bar height increased from 6px to 12px (text no longer cut off)
+- **Changed:** Add Event bar text now bright green (#00ff00) with green glow
+- **Changed:** Add Event bar font size increased from 7px to 9px
+- **Changed:** Add Event bar letter spacing increased to 0.5px
+- **Improved:** Hover effect on Add Event bar now darker green (#004d00)
+
+### Color Bar Fix Details:
+**Problem**: Today/Tomorrow/Important sections still used `height:100%` on color bars
+**Solution**: Applied same fix as clicked day events:
+- Changed parent div: `align-items:start` → `align-items:stretch`
+- Added `min-height:20px` to parent
+- Changed bars: `height:100%` → `align-self:stretch`
+- Bars now properly fill vertical space in ALL sections
+
+### Add Event Bar Changes:
+**Before**:
+- Background: Orange (#ff9800)
+- Text: Black (#000)
+- Height: 6px (text cut off)
+- Font: 7px
+
+**After**:
+- Background: Dark green (#006400)
+- Text: Bright green (#00ff00) with green glow
+- Height: 12px (text fully visible)
+- Font: 9px
+- Hover: Darker green (#004d00)
+- Matrix-themed green aesthetic
+
+## Version 3.10.6 (2026-02-06) - COLOR BARS FIX, SORTING REVERSAL, CONFLICT BADGE, README UPDATE
+- **Fixed:** Event color bars now display correctly in clicked day events
+- **Fixed:** Changed sorting - all-day events now appear FIRST, then timed events
+- **Added:** Conflict badge (⚠) appears on right side of conflicting events
+- **Updated:** Complete README.md rewrite with full Matrix theme documentation
+- **Changed:** Color bars use `align-self:stretch` instead of `height:100%` (fixes rendering)
+- **Changed:** Parent div uses `align-items:stretch` and `min-height:20px`
+- **Improved:** Content wrapper now uses flexbox for proper conflict badge positioning
+
+### Color Bar Fix:
+**Problem**: Bars had `height:100%` but parent had no explicit height
+**Solution**: 
+- Changed to `align-self:stretch` on bars
+- Parent uses `align-items:stretch` 
+- Added `min-height:20px` to parent
+- Bars now properly fill vertical space
+
+### Sorting Change:
+**Before**: Timed events first → All-day events last
+**After**: All-day events FIRST → Timed events chronologically
+
+**Example**:
+```
+Monday, Feb 5
+├─ All Day - Project Deadline       ← All-day first
+├─ 8:00 AM - Morning Standup        ← Earliest time
+├─ 10:30 AM - Coffee with Bob       
+└─ 2:00 PM - Team Meeting           ← Latest time
+```
+
+### Conflict Badge:
+- Orange warning triangle (⚠) on right side
+- 10px font size
+- Only appears if `event.conflict` is true
+- Title attribute shows "Time conflict detected"
+- Small and unobtrusive
+
+### README Update:
+- Complete rewrite with Matrix theme focus
+- Full usage instructions for all features
+- Admin interface documentation
+- Outlook sync setup guide
+- System monitoring details
+- Troubleshooting section
+- Color scheme reference
+- File structure documentation
+- Performance tips
+- Security notes
+- Quick start examples
+
 ## Version 3.10.5 (2026-02-06) - TIME SORTING & THINNER ADD BAR
 - **Added:** Events now sorted by time when clicking week grid days
 - **Changed:** Add Event bar now ultra-thin (6px height, down from 12px)
