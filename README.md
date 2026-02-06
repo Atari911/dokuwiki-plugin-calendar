@@ -1,37 +1,53 @@
-# DokuWiki Calendar Plugin - Matrix Edition
+# DokuWiki Calendar Plugin - Matrix Edition v4.0.0
 
-A powerful, feature-rich calendar plugin with **Matrix theme**, integrated event management, **Outlook sync**, system monitoring, and advanced features.
+A powerful, feature-rich calendar plugin with **Matrix theme**, live system monitoring, real-time weather, **Outlook sync**, and advanced event management.
 
-**Current Version**: 3.10.6
+**Version**: 4.0.0  
+**Release Date**: February 6, 2026  
+**Codename**: Matrix Edition
 
 ---
 
 ## 🌟 Key Features
 
-### 📅 Calendar Views
+### 📅 Multiple Views
+- **Sidebar Widget** - Compact week view with live stats (recommended)
 - **Full Calendar** - Traditional month grid with event panel
-- **Sidebar Widget** - Compact week view with live system stats
 - **Event Panel** - Standalone event management
 - **Event List** - Flexible date range displays
 
 ### 🎨 Matrix Theme
-- **Green Glow Effects** - Authentic Matrix-style aesthetics
-- **Dual Color Bars** - Section color (4px) + Event color (3px) with 6px gap
+- **Authentic Aesthetics** - Green glow effects throughout
+- **Single Color Bars** - Clean 3px bars showing event color
+- **Dark Backgrounds** - #1a1a1a, rgba(36, 36, 36)
+- **Live Updates** - Clock, weather, system stats
+
+### 💻 Sidebar Widget Features
+- **Interactive Week Grid** - Click any day to view events
+- **Live System Monitoring** - CPU load, real-time CPU, memory usage
+- **Hover Tooltips** - Detailed stats (load averages, top processes)
+- **Real-time Weather** - Geolocation-based temperature
 - **Live Clock** - Updates every second
-- **Weather Display** - Real-time temperature with geolocation
-- **System Monitoring** - CPU load, memory usage with tooltips
+- **Event Sections** - Today (orange), Tomorrow (green), Important (purple)
+- **Add Event Button** - Dark green bar opens full event dialog
 
-### ⚡ Advanced Features
-- **Outlook Sync** - Bi-directional sync with Microsoft Outlook calendars
-- **Time Conflict Detection** - Automatic detection with warning badges (⚠)
-- **DokuWiki Formatting** - Full support for **bold**, [[links]], //italic//, etc.
-- **Event HTML Rendering** - Rich content in event titles and descriptions
-- **Click-to-View** - Click week grid days to see all events
-- **Quick Add** - Ultra-thin orange bar for instant event creation
+### ⚡ Event Management
+- **All-Day Events First** - Then sorted chronologically by time
+- **Conflict Detection** - Orange ⚠ badge on overlapping events
+- **Rich Content** - Full DokuWiki formatting (**bold**, [[links]], //italic//)
+- **Single Color Bars** - Clean design with event's assigned color
+- **AJAX Operations** - Create, edit, delete without page reload
+- **Draggable Dialogs** - Professional event forms
 
-### 🔧 Admin Interface
-- **Update Plugin Tab** (default) - Version info, changelog, cache management
-- **Outlook Sync Tab** - Configure Microsoft Azure integration
+### 🔄 Outlook Integration
+- **Bi-directional Sync** - DokuWiki ↔ Microsoft Outlook calendars
+- **Category Mapping** - Map DokuWiki colors to Outlook categories
+- **Azure AD Authentication** - Secure OAuth 2.0
+- **Import/Export Config** - Encrypted configuration files
+
+### 🛠️ Admin Interface
+- **Update Plugin Tab** (default) - Version info, changelog, Clear Cache button
+- **Outlook Sync Tab** - Azure configuration, category mapping
 - **Manage Events Tab** - Browse, edit, delete, move events
 
 ---
@@ -40,14 +56,12 @@ A powerful, feature-rich calendar plugin with **Matrix theme**, integrated event
 
 ### 1. Extract Plugin
 ```bash
-# Extract to DokuWiki plugins directory
 cd /path/to/dokuwiki/lib/plugins/
-unzip calendar-matrix-update-v3.10.6.zip
+unzip calendar-matrix-edition-v4.0.0.zip
 ```
 
 ### 2. Set Permissions
 ```bash
-# Create data directories
 mkdir -p data/meta/calendar
 chmod -R 775 data/meta/calendar
 chown -R www-data:www-data data/meta/calendar
@@ -55,67 +69,68 @@ chown -R www-data:www-data data/meta/calendar
 
 ### 3. Clear Cache
 1. Go to **Admin → Calendar Management**
-2. Update Plugin tab opens automatically
-3. Click **🗑️ Clear Cache** button
-4. Refresh your wiki page
+2. Click **🗑️ Clear Cache** button (orange, prominent)
+3. Refresh your wiki page
 
 ---
 
 ## 🎯 Usage
 
-### Basic Calendar Syntax
+### Sidebar Widget (Recommended)
 
-#### Full Calendar (Month View)
-```
-{{calendar}}
-```
-Displays current month with event panel on the right.
+Display the Matrix-themed sidebar widget:
 
-#### Specific Month
-```
-{{calendar year=2026 month=6}}
-```
-
-#### With Namespace
-```
-{{calendar namespace=team}}
-```
-Separate calendars for different teams/projects.
-
-### Sidebar Widget
-
-#### Week View with System Stats
 ```
 {{calendar sidebar}}
 ```
 
 **Features**:
-- Current week grid (7 days)
-- Live clock (updates every second)
+- Current week grid (7 days, clickable)
+- Live system stats (CPU, memory)
 - Real-time weather with temperature
-- System monitoring bars:
-  - **Green bar**: 5-min CPU load average
-  - **Purple bar**: Real-time CPU usage
-  - **Orange bar**: Memory usage
-- Hover tooltips with detailed stats
-- Click days to view all events
-- **+ ADD EVENT** bar for quick access
+- Live clock
 - Today/Tomorrow/Important event sections
+- Dark green Add Event button
 
-#### With Namespace
+**With Namespace**:
 ```
 {{calendar sidebar namespace=team}}
 ```
 
+### Full Calendar
+
+Traditional month view with event panel:
+
+```
+{{calendar}}
+```
+
+**Specific Month**:
+```
+{{calendar year=2026 month=6}}
+```
+
+**With Namespace**:
+```
+{{calendar namespace=team}}
+```
+
 ### Event Panel Only
+
+Display just the event management panel (320px wide):
+
 ```
 {{eventpanel}}
 ```
-320px wide panel - perfect for page sidebars.
+
+Perfect for page sidebars.
 
 ### Event List
+
+Display events in a simple list:
+
 ```
-{{eventlist date=2026-01-22}}
+{{eventlist date=2026-02-06}}
 ```
 
 **Date Range**:
@@ -132,38 +147,41 @@ Separate calendars for different teams/projects.
 
 ## 📝 Creating Events
 
-### Method 1: Sidebar Widget
-1. Click the **+ ADD EVENT** bar (thin orange line below header)
-2. Opens Admin → Manage Events tab
+### Method 1: Sidebar Widget Add Event Button
+
+1. Click the **+ ADD EVENT** dark green bar
+2. Event dialog opens
 3. Fill in event details
 4. Click **Save**
 
-### Method 2: Calendar Grid
+### Method 2: Click Week Grid Day
+
+1. Click any day in the week grid
+2. View existing events
+3. Click **+ Add** button if desired
+4. Fill in event details
+5. Click **Save**
+
+### Method 3: Full Calendar
+
 1. Click **+ Add** button in event panel
 2. Fill in event details
 3. Click **Save**
 
-### Method 3: Day Popup
-1. Click any day in calendar grid
-2. Click **+ Add** in popup
-3. Fill in event details
-4. Click **Save**
-
 ### Event Fields
 
 **Required**:
-- **Date** - YYYY-MM-DD format (can be changed to move events)
+- **Date** - YYYY-MM-DD format
 - **Title** - Event name (supports **bold**, [[links]], //italic//)
 
 **Optional**:
-- **Time** - HH:MM format (24-hour)
-  - Leave blank for all-day events
+- **Time** - HH:MM format (24-hour) - leave blank for all-day
 - **End Time** - HH:MM format (for duration)
-- **Color** - Choose from color picker or enter hex code
+- **Color** - Choose from picker or enter hex code
 - **Category** - For organization
 - **Description** - Full DokuWiki formatting supported
 
-### DokuWiki Formatting Support
+### DokuWiki Formatting
 
 Events support full DokuWiki syntax:
 
@@ -187,12 +205,12 @@ Renders with proper HTML formatting including clickable links.
 **Week Grid**:
 - 7 days displayed (current week)
 - Event count badges on days with events
-- Click any day → View all events in expandable section
+- Click any day → View all events (expandable section)
 - Events sorted: All-day first, then by time
 
 **Today Section** (Orange):
 - All events happening today
-- Sorted: All-day events first, then chronologically
+- Sorted: All-day first, then chronologically
 
 **Tomorrow Section** (Green):
 - All events happening tomorrow
@@ -206,95 +224,74 @@ Renders with proper HTML formatting including clickable links.
 
 When you click a day in the week grid:
 
-**Display**:
 ```
 Monday, Feb 5
-├─ [Blue][Green]  All Day - Project Deadline
-├─ [Blue][Green]  8:00 AM - Morning Standup
-├─ [Blue][Orange] 10:30 AM - Coffee with Bob ⚠
-└─ [Blue][Purple] 2:00 PM - Team Meeting
+├─ [Green]  All Day - Project Deadline
+├─ [Blue]   8:00 AM - Morning Standup
+├─ [Orange] 10:30 AM - Coffee with Bob ⚠
+└─ [Purple] 2:00 PM - Team Meeting
 ```
 
-**Color Bars**:
-- **First bar** (4px, blue) - Section color (selected day = blue)
-- **Second bar** (3px) - Event's assigned color
-- 6px gap between bars
-
-**Conflict Badge**:
-- **⚠** appears if event overlaps with another
-- Orange warning triangle on the right
-- Small (10px) and unobtrusive
-
-**Sorting Order**:
-1. All-day events (no time) appear **first**
-2. Timed events sorted chronologically (earliest → latest)
+**Features**:
+- **Single color bar** (3px) - Event's assigned color
+- **Conflict badge** - ⚠ appears on right if event overlaps
+- **Sorting** - All-day events FIRST, then chronological
 
 ---
 
-## ⚙️ Admin Interface
+## ⚙️ System Monitoring
 
-### Access
-Go to **Admin → Calendar Management**
+### Live Stats in Sidebar
 
-### Tabs
+**Green Bar** (5-min CPU Load):
+```
+Hover to see:
+CPU Load Average
+1-min: 2.45
+5-min: 2.12
+15-min: 1.98
+Uptime: 5 days, 3 hours
+```
 
-#### 1. 📦 Update Plugin (Default Tab)
+**Purple Bar** (Real-time CPU):
+```
+Hover to see:
+CPU Load (Short-term)
+Current: 25.3%
 
-**Features**:
-- Current version and date
-- Author information
-- Installation path
-- Permission check
-- **🗑️ Clear Cache** button (prominent orange button)
-- Recent changelog (last 10 versions)
+Top Processes:
+1. apache2 (8.2%)
+2. mysql (6.1%)
+3. php-fpm (4.5%)
+```
 
-**Clear Cache**:
-- Click orange button
-- Confirm dialog
-- Clears all DokuWiki cache
-- **Use after every plugin update!**
-- Success message displays on same tab
+**Orange Bar** (Memory Usage):
+```
+Hover to see:
+Memory Usage
+Total: 16.0 GB
+Used: 8.2 GB (51%)
+Available: 7.8 GB
 
-#### 2. ⚙️ Outlook Sync
+Top Processes:
+1. mysql (2.1 GB)
+2. apache2 (1.3 GB)
+3. php-fpm (845 MB)
+```
 
-**Azure Configuration**:
-- Tenant ID
-- Client ID
-- Client Secret
-- User Email
-- Timezone
+**Update Frequency**:
+- Stats: Every 2 seconds
+- Weather: Every 10 minutes
+- Clock: Every second
 
-**Sync Settings**:
-- Default category
-- Reminder minutes
-- Sync completed tasks (checkbox)
-- Delete Outlook events (checkbox)
-- Important namespaces (comma-separated)
+---
 
-**Namespace Selection**:
-- Sync all namespaces (checkbox)
-- Or select specific namespaces
+## 🌤️ Weather Display
 
-**Category Mapping**:
-- Map DokuWiki colors to Outlook categories
-- Visual color picker
-- Custom mappings
-
-**Buttons**:
-- **📤 Export Config** - Download encrypted config
-- **📥 Import Config** - Upload encrypted config
-- **Save Configuration**
-
-#### 3. 📅 Manage Events
-
-**Features**:
-- Browse all events across all namespaces
-- Filter by namespace
-- Search events
-- Edit event details
-- Delete events
-- Move events between dates/namespaces
-- Bulk operations
+- **Geolocation-based** temperature
+- **Fallback**: Irvine, CA (33.6846, -117.8265)
+- **Updates**: Every 10 minutes
+- **Display**: Icon + temperature (e.g., "🌤️ 72°")
 
 ---
 
@@ -352,82 +349,89 @@ Go to **Admin → Calendar Management**
 - Updates sync to existing events
 - Category colors mapped to DokuWiki colors
 
-**Conflict Resolution**:
-- Last-write-wins
-- Sync timestamp tracked
+**Conflict Resolution**: Last-write-wins
 
 ---
 
 ## 🎨 Color Scheme
 
-### Section Colors (Left Bar, 4px)
+### Section Colors
 
-- **Today**: Orange `#ff9800`
-- **Tomorrow**: Green `#4caf50`
-- **Important Events**: Purple `#9b59b6`
-- **Selected Day**: Blue `#3498db`
-
-### Event Colors (Right Bar, 3px)
-
-- **Default**: Matrix Green `#00cc07`
-- **Custom**: User-assigned color
-- **Gap**: 6px between section and event bars
+- **Today**: Orange #ff9800
+- **Tomorrow**: Green #4caf50
+- **Important Events**: Purple #9b59b6
+- **Add Event Bar**: Dark green #006400
 
 ### System Bars
 
-- **Green**: 5-min CPU load average
-- **Purple**: Real-time CPU usage (5-sec average)
-- **Orange**: Real-time memory usage
+- **Green Bar**: 5-min CPU load average
+- **Purple Bar**: Real-time CPU usage
+- **Orange Bar**: Real-time memory usage
 
-### UI Elements
+### Event Colors
 
-- **Add Event Bar**: Orange `#ff9800` (6px height)
-- **Conflict Badge**: Orange `#ff9800` (⚠ symbol)
-- **Clear Cache Button**: Orange `#ff9800`
+- **Default**: Matrix Green #00cc07
+- **Custom**: User-assigned color (via color picker)
 
 ---
 
-## 🔍 System Monitoring
+## 🛠️ Admin Interface
 
-### Sidebar Widget Stats
+### Access
+Go to **Admin → Calendar Management**
 
-**Green Bar Tooltip** (5-min CPU Load):
-```
-CPU Load Average
-1-min: 2.45
-5-min: 2.12
-15-min: 1.98
-Uptime: 5 days, 3 hours
-```
+### Tabs
 
-**Purple Bar Tooltip** (Real-time CPU):
-```
-CPU Load (Short-term)
-Current: 25.3%
+#### 1. 📦 Update Plugin (Default Tab)
 
-Top Processes:
-1. apache2 (8.2%)
-2. mysql (6.1%)
-3. php-fpm (4.5%)
-```
+**Features**:
+- Current version and date
+- Author information
+- Installation path
+- Permission check
+- **🗑️ Clear Cache** button (prominent orange)
+- Recent changelog (last 10 versions)
 
-**Orange Bar Tooltip** (Memory):
-```
-Memory Usage
-Total: 16.0 GB
-Used: 8.2 GB (51%)
-Available: 7.8 GB
+**Clear Cache**:
+- Click orange button
+- Confirm dialog
+- Clears all DokuWiki cache
+- **Use after every plugin update!**
 
-Top Processes:
-1. mysql (2.1 GB)
-2. apache2 (1.3 GB)
-3. php-fpm (845 MB)
-```
+#### 2. ⚙️ Outlook Sync
 
-**Update Frequency**:
-- Stats: Every 2 seconds
-- Weather: Every 10 minutes
-- Clock: Every second
+**Azure Configuration**:
+- Tenant ID
+- Client ID
+- Client Secret
+- User Email
+- Timezone
+
+**Sync Settings**:
+- Default category
+- Reminder minutes
+- Sync completed tasks (checkbox)
+- Delete Outlook events (checkbox)
+- Important namespaces (comma-separated)
+
+**Category Mapping**:
+- Map DokuWiki colors to Outlook categories
+- Visual color picker
+
+**Buttons**:
+- **📤 Export Config** - Download encrypted config
+- **📥 Import Config** - Upload encrypted config
+- **Save Configuration**
+
+#### 3. 📅 Manage Events
+
+**Features**:
+- Browse all events across all namespaces
+- Filter by namespace
+- Search events
+- Edit event details
+- Delete events
+- Move events between dates/namespaces
 
 ---
 
@@ -435,10 +439,8 @@ Top Processes:
 
 ### Event Storage
 ```
-data/meta/calendar/2026-01.json
 data/meta/calendar/2026-02.json
-data/meta/[namespace]/calendar/2026-01.json
-data/meta/team/calendar/2026-03.json
+data/meta/team/calendar/2026-02.json
 ```
 
 ### Event JSON Format
@@ -447,18 +449,18 @@ data/meta/team/calendar/2026-03.json
   "2026-02-06": [
     {
       "id": "evt_abc123",
-      "title": "**Team Meeting** with [[team:bob|Bob]]",
-      "title_html": "<strong>Team Meeting</strong> with <a href=\"...\">Bob</a>",
+      "title": "**Team Meeting**",
+      "title_html": "<strong>Team Meeting</strong>",
       "time": "14:00",
       "end_time": "15:00",
-      "description": "Discuss //project timeline//",
-      "description_html": "Discuss <em>project timeline</em>",
+      "description": "Discuss //timeline//",
+      "description_html": "Discuss <em>timeline</em>",
       "color": "#3498db",
       "category": "Meetings",
       "namespace": "team",
       "created": "2026-02-05 10:00:00",
       "modified": "2026-02-05 10:30:00",
-      "conflict": true
+      "conflict": false
     }
   ]
 }
@@ -468,7 +470,7 @@ data/meta/team/calendar/2026-03.json
 
 - **id**: Unique identifier (auto-generated)
 - **title**: Raw DokuWiki syntax
-- **title_html**: Pre-rendered HTML for JavaScript display
+- **title_html**: Pre-rendered HTML for JavaScript
 - **time**: Start time (HH:MM, 24-hour)
 - **end_time**: End time (optional)
 - **description**: Raw DokuWiki syntax
@@ -476,13 +478,13 @@ data/meta/team/calendar/2026-03.json
 - **color**: Hex color code
 - **category**: Category name
 - **namespace**: Calendar namespace
-- **created**: Timestamp (YYYY-MM-DD HH:MM:SS)
+- **created**: Timestamp
 - **modified**: Last modified timestamp
 - **conflict**: Boolean - time conflict detected
 
 ---
 
-## 🛠️ Troubleshooting
+## 🐛 Troubleshooting
 
 ### Events Not Displaying
 
@@ -506,36 +508,38 @@ chmod -R 775 data/meta/calendar/
 ```bash
 cat data/meta/calendar/2026-02.json
 # Should be valid JSON
-# Check for syntax errors
 ```
 
 ### Color Bars Not Showing
 
-**Symptom**: No colored bars in clicked day events
-
 **Solution**: 
 1. Clear browser cache (Ctrl+Shift+R)
 2. Clear DokuWiki cache (admin button)
-3. Check browser console for errors
-4. Verify plugin version is 3.10.6+
+3. Verify plugin version is 4.0.0
 
 ### Tooltips Not Working
-
-**Symptom**: Hover over system bars shows no tooltip
 
 **Solution**:
 1. Verify JavaScript is enabled
 2. Clear cache
-3. Check console for "showTooltip_sidebar_* is not defined"
-4. Update to version 3.10.6+
+3. Check console for errors
+4. Update to version 4.0.0
 
 ### Weather Shows "--°"
 
 **Solution**:
 1. Clear cache
-2. Allow geolocation in browser (or uses Irvine, CA default)
+2. Allow geolocation in browser
 3. Wait 10 seconds for initial update
-4. Check console for weather API errors
+4. Check console for errors
+
+### Add Event Button Doesn't Work
+
+**Solution**:
+1. Check browser console for errors
+2. Verify calendar-main.js loaded
+3. Clear cache
+4. Update to version 4.0.0
 
 ### Outlook Sync Not Working
 
@@ -544,12 +548,7 @@ cat data/meta/calendar/2026-02.json
 - Check app permissions in Azure Portal
 - Ensure admin consent granted
 
-**Check 2**: Sync logs
-- Check `/lib/plugins/calendar/sync.log`
-- Look for authentication errors
-- Verify API call responses
-
-**Check 3**: Cron job
+**Check 2**: Cron job
 ```bash
 # Check cron is running
 crontab -l
@@ -557,16 +556,6 @@ crontab -l
 # Should show:
 */15 * * * * /usr/bin/php /path/to/dokuwiki/lib/plugins/calendar/sync_outlook.php
 ```
-
-### HTML Formatting Not Rendering
-
-**Symptom**: Event shows `**bold**` instead of **bold**
-
-**Solution**:
-1. Clear cache (critical!)
-2. Verify DokuWiki parser is working
-3. Check `title_html` and `description_html` fields exist in JSON
-4. Update to version 3.10.2+
 
 ---
 
@@ -615,7 +604,7 @@ crontab -l
 | Firefox | 88+     | ✅ Full |
 | Safari  | 14+     | ✅ Full |
 | Edge    | 90+     | ✅ Full |
-| Mobile  | Modern  | ⚠️ Limited (sidebar may need scrolling) |
+| Mobile  | Modern  | ⚠️ Limited (sidebar scrollable) |
 
 **Required Features**:
 - Flexbox
@@ -628,7 +617,8 @@ crontab -l
 ## 🆘 Support
 
 ### Documentation
-- `CHANGELOG.md` - Version history
+- `CHANGELOG.md` - Full version history
+- `RELEASE_NOTES_v4.0.0.txt` - v4.0 details
 - `OUTLOOK_SYNC_SETUP.md` - Detailed sync guide
 - `QUICK_REFERENCE.md` - Syntax quick reference
 
@@ -647,19 +637,28 @@ GPL 2.0
 
 ---
 
-## ✨ Credits
+## ✨ What's New in v4.0.0
 
-**Author**: atari911  
-**Email**: atari911@gmail.com  
-**Version**: 3.10.6  
-**Date**: February 6, 2026
+### Major Changes from v3.x
+- ✅ **Single color bars** (removed dual bars)
+- ✅ **All-day events first** (reversed sorting)
+- ✅ **Add Event dialog** in sidebar widget
+- ✅ **Perfect spacing** throughout
+- ✅ **Matrix Edition** official naming
+- ✅ **Production ready** - all bugs resolved
 
-**Special Features**:
-- Matrix theme design
-- Outlook synchronization
-- System monitoring integration
-- Real-time weather display
-- Advanced event conflict detection
+### Breaking Changes
+- Dual color bars removed (now single bar only)
+- All-day events now appear FIRST (not last)
+- Update Plugin tab is now default (not Config)
+
+### Bug Fixes
+- Fixed color bars rendering (align-self:stretch)
+- Fixed tooltip function naming
+- Fixed weather display
+- Fixed HTML rendering in events
+- Fixed Add Event dialog
+- Fixed spacing throughout
 
 ---
 
@@ -671,7 +670,7 @@ GPL 2.0
 
 {{calendar sidebar namespace=personal}}
 
-**Quick Add**: Click the orange "+ ADD EVENT" bar
+**Quick Add**: Click the dark green "+ ADD EVENT" bar
 ```
 
 ### Team Dashboard
@@ -698,4 +697,35 @@ GPL 2.0
 
 ---
 
-**🎉 Enjoy your Matrix-themed calendar with full Outlook integration!**
+## 🎉 Credits
+
+**Author**: atari911  
+**Email**: atari911@gmail.com  
+**Version**: 4.0.0  
+**Date**: February 6, 2026  
+
+**Special Features**:
+- Matrix theme design
+- Outlook synchronization
+- System monitoring integration
+- Real-time weather display
+- Advanced event conflict detection
+
+---
+
+## 🚀 Final Notes
+
+**Version 4.0.0 - Matrix Edition** represents a complete, production-ready calendar plugin with:
+
+- ✨ Beautiful Matrix-themed design
+- 💻 Live system monitoring
+- 🌤️ Real-time weather
+- 📅 Advanced event management
+- 🔄 Enterprise Outlook sync
+- 🎨 Polished UI throughout
+
+**Install it, clear cache, and enjoy your Matrix calendar!** 🎉
+
+---
+
+**Happy Calendaring! 🗓️✨**
