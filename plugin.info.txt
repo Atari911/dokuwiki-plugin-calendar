@@ -1,7 +1,8 @@
 base     calendar
-author   DokuWiki Community
-email    support@example.com
-date     2026-01-22
+author   atari911
+email    atari911@gmail.com
+date     2026-02-06
 name     Calendar Plugin - Compact
 desc     A sleek, compact calendar plugin with integrated event list
 url      https://www.dokuwiki.org/plugin:calendar
+version  3.10.5

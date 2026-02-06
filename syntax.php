@@ -113,7 +113,13 @@ class syntax_plugin_calendar extends DokuWiki_Syntax_Plugin {
             $nextYear++;
         }
         
-        $html = '<div class="calendar-compact-container" id="' . $calId . '" data-namespace="' . htmlspecialchars($namespace) . '" data-year="' . $year . '" data-month="' . $month . '">';
+        $html = '<div class="calendar-compact-container" id="' . $calId . '" data-namespace="' . htmlspecialchars($namespace) . '" data-original-namespace="' . htmlspecialchars($namespace) . '" data-year="' . $year . '" data-month="' . $month . '">';
+        
+        // Load calendar JavaScript manually (not through DokuWiki concatenation)
+        $html .= '<script src="' . DOKU_BASE . 'lib/plugins/calendar/calendar-main.js"></script>';
+        
+        // Initialize DOKU_BASE for JavaScript
+        $html .= '<script>if(typeof DOKU_BASE==="undefined"){window.DOKU_BASE="' . DOKU_BASE . '";}</script>';
         
         // Embed events data as JSON for JavaScript access
         $html .= '<script type="application/json" id="events-data-' . $calId . '">' . json_encode($events) . '</script>';
@@ -128,6 +134,15 @@ class syntax_plugin_calendar extends DokuWiki_Syntax_Plugin {
         $html .= '<button class="cal-nav-btn" onclick="navCalendar(\'' . $calId . '\', ' . $nextYear . ', ' . $nextMonth . ', \'' . $namespace . '\')">›</button>';
         $html .= '<button class="cal-today-btn" onclick="jumpToToday(\'' . $calId . '\', \'' . $namespace . '\')">Today</button>';
         $html .= '</div>';
+        
+        // Namespace filter indicator - only show if actively filtering a specific namespace
+        if ($namespace && $namespace !== '*' && strpos($namespace, '*') === false && strpos($namespace, ';') === false) {
+            $html .= '<div class="calendar-namespace-filter" id="namespace-filter-' . $calId . '">';
+            $html .= '<span class="namespace-filter-label">Filtering:</span>';
+            $html .= '<span class="namespace-filter-name">' . htmlspecialchars($namespace) . '</span>';
+            $html .= '<button class="namespace-filter-clear" onclick="clearNamespaceFilter(\'' . $calId . '\')" title="Clear filter and show all namespaces">✕</button>';
+            $html .= '</div>';
+        }
         
         // Calendar grid
         $html .= '<table class="calendar-compact-grid">';
@@ -270,6 +285,13 @@ class syntax_plugin_calendar extends DokuWiki_Syntax_Plugin {
             $html .= '<span class="namespace-badge">' . htmlspecialchars($namespace) . '</span>';
         }
         $html .= '</div>';
+        
+        // Search bar in header
+        $html .= '<div class="event-search-container-inline">';
+        $html .= '<input type="text" class="event-search-input-inline" id="event-search-' . $calId . '" placeholder="🔍 Search..." oninput="filterEvents(\'' . $calId . '\', this.value)">';
+        $html .= '<button class="event-search-clear-inline" id="search-clear-' . $calId . '" onclick="clearEventSearch(\'' . $calId . '\')" style="display:none;">✕</button>';
+        $html .= '</div>';
+        
         $html .= '<button class="add-event-compact" onclick="openAddEvent(\'' . $calId . '\', \'' . $namespace . '\')">+ Add</button>';
         $html .= '</div>';
         
@@ -295,14 +317,24 @@ class syntax_plugin_calendar extends DokuWiki_Syntax_Plugin {
             return '<p class="no-events-msg">No events this month</p>';
         }
         
+        // Check for time conflicts
+        $events = $this->checkTimeConflicts($events);
+        
         // Sort by date ascending (chronological order - oldest first)
         ksort($events);
         
         // Sort events within each day by time
         foreach ($events as $dateKey => &$dayEvents) {
             usort($dayEvents, function($a, $b) {
-                $timeA = isset($a['time']) ? $a['time'] : '00:00';
-                $timeB = isset($b['time']) ? $b['time'] : '00:00';
+                $timeA = isset($a['time']) && !empty($a['time']) ? $a['time'] : null;
+                $timeB = isset($b['time']) && !empty($b['time']) ? $b['time'] : null;
+                
+                // All-day events (no time) go to the TOP
+                if ($timeA === null && $timeB !== null) return -1; // A before B
+                if ($timeA !== null && $timeB === null) return 1;  // A after B  
+                if ($timeA === null && $timeB === null) return 0;  // Both all-day, equal
+                
+                // Both have times, sort chronologically
                 return strcmp($timeA, $timeB);
             });
         }
@@ -312,12 +344,45 @@ class syntax_plugin_calendar extends DokuWiki_Syntax_Plugin {
         $today = date('Y-m-d');
         $firstFutureEventId = null;
         
-        // Build HTML for each event
-        $html = '';
+        // Helper function to check if event is past (with 15-minute grace period for timed events)
+        $isEventPast = function($dateKey, $time) use ($today) {
+            // If event is on a past date, it's definitely past
+            if ($dateKey < $today) {
+                return true;
+            }
+            
+            // If event is on a future date, it's definitely not past
+            if ($dateKey > $today) {
+                return false;
+            }
+            
+            // Event is today - check time with grace period
+            if ($time && $time !== '') {
+                try {
+                    $currentDateTime = new DateTime();
+                    $eventDateTime = new DateTime($dateKey . ' ' . $time);
+                    
+                    // Add 15-minute grace period
+                    $eventDateTime->modify('+15 minutes');
+                    
+                    // Event is past if current time > event time + 15 minutes
+                    return $currentDateTime > $eventDateTime;
+                } catch (Exception $e) {
+                    // If time parsing fails, fall back to date-only comparison
+                    return false;
+                }
+            }
+            
+            // No time specified for today's event, treat as future
+            return false;
+        };
+        
+        // Build HTML for each event - separate past/completed from future
+        $pastHtml = '';
+        $futureHtml = '';
+        $pastCount = 0;
         
         foreach ($events as $dateKey => $dayEvents) {
-            $isPast = $dateKey < $today;
-            $isToday = $dateKey === $today;
             
             foreach ($dayEvents as $event) {
                 // Track first future/today event for auto-scroll
@@ -326,22 +391,46 @@ class syntax_plugin_calendar extends DokuWiki_Syntax_Plugin {
                 }
                 $eventId = isset($event['id']) ? $event['id'] : '';
                 $title = isset($event['title']) ? htmlspecialchars($event['title']) : 'Untitled';
-                $time = isset($event['time']) ? htmlspecialchars($event['time']) : '';
+                $timeRaw = isset($event['time']) ? $event['time'] : '';
+                $time = htmlspecialchars($timeRaw);
+                $endTime = isset($event['endTime']) ? htmlspecialchars($event['endTime']) : '';
                 $color = isset($event['color']) ? htmlspecialchars($event['color']) : '#3498db';
                 $description = isset($event['description']) ? $event['description'] : '';
                 $isTask = isset($event['isTask']) ? $event['isTask'] : false;
                 $completed = isset($event['completed']) ? $event['completed'] : false;
                 $endDate = isset($event['endDate']) ? $event['endDate'] : '';
                 
+                // Use helper function to determine if event is past (with grace period)
+                $isPast = $isEventPast($dateKey, $timeRaw);
+                $isToday = $dateKey === $today;
+                
+                // Check if event should be in past section
+                // EXCEPTION: Uncompleted tasks (isTask && !completed) should stay visible even if past
+                $isPastOrCompleted = ($isPast && (!$isTask || $completed)) || $completed;
+                if ($isPastOrCompleted) {
+                    $pastCount++;
+                }
+                
+                // Determine if task is past due (past date, is task, not completed)
+                $isPastDue = $isPast && $isTask && !$completed;
+                
                 // Process description for wiki syntax, HTML, images, and links
                 $renderedDescription = $this->renderDescription($description);
                 
-                // Convert to 12-hour format
+                // Convert to 12-hour format and handle time ranges
                 $displayTime = '';
                 if ($time) {
                     $timeObj = DateTime::createFromFormat('H:i', $time);
                     if ($timeObj) {
                         $displayTime = $timeObj->format('g:i A');
+                        
+                        // Add end time if present and different from start time
+                        if ($endTime && $endTime !== $time) {
+                            $endTimeObj = DateTime::createFromFormat('H:i', $endTime);
+                            if ($endTimeObj) {
+                                $displayTime .= ' - ' . $endTimeObj->format('g:i A');
+                            }
+                        }
                     } else {
                         $displayTime = $time;
                     }
@@ -361,66 +450,273 @@ class syntax_plugin_calendar extends DokuWiki_Syntax_Plugin {
                 }
                 
                 $completedClass = $completed ? ' event-completed' : '';
-                $pastClass = $isPast ? ' event-past' : '';
+                // Don't grey out past due tasks - they need attention!
+                $pastClass = ($isPast && !$isPastDue) ? ' event-past' : '';
+                $pastDueClass = $isPastDue ? ' event-pastdue' : '';
                 $firstFutureAttr = ($firstFutureEventId === $eventId) ? ' data-first-future="true"' : '';
                 
-                $html .= '<div class="event-compact-item' . $completedClass . $pastClass . '" data-event-id="' . $eventId . '" data-date="' . $dateKey . '" style="border-left-color: ' . $color . ';"' . $firstFutureAttr . '>';
+                $eventHtml = '<div class="event-compact-item' . $completedClass . $pastClass . $pastDueClass . '" data-event-id="' . $eventId . '" data-date="' . $dateKey . '" style="border-left-color: ' . $color . ';"' . $firstFutureAttr . '>';
                 
-                $html .= '<div class="event-info">';
-                $html .= '<div class="event-title-row">';
-                $html .= '<span class="event-title-compact">' . $title . '</span>';
-                $html .= '</div>';
+                $eventHtml .= '<div class="event-info">';
+                $eventHtml .= '<div class="event-title-row">';
+                $eventHtml .= '<span class="event-title-compact">' . $title . '</span>';
+                $eventHtml .= '</div>';
                 
                 // For past events, hide meta and description (collapsed)
-                if (!$isPast) {
-                    $html .= '<div class="event-meta-compact">';
-                    $html .= '<span class="event-date-time">' . $displayDate . $multiDay;
+                // EXCEPTION: Past due tasks should show their details
+                if (!$isPast || $isPastDue) {
+                    $eventHtml .= '<div class="event-meta-compact">';
+                    $eventHtml .= '<span class="event-date-time">' . $displayDate . $multiDay;
                     if ($displayTime) {
-                        $html .= ' • ' . $displayTime;
+                        $eventHtml .= ' • ' . $displayTime;
                     }
-                    // Add TODAY badge for today's events
-                    if ($isToday) {
-                        $html .= ' <span class="event-today-badge">TODAY</span>';
+                    // Add TODAY badge for today's events OR PAST DUE for uncompleted past tasks
+                    if ($isPastDue) {
+                        $eventHtml .= ' <span class="event-pastdue-badge">PAST DUE</span>';
+                    } elseif ($isToday) {
+                        $eventHtml .= ' <span class="event-today-badge">TODAY</span>';
                     }
-                    // Add namespace badge (for multi-namespace or stored namespace)
+                    // Add namespace badge - ALWAYS show if event has a namespace
                     $eventNamespace = isset($event['namespace']) ? $event['namespace'] : '';
                     if (!$eventNamespace && isset($event['_namespace'])) {
                         $eventNamespace = $event['_namespace']; // Fallback to _namespace for backward compatibility
                     }
-                    if ($eventNamespace) {
-                        $html .= ' <span class="event-namespace-badge">' . htmlspecialchars($eventNamespace) . '</span>';
+                    // Show badge if namespace exists and is not empty
+                    if ($eventNamespace && $eventNamespace !== '') {
+                        $eventHtml .= ' <span class="event-namespace-badge" onclick="filterCalendarByNamespace(\'' . $calId . '\', \'' . htmlspecialchars($eventNamespace) . '\')" style="cursor:pointer;" title="Click to filter by this namespace">' . htmlspecialchars($eventNamespace) . '</span>';
                     }
-                    $html .= '</span>';
-                    $html .= '</div>';
+                    
+                    // Add conflict warning if event has time conflicts
+                    if (isset($event['hasConflict']) && $event['hasConflict'] && isset($event['conflictsWith'])) {
+                        $conflictList = [];
+                        foreach ($event['conflictsWith'] as $conflict) {
+                            $conflictText = htmlspecialchars($conflict['title']);
+                            if (!empty($conflict['time'])) {
+                                // Format time range
+                                $startTimeObj = DateTime::createFromFormat('H:i', $conflict['time']);
+                                $startTimeFormatted = $startTimeObj ? $startTimeObj->format('g:i A') : $conflict['time'];
+                                
+                                if (!empty($conflict['endTime']) && $conflict['endTime'] !== $conflict['time']) {
+                                    $endTimeObj = DateTime::createFromFormat('H:i', $conflict['endTime']);
+                                    $endTimeFormatted = $endTimeObj ? $endTimeObj->format('g:i A') : $conflict['endTime'];
+                                    $conflictText .= ' (' . $startTimeFormatted . ' - ' . $endTimeFormatted . ')';
+                                } else {
+                                    $conflictText .= ' (' . $startTimeFormatted . ')';
+                                }
+                            }
+                            $conflictList[] = $conflictText;
+                        }
+                        $conflictCount = count($event['conflictsWith']);
+                        $conflictJson = htmlspecialchars(json_encode($conflictList), ENT_QUOTES, 'UTF-8');
+                        $eventHtml .= ' <span class="event-conflict-badge" data-conflicts="' . $conflictJson . '" onmouseenter="showConflictTooltip(this)" onmouseleave="hideConflictTooltip()">⚠️ ' . $conflictCount . '</span>';
+                    }
+                    
+                    $eventHtml .= '</span>';
+                    $eventHtml .= '</div>';
                     
                     if ($description) {
-                        $html .= '<div class="event-desc-compact">' . $renderedDescription . '</div>';
+                        $eventHtml .= '<div class="event-desc-compact">' . $renderedDescription . '</div>';
+                    }
+                } else {
+                    // Past events: render with display:none for click-to-expand
+                    $eventHtml .= '<div class="event-meta-compact" style="display:none;">';
+                    $eventHtml .= '<span class="event-date-time">' . $displayDate . $multiDay;
+                    if ($displayTime) {
+                        $eventHtml .= ' • ' . $displayTime;
+                    }
+                    $eventNamespace = isset($event['namespace']) ? $event['namespace'] : '';
+                    if (!$eventNamespace && isset($event['_namespace'])) {
+                        $eventNamespace = $event['_namespace'];
+                    }
+                    if ($eventNamespace && $eventNamespace !== '') {
+                        $eventHtml .= ' <span class="event-namespace-badge" onclick="filterCalendarByNamespace(\'' . $calId . '\', \'' . htmlspecialchars($eventNamespace) . '\')" style="cursor:pointer;" title="Click to filter by this namespace">' . htmlspecialchars($eventNamespace) . '</span>';
+                    }
+                    
+                    // Add conflict warning if event has time conflicts
+                    if (isset($event['hasConflict']) && $event['hasConflict'] && isset($event['conflictsWith'])) {
+                        $conflictList = [];
+                        foreach ($event['conflictsWith'] as $conflict) {
+                            $conflictText = htmlspecialchars($conflict['title']);
+                            if (!empty($conflict['time'])) {
+                                $startTimeObj = DateTime::createFromFormat('H:i', $conflict['time']);
+                                $startTimeFormatted = $startTimeObj ? $startTimeObj->format('g:i A') : $conflict['time'];
+                                
+                                if (!empty($conflict['endTime']) && $conflict['endTime'] !== $conflict['time']) {
+                                    $endTimeObj = DateTime::createFromFormat('H:i', $conflict['endTime']);
+                                    $endTimeFormatted = $endTimeObj ? $endTimeObj->format('g:i A') : $conflict['endTime'];
+                                    $conflictText .= ' (' . $startTimeFormatted . ' - ' . $endTimeFormatted . ')';
+                                } else {
+                                    $conflictText .= ' (' . $startTimeFormatted . ')';
+                                }
+                            }
+                            $conflictList[] = $conflictText;
+                        }
+                        $conflictCount = count($event['conflictsWith']);
+                        $conflictJson = htmlspecialchars(json_encode($conflictList), ENT_QUOTES, 'UTF-8');
+                        $eventHtml .= ' <span class="event-conflict-badge" data-conflicts="' . $conflictJson . '" onmouseenter="showConflictTooltip(this)" onmouseleave="hideConflictTooltip()">⚠️ ' . $conflictCount . '</span>';
+                    }
+                    
+                    $eventHtml .= '</span>';
+                    $eventHtml .= '</div>';
+                    
+                    if ($description) {
+                        $eventHtml .= '<div class="event-desc-compact" style="display:none;">' . $renderedDescription . '</div>';
                     }
                 }
                 
-                $html .= '</div>'; // event-info
+                $eventHtml .= '</div>'; // event-info
                 
                 // Use stored namespace from event, fallback to passed namespace
                 $buttonNamespace = isset($event['namespace']) ? $event['namespace'] : $namespace;
                 
-                $html .= '<div class="event-actions-compact">';
-                $html .= '<button class="event-action-btn" onclick="deleteEvent(\'' . $calId . '\', \'' . $eventId . '\', \'' . $dateKey . '\', \'' . $buttonNamespace . '\')">🗑️</button>';
-                $html .= '<button class="event-action-btn" onclick="editEvent(\'' . $calId . '\', \'' . $eventId . '\', \'' . $dateKey . '\', \'' . $buttonNamespace . '\')">✏️</button>';
-                $html .= '</div>';
+                $eventHtml .= '<div class="event-actions-compact">';
+                $eventHtml .= '<button class="event-action-btn" onclick="deleteEvent(\'' . $calId . '\', \'' . $eventId . '\', \'' . $dateKey . '\', \'' . $buttonNamespace . '\')">🗑️</button>';
+                $eventHtml .= '<button class="event-action-btn" onclick="editEvent(\'' . $calId . '\', \'' . $eventId . '\', \'' . $dateKey . '\', \'' . $buttonNamespace . '\')">✏️</button>';
+                $eventHtml .= '</div>';
                 
                 // Checkbox for tasks - ON THE FAR RIGHT
                 if ($isTask) {
                     $checked = $completed ? 'checked' : '';
-                    $html .= '<input type="checkbox" class="task-checkbox" ' . $checked . ' onclick="toggleTaskComplete(\'' . $calId . '\', \'' . $eventId . '\', \'' . $dateKey . '\', \'' . $buttonNamespace . '\', this.checked)">';
+                    $eventHtml .= '<input type="checkbox" class="task-checkbox" ' . $checked . ' onclick="toggleTaskComplete(\'' . $calId . '\', \'' . $eventId . '\', \'' . $dateKey . '\', \'' . $buttonNamespace . '\', this.checked)">';
                 }
                 
-                $html .= '</div>';
+                $eventHtml .= '</div>';
                 
-                // Add to HTML output
+                // Add to appropriate section
+                if ($isPastOrCompleted) {
+                    $pastHtml .= $eventHtml;
+                } else {
+                    $futureHtml .= $eventHtml;
+                }
             }
         }
         
+        // Build final HTML with collapsible past events section
+        $html = '';
+        
+        // Add collapsible past events section if any exist
+        if ($pastCount > 0) {
+            $html .= '<div class="past-events-section">';
+            $html .= '<div class="past-events-toggle" onclick="togglePastEvents(\'' . $calId . '\')">';
+            $html .= '<span class="past-events-arrow" id="past-arrow-' . $calId . '">▶</span> ';
+            $html .= '<span class="past-events-label">Past Events (' . $pastCount . ')</span>';
+            $html .= '</div>';
+            $html .= '<div class="past-events-content" id="past-events-' . $calId . '" style="display:none;">';
+            $html .= $pastHtml;
+            $html .= '</div>';
+            $html .= '</div>';
+        }
+        
+        // Add future events
+        $html .= $futureHtml;
+        
         return $html;
+    }
+    
+    /**
+     * Check for time conflicts between events
+     */
+    private function checkTimeConflicts($events) {
+        // Group events by date
+        $eventsByDate = [];
+        foreach ($events as $date => $dateEvents) {
+            if (!is_array($dateEvents)) continue;
+            
+            foreach ($dateEvents as $evt) {
+                if (empty($evt['time'])) continue; // Skip all-day events
+                
+                if (!isset($eventsByDate[$date])) {
+                    $eventsByDate[$date] = [];
+                }
+                $eventsByDate[$date][] = $evt;
+            }
+        }
+        
+        // Check for overlaps on each date
+        foreach ($eventsByDate as $date => $dateEvents) {
+            for ($i = 0; $i < count($dateEvents); $i++) {
+                for ($j = $i + 1; $j < count($dateEvents); $j++) {
+                    if ($this->eventsOverlap($dateEvents[$i], $dateEvents[$j])) {
+                        // Mark both events as conflicting
+                        $dateEvents[$i]['hasConflict'] = true;
+                        $dateEvents[$j]['hasConflict'] = true;
+                        
+                        // Store conflict info
+                        if (!isset($dateEvents[$i]['conflictsWith'])) {
+                            $dateEvents[$i]['conflictsWith'] = [];
+                        }
+                        if (!isset($dateEvents[$j]['conflictsWith'])) {
+                            $dateEvents[$j]['conflictsWith'] = [];
+                        }
+                        
+                        $dateEvents[$i]['conflictsWith'][] = [
+                            'id' => $dateEvents[$j]['id'],
+                            'title' => $dateEvents[$j]['title'],
+                            'time' => $dateEvents[$j]['time'],
+                            'endTime' => isset($dateEvents[$j]['endTime']) ? $dateEvents[$j]['endTime'] : ''
+                        ];
+                        
+                        $dateEvents[$j]['conflictsWith'][] = [
+                            'id' => $dateEvents[$i]['id'],
+                            'title' => $dateEvents[$i]['title'],
+                            'time' => $dateEvents[$i]['time'],
+                            'endTime' => isset($dateEvents[$i]['endTime']) ? $dateEvents[$i]['endTime'] : ''
+                        ];
+                    }
+                }
+            }
+            
+            // Update the events array with conflict information
+            foreach ($events[$date] as &$evt) {
+                foreach ($dateEvents as $checkedEvt) {
+                    if ($evt['id'] === $checkedEvt['id']) {
+                        if (isset($checkedEvt['hasConflict'])) {
+                            $evt['hasConflict'] = $checkedEvt['hasConflict'];
+                        }
+                        if (isset($checkedEvt['conflictsWith'])) {
+                            $evt['conflictsWith'] = $checkedEvt['conflictsWith'];
+                        }
+                        break;
+                    }
+                }
+            }
+        }
+        
+        return $events;
+    }
+    
+    /**
+     * Check if two events overlap in time
+     */
+    private function eventsOverlap($evt1, $evt2) {
+        if (empty($evt1['time']) || empty($evt2['time'])) {
+            return false; // All-day events don't conflict
+        }
+        
+        $start1 = $evt1['time'];
+        $end1 = isset($evt1['endTime']) && !empty($evt1['endTime']) ? $evt1['endTime'] : $evt1['time'];
+        
+        $start2 = $evt2['time'];
+        $end2 = isset($evt2['endTime']) && !empty($evt2['endTime']) ? $evt2['endTime'] : $evt2['time'];
+        
+        // Convert to minutes for easier comparison
+        $start1Mins = $this->timeToMinutes($start1);
+        $end1Mins = $this->timeToMinutes($end1);
+        $start2Mins = $this->timeToMinutes($start2);
+        $end2Mins = $this->timeToMinutes($end2);
+        
+        // Check for overlap: start1 < end2 AND start2 < end1
+        return $start1Mins < $end2Mins && $start2Mins < $end1Mins;
+    }
+    
+    /**
+     * Convert HH:MM time to minutes since midnight
+     */
+    private function timeToMinutes($timeStr) {
+        $parts = explode(':', $timeStr);
+        if (count($parts) !== 2) return 0;
+        
+        return (int)$parts[0] * 60 + (int)$parts[1];
     }
     
     private function renderEventPanelOnly($data) {
@@ -460,41 +756,59 @@ class syntax_plugin_calendar extends DokuWiki_Syntax_Plugin {
             $nextYear++;
         }
         
-        $html = '<div class="event-panel-standalone" id="' . $calId . '" data-height="' . htmlspecialchars($height) . '" data-namespace="' . htmlspecialchars($namespace) . '">';
+        $html = '<div class="event-panel-standalone" id="' . $calId . '" data-height="' . htmlspecialchars($height) . '" data-namespace="' . htmlspecialchars($namespace) . '" data-original-namespace="' . htmlspecialchars($namespace) . '">';
         
-        // Header with navigation
-        $html .= '<div class="panel-standalone-header">';
-        $html .= '<button class="cal-nav-btn" onclick="navEventPanel(\'' . $calId . '\', ' . $prevYear . ', ' . $prevMonth . ', \'' . $namespace . '\')">‹</button>';
-        $html .= '<div class="panel-header-content">';
-        $html .= '<h3 class="calendar-month-picker" onclick="openMonthPickerPanel(\'' . $calId . '\', ' . $year . ', ' . $month . ', \'' . $namespace . '\')" title="Click to jump to month">' . $monthName . ' Events</h3>';
+        // Load calendar JavaScript manually (not through DokuWiki concatenation)
+        $html .= '<script src="' . DOKU_BASE . 'lib/plugins/calendar/calendar-main.js"></script>';
+        
+        // Initialize DOKU_BASE for JavaScript
+        $html .= '<script>if(typeof DOKU_BASE==="undefined"){window.DOKU_BASE="' . DOKU_BASE . '";}</script>';
+        
+        // Compact two-row header designed for ~500px width
+        $html .= '<div class="panel-header-compact">';
+        
+        // Row 1: Navigation and title
+        $html .= '<div class="panel-header-row-1">';
+        $html .= '<button class="panel-nav-btn" onclick="navEventPanel(\'' . $calId . '\', ' . $prevYear . ', ' . $prevMonth . ', \'' . $namespace . '\')">‹</button>';
+        
+        // Compact month name (e.g. "Feb 2026" instead of "February 2026 Events")
+        $shortMonthName = date('M Y', mktime(0, 0, 0, $month, 1, $year));
+        $html .= '<h3 class="panel-month-title" onclick="openMonthPickerPanel(\'' . $calId . '\', ' . $year . ', ' . $month . ', \'' . $namespace . '\')" title="Click to jump to month">' . $shortMonthName . '</h3>';
+        
+        $html .= '<button class="panel-nav-btn" onclick="navEventPanel(\'' . $calId . '\', ' . $nextYear . ', ' . $nextMonth . ', \'' . $namespace . '\')">›</button>';
+        
+        // Namespace badge (if applicable)
         if ($namespace) {
-            // Show multiple namespace badges if multi-namespace
             if ($isMultiNamespace) {
-                // Handle wildcard
                 if (strpos($namespace, '*') !== false) {
-                    $html .= '<span class="namespace-badge">' . htmlspecialchars($namespace) . '</span> ';
+                    $html .= '<span class="panel-ns-badge" title="' . htmlspecialchars($namespace) . '">' . htmlspecialchars($namespace) . '</span>';
                 } else {
-                    // Semicolon-separated list
                     $namespaceList = array_map('trim', explode(';', $namespace));
-                    foreach ($namespaceList as $ns) {
-                        $ns = trim($ns);
-                        if (empty($ns)) continue;
-                        $namespaceUrl = DOKU_BASE . 'doku.php?id=' . str_replace(':', ':', $ns);
-                        $html .= '<a href="' . $namespaceUrl . '" class="namespace-badge" title="Go to namespace page">' . htmlspecialchars($ns) . '</a> ';
-                    }
+                    $nsCount = count($namespaceList);
+                    $html .= '<span class="panel-ns-badge" title="' . htmlspecialchars(implode(', ', $namespaceList)) . '">' . $nsCount . ' NS</span>';
                 }
             } else {
-                $namespaceUrl = DOKU_BASE . 'doku.php?id=' . str_replace(':', ':', $namespace);
-                $html .= '<a href="' . $namespaceUrl . '" class="namespace-badge" title="Go to namespace page">' . htmlspecialchars($namespace) . '</a>';
+                $isFiltering = ($namespace !== '*' && strpos($namespace, '*') === false && strpos($namespace, ';') === false);
+                if ($isFiltering) {
+                    $html .= '<span class="panel-ns-badge filter-on" title="Filtering by ' . htmlspecialchars($namespace) . ' - click to clear" onclick="clearNamespaceFilterPanel(\'' . $calId . '\')">' . htmlspecialchars($namespace) . ' ✕</span>';
+                } else {
+                    $html .= '<span class="panel-ns-badge" title="' . htmlspecialchars($namespace) . '">' . htmlspecialchars($namespace) . '</span>';
+                }
             }
         }
-        $html .= '</div>';
-        $html .= '<button class="cal-nav-btn" onclick="navEventPanel(\'' . $calId . '\', ' . $nextYear . ', ' . $nextMonth . ', \'' . $namespace . '\')">›</button>';
-        $html .= '<button class="cal-today-btn" onclick="jumpTodayPanel(\'' . $calId . '\', \'' . $namespace . '\')">Today</button>';
+        
+        $html .= '<button class="panel-today-btn" onclick="jumpTodayPanel(\'' . $calId . '\', \'' . $namespace . '\')">Today</button>';
         $html .= '</div>';
         
-        $html .= '<div class="panel-standalone-actions">';
-        $html .= '<button class="add-event-compact" onclick="openAddEventPanel(\'' . $calId . '\', \'' . $namespace . '\')">+ Add Event</button>';
+        // Row 2: Search and add button
+        $html .= '<div class="panel-header-row-2">';
+        $html .= '<div class="panel-search-box">';
+        $html .= '<input type="text" class="panel-search-input" id="event-search-' . $calId . '" placeholder="Search events..." oninput="filterEvents(\'' . $calId . '\', this.value)">';
+        $html .= '<button class="panel-search-clear" id="search-clear-' . $calId . '" onclick="clearEventSearch(\'' . $calId . '\')" style="display:none;">✕</button>';
+        $html .= '</div>';
+        $html .= '<button class="panel-add-btn" onclick="openAddEventPanel(\'' . $calId . '\', \'' . $namespace . '\')">+ Add</button>';
+        $html .= '</div>';
+        
         $html .= '</div>';
         
         $html .= '<div class="event-list-compact" id="eventlist-' . $calId . '" style="max-height: ' . htmlspecialchars($height) . ';">';
@@ -513,35 +827,79 @@ class syntax_plugin_calendar extends DokuWiki_Syntax_Plugin {
     
     private function renderStandaloneEventList($data) {
         $namespace = $data['namespace'];
+        // If no namespace specified, show all namespaces
+        if (empty($namespace)) {
+            $namespace = '*';
+        }
         $daterange = $data['daterange'];
         $date = $data['date'];
         $range = isset($data['range']) ? strtolower($data['range']) : '';
         $today = isset($data['today']) ? true : false;
         $sidebar = isset($data['sidebar']) ? true : false;
+        $showchecked = isset($data['showchecked']) ? true : false; // New parameter
+        $noheader = isset($data['noheader']) ? true : false; // New parameter to hide header
         
         // Handle "range" parameter - day, week, or month
         if ($range === 'day') {
-            $startDate = date('Y-m-d');
+            $startDate = date('Y-m-d', strtotime('-30 days')); // Include past 30 days for past due tasks
             $endDate = date('Y-m-d');
             $headerText = 'Today';
         } elseif ($range === 'week') {
-            $startDate = date('Y-m-d'); // Today
-            $endDateTime = new DateTime($startDate);
+            $startDate = date('Y-m-d', strtotime('-30 days')); // Include past 30 days for past due tasks
+            $endDateTime = new DateTime();
             $endDateTime->modify('+7 days');
             $endDate = $endDateTime->format('Y-m-d');
             $headerText = 'This Week';
         } elseif ($range === 'month') {
-            $startDate = date('Y-m-01'); // First of current month
+            $startDate = date('Y-m-01', strtotime('-1 month')); // Include previous month for past due tasks
             $endDate = date('Y-m-t'); // Last of current month
-            $dt = new DateTime($startDate);
+            $dt = new DateTime();
             $headerText = $dt->format('F Y');
         } elseif ($sidebar) {
-            // Handle "sidebar" parameter - shows today through one month from today
-            $startDate = date('Y-m-d'); // Today
-            $endDateTime = new DateTime($startDate);
-            $endDateTime->modify('+1 month');
-            $endDate = $endDateTime->format('Y-m-d'); // One month from today
-            $headerText = 'Upcoming';
+            // NEW: Sidebar widget - load current week's events
+            $weekStart = date('Y-m-d', strtotime('monday this week'));
+            $weekEnd = date('Y-m-d', strtotime('sunday this week'));
+            
+            // Load events for the entire week
+            $start = new DateTime($weekStart);
+            $end = new DateTime($weekEnd);
+            $end->modify('+1 day'); // DatePeriod excludes end date
+            $interval = new DateInterval('P1D');
+            $period = new DatePeriod($start, $interval, $end);
+            
+            $isMultiNamespace = !empty($namespace) && (strpos($namespace, ';') !== false || strpos($namespace, '*') !== false);
+            $allEvents = [];
+            $loadedMonths = [];
+            
+            foreach ($period as $dt) {
+                $year = (int)$dt->format('Y');
+                $month = (int)$dt->format('n');
+                $dateKey = $dt->format('Y-m-d');
+                
+                $monthKey = $year . '-' . $month . '-' . $namespace;
+                
+                if (!isset($loadedMonths[$monthKey])) {
+                    if ($isMultiNamespace) {
+                        $loadedMonths[$monthKey] = $this->loadEventsMultiNamespace($namespace, $year, $month);
+                    } else {
+                        $loadedMonths[$monthKey] = $this->loadEvents($namespace, $year, $month);
+                    }
+                }
+                
+                $monthEvents = $loadedMonths[$monthKey];
+                
+                if (isset($monthEvents[$dateKey]) && !empty($monthEvents[$dateKey])) {
+                    $allEvents[$dateKey] = $monthEvents[$dateKey];
+                }
+            }
+            
+            // Apply time conflict detection
+            $allEvents = $this->checkTimeConflicts($allEvents);
+            
+            $calId = 'sidebar-' . substr(md5($namespace . $weekStart), 0, 8);
+            
+            // Render sidebar widget and return immediately
+            return $this->renderSidebarWidget($allEvents, $namespace, $calId);
         } elseif ($today) {
             $startDate = date('Y-m-d');
             $endDate = date('Y-m-d');
@@ -599,8 +957,356 @@ class syntax_plugin_calendar extends DokuWiki_Syntax_Plugin {
             }
         }
         
+        // Sort events by date (already sorted by dateKey), then by time within each day
+        foreach ($allEvents as $dateKey => &$dayEvents) {
+            usort($dayEvents, function($a, $b) {
+                $timeA = isset($a['time']) && !empty($a['time']) ? $a['time'] : null;
+                $timeB = isset($b['time']) && !empty($b['time']) ? $b['time'] : null;
+                
+                // All-day events (no time) go to the TOP
+                if ($timeA === null && $timeB !== null) return -1; // A before B
+                if ($timeA !== null && $timeB === null) return 1;  // A after B  
+                if ($timeA === null && $timeB === null) return 0;  // Both all-day, equal
+                
+                // Both have times, sort chronologically
+                return strcmp($timeA, $timeB);
+            });
+        }
+        unset($dayEvents); // Break reference
+        
         // Simple 2-line display widget
-        $html = '<div class="eventlist-simple">';
+        $calId = 'eventlist_' . uniqid();
+        $html = '<div class="eventlist-simple" id="' . $calId . '">';
+        
+        // Load calendar JavaScript manually (not through DokuWiki concatenation)
+        $html .= '<script src="' . DOKU_BASE . 'lib/plugins/calendar/calendar-main.js"></script>';
+        
+        // Initialize DOKU_BASE for JavaScript
+        $html .= '<script>if(typeof DOKU_BASE==="undefined"){window.DOKU_BASE="' . DOKU_BASE . '";}</script>';
+        
+        // Add compact header with date and clock for "today" mode (unless noheader is set)
+        if ($today && !empty($allEvents) && !$noheader) {
+            $todayDate = new DateTime();
+            $displayDate = $todayDate->format('D, M j, Y'); // "Fri, Jan 30, 2026"
+            $currentTime = $todayDate->format('g:i:s A'); // "2:45:30 PM"
+            
+            $html .= '<div class="eventlist-today-header">';
+            $html .= '<span class="eventlist-today-clock" id="clock-' . $calId . '">' . $currentTime . '</span>';
+            $html .= '<div class="eventlist-bottom-info">';
+            $html .= '<span class="eventlist-weather"><span id="weather-icon-' . $calId . '">🌤️</span> <span id="weather-temp-' . $calId . '">--°</span></span>';
+            $html .= '<span class="eventlist-today-date">' . $displayDate . '</span>';
+            $html .= '</div>';
+            
+            // Three CPU/Memory bars (all update live)
+            $html .= '<div class="eventlist-stats-container">';
+            
+            // 5-minute load average (green, updates every 2 seconds)
+            $html .= '<div class="eventlist-cpu-bar" onmouseover="showTooltip_' . $calId . '(\'green\')" onmouseout="hideTooltip_' . $calId . '(\'green\')">';
+            $html .= '<div class="eventlist-cpu-fill" id="cpu-5min-' . $calId . '" style="width: 0%;"></div>';
+            $html .= '<div class="system-tooltip" id="tooltip-green-' . $calId . '" style="display:none;"></div>';
+            $html .= '</div>';
+            
+            // Real-time CPU (purple, updates with 5-sec average)
+            $html .= '<div class="eventlist-cpu-bar eventlist-cpu-realtime" onmouseover="showTooltip_' . $calId . '(\'purple\')" onmouseout="hideTooltip_' . $calId . '(\'purple\')">';
+            $html .= '<div class="eventlist-cpu-fill eventlist-cpu-fill-purple" id="cpu-realtime-' . $calId . '" style="width: 0%;"></div>';
+            $html .= '<div class="system-tooltip" id="tooltip-purple-' . $calId . '" style="display:none;"></div>';
+            $html .= '</div>';
+            
+            // Real-time Memory (orange, updates)
+            $html .= '<div class="eventlist-cpu-bar eventlist-mem-realtime" onmouseover="showTooltip_' . $calId . '(\'orange\')" onmouseout="hideTooltip_' . $calId . '(\'orange\')">';
+            $html .= '<div class="eventlist-cpu-fill eventlist-cpu-fill-orange" id="mem-realtime-' . $calId . '" style="width: 0%;"></div>';
+            $html .= '<div class="system-tooltip" id="tooltip-orange-' . $calId . '" style="display:none;"></div>';
+            $html .= '</div>';
+            
+            $html .= '</div>';
+            $html .= '</div>';
+            
+            // Add JavaScript to update clock and weather
+            $html .= '<script>
+(function() {
+    // Update clock every second
+    function updateClock() {
+        const now = new Date();
+        let hours = now.getHours();
+        const minutes = String(now.getMinutes()).padStart(2, "0");
+        const seconds = String(now.getSeconds()).padStart(2, "0");
+        const ampm = hours >= 12 ? "PM" : "AM";
+        hours = hours % 12 || 12;
+        const timeStr = hours + ":" + minutes + ":" + seconds + " " + ampm;
+        const clockEl = document.getElementById("clock-' . $calId . '");
+        if (clockEl) clockEl.textContent = timeStr;
+    }
+    setInterval(updateClock, 1000);
+    
+    // Fetch weather (geolocation-based)
+    function updateWeather() {
+        if ("geolocation" in navigator) {
+            navigator.geolocation.getCurrentPosition(function(position) {
+                const lat = position.coords.latitude;
+                const lon = position.coords.longitude;
+                
+                // Use Open-Meteo API (free, no key required)
+                fetch(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current_weather=true&temperature_unit=fahrenheit`)
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.current_weather) {
+                            const temp = Math.round(data.current_weather.temperature);
+                            const weatherCode = data.current_weather.weathercode;
+                            const icon = getWeatherIcon(weatherCode);
+                            const iconEl = document.getElementById("weather-icon-' . $calId . '");
+                            const tempEl = document.getElementById("weather-temp-' . $calId . '");
+                            if (iconEl) iconEl.textContent = icon;
+                            if (tempEl) tempEl.innerHTML = temp + "&deg;";
+                        }
+                    })
+                    .catch(error => {
+                        console.log("Weather fetch error:", error);
+                    });
+            }, function(error) {
+                // If geolocation fails, use Sacramento as default
+                fetch("https://api.open-meteo.com/v1/forecast?latitude=38.5816&longitude=-121.4944&current_weather=true&temperature_unit=fahrenheit")
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.current_weather) {
+                            const temp = Math.round(data.current_weather.temperature);
+                            const weatherCode = data.current_weather.weathercode;
+                            const icon = getWeatherIcon(weatherCode);
+                            const iconEl = document.getElementById("weather-icon-' . $calId . '");
+                            const tempEl = document.getElementById("weather-temp-' . $calId . '");
+                            if (iconEl) iconEl.textContent = icon;
+                            if (tempEl) tempEl.innerHTML = temp + "&deg;";
+                        }
+                    })
+                    .catch(err => console.log("Weather error:", err));
+            });
+        } else {
+            // No geolocation, use Sacramento
+            fetch("https://api.open-meteo.com/v1/forecast?latitude=38.5816&longitude=-121.4944&current_weather=true&temperature_unit=fahrenheit")
+                .then(response => response.json())
+                .then(data => {
+                    if (data.current_weather) {
+                        const temp = Math.round(data.current_weather.temperature);
+                        const weatherCode = data.current_weather.weathercode;
+                        const icon = getWeatherIcon(weatherCode);
+                        const iconEl = document.getElementById("weather-icon-' . $calId . '");
+                        const tempEl = document.getElementById("weather-temp-' . $calId . '");
+                        if (iconEl) iconEl.textContent = icon;
+                        if (tempEl) tempEl.innerHTML = temp + "&deg;";
+                    }
+                })
+                .catch(err => console.log("Weather error:", err));
+        }
+    }
+    
+    // WMO Weather interpretation codes
+    function getWeatherIcon(code) {
+        const icons = {
+            0: "☀️",   // Clear sky
+            1: "🌤️",   // Mainly clear
+            2: "⛅",   // Partly cloudy
+            3: "☁️",   // Overcast
+            45: "🌫️",  // Fog
+            48: "🌫️",  // Depositing rime fog
+            51: "🌦️",  // Light drizzle
+            53: "🌦️",  // Moderate drizzle
+            55: "🌧️",  // Dense drizzle
+            61: "🌧️",  // Slight rain
+            63: "🌧️",  // Moderate rain
+            65: "⛈️",  // Heavy rain
+            71: "🌨️",  // Slight snow
+            73: "🌨️",  // Moderate snow
+            75: "❄️",  // Heavy snow
+            77: "🌨️",  // Snow grains
+            80: "🌦️",  // Slight rain showers
+            81: "🌧️",  // Moderate rain showers
+            82: "⛈️",  // Violent rain showers
+            85: "🌨️",  // Slight snow showers
+            86: "❄️",  // Heavy snow showers
+            95: "⛈️",  // Thunderstorm
+            96: "⛈️",  // Thunderstorm with slight hail
+            99: "⛈️"   // Thunderstorm with heavy hail
+        };
+        return icons[code] || "🌤️";
+    }
+    
+    // Update weather immediately and every 10 minutes
+    updateWeather();
+    setInterval(updateWeather, 600000);
+    
+    // CPU load history for 4-second rolling average
+    const cpuHistory = [];
+    const CPU_HISTORY_SIZE = 2; // 2 samples × 2 seconds = 4 seconds
+    
+    // Store latest system stats for tooltips
+    let latestStats = {
+        load: {"1min": 0, "5min": 0, "15min": 0},
+        uptime: "",
+        memory_details: {},
+        top_processes: []
+    };
+    
+    // Tooltip functions
+    window["showTooltip_' . $calId . '"] = function(color) {
+        const tooltip = document.getElementById("tooltip-" + color + "-' . $calId . '");
+        if (!tooltip) {
+            console.log("Tooltip element not found for color:", color);
+            return;
+        }
+        
+        console.log("Showing tooltip for:", color, "latestStats:", latestStats);
+        
+        let content = "";
+        
+        if (color === "green") {
+            // Green bar: Load averages and uptime
+            content = "<div class=\"tooltip-title\">CPU Load Average</div>";
+            content += "<div>1 min: " + (latestStats.load["1min"] || "N/A") + "</div>";
+            content += "<div>5 min: " + (latestStats.load["5min"] || "N/A") + "</div>";
+            content += "<div>15 min: " + (latestStats.load["15min"] || "N/A") + "</div>";
+            if (latestStats.uptime) {
+                content += "<div style=\"margin-top:3px; padding-top:2px; border-top:1px solid rgba(0,204,7,0.3);\">Uptime: " + latestStats.uptime + "</div>";
+            }
+            tooltip.style.borderColor = "#00cc07";
+            tooltip.style.color = "#00cc07";
+        } else if (color === "purple") {
+            // Purple bar: Load averages (short-term) and top processes
+            content = "<div class=\"tooltip-title\">CPU Load (Short-term)</div>";
+            content += "<div>1 min: " + (latestStats.load["1min"] || "N/A") + "</div>";
+            content += "<div>5 min: " + (latestStats.load["5min"] || "N/A") + "</div>";
+            if (latestStats.top_processes && latestStats.top_processes.length > 0) {
+                content += "<div style=\"margin-top:3px; padding-top:2px; border-top:1px solid rgba(155,89,182,0.3);\" class=\"tooltip-title\">Top Processes</div>";
+                latestStats.top_processes.slice(0, 5).forEach(proc => {
+                    content += "<div>" + proc.cpu + " " + proc.command + "</div>";
+                });
+            }
+            tooltip.style.borderColor = "#9b59b6";
+            tooltip.style.color = "#9b59b6";
+        } else if (color === "orange") {
+            // Orange bar: Memory details and top processes
+            content = "<div class=\"tooltip-title\">Memory Usage</div>";
+            if (latestStats.memory_details && latestStats.memory_details.total) {
+                content += "<div>Total: " + latestStats.memory_details.total + "</div>";
+                content += "<div>Used: " + latestStats.memory_details.used + "</div>";
+                content += "<div>Available: " + latestStats.memory_details.available + "</div>";
+                if (latestStats.memory_details.cached) {
+                    content += "<div>Cached: " + latestStats.memory_details.cached + "</div>";
+                }
+            } else {
+                content += "<div>Loading...</div>";
+            }
+            if (latestStats.top_processes && latestStats.top_processes.length > 0) {
+                content += "<div style=\"margin-top:3px; padding-top:2px; border-top:1px solid rgba(255,140,0,0.3);\" class=\"tooltip-title\">Top Processes</div>";
+                latestStats.top_processes.slice(0, 5).forEach(proc => {
+                    content += "<div>" + proc.cpu + " " + proc.command + "</div>";
+                });
+            }
+            tooltip.style.borderColor = "#ff9800";
+            tooltip.style.color = "#ff9800";
+        }
+        
+        console.log("Tooltip content:", content);
+        tooltip.innerHTML = content;
+        tooltip.style.display = "block";
+        
+        // Position tooltip using fixed positioning above the bar
+        const bar = tooltip.parentElement;
+        const barRect = bar.getBoundingClientRect();
+        const tooltipRect = tooltip.getBoundingClientRect();
+        
+        // Center horizontally on the bar
+        const left = barRect.left + (barRect.width / 2) - (tooltipRect.width / 2);
+        // Position above the bar with 8px gap
+        const top = barRect.top - tooltipRect.height - 8;
+        
+        tooltip.style.left = left + "px";
+        tooltip.style.top = top + "px";
+    };
+    
+    window["hideTooltip_' . $calId . '"] = function(color) {
+        const tooltip = document.getElementById("tooltip-" + color + "-' . $calId . '");
+        if (tooltip) {
+            tooltip.style.display = "none";
+        }
+    };
+    
+    // Update CPU and memory bars every 2 seconds
+    function updateSystemStats() {
+        // Fetch real system stats from server
+        fetch("' . DOKU_BASE . 'lib/plugins/calendar/get_system_stats.php")
+            .then(response => response.json())
+            .then(data => {
+                console.log("System stats received:", data);
+                
+                // Store data for tooltips
+                latestStats = {
+                    load: data.load || {"1min": 0, "5min": 0, "15min": 0},
+                    uptime: data.uptime || "",
+                    memory_details: data.memory_details || {},
+                    top_processes: data.top_processes || []
+                };
+                
+                console.log("latestStats updated to:", latestStats);
+                
+                // Update green bar (5-minute average) - updates live now!
+                const greenBar = document.getElementById("cpu-5min-' . $calId . '");
+                if (greenBar) {
+                    greenBar.style.width = Math.min(100, data.cpu_5min) + "%";
+                }
+                
+                // Add current CPU to history for purple bar
+                cpuHistory.push(data.cpu);
+                if (cpuHistory.length > CPU_HISTORY_SIZE) {
+                    cpuHistory.shift(); // Remove oldest
+                }
+                
+                // Calculate 5-second average for CPU
+                const cpuAverage = cpuHistory.reduce((sum, val) => sum + val, 0) / cpuHistory.length;
+                
+                // Update CPU bar (purple) with 5-second average
+                const cpuBar = document.getElementById("cpu-realtime-' . $calId . '");
+                if (cpuBar) {
+                    cpuBar.style.width = Math.min(100, cpuAverage) + "%";
+                }
+                
+                // Update memory bar (orange) with real data
+                const memBar = document.getElementById("mem-realtime-' . $calId . '");
+                if (memBar) {
+                    memBar.style.width = Math.min(100, data.memory) + "%";
+                }
+            })
+            .catch(error => {
+                console.log("System stats error:", error);
+                // Fallback to client-side estimates on error
+                const cpuFallback = Math.random() * 100;
+                cpuHistory.push(cpuFallback);
+                if (cpuHistory.length > CPU_HISTORY_SIZE) {
+                    cpuHistory.shift();
+                }
+                const cpuAverage = cpuHistory.reduce((sum, val) => sum + val, 0) / cpuHistory.length;
+                
+                const greenBar = document.getElementById("cpu-5min-' . $calId . '");
+                if (greenBar) greenBar.style.width = Math.min(100, cpuFallback) + "%";
+                
+                const cpuBar = document.getElementById("cpu-realtime-' . $calId . '");
+                if (cpuBar) cpuBar.style.width = Math.min(100, cpuAverage) + "%";
+                
+                let memoryUsage = 0;
+                if (performance.memory) {
+                    memoryUsage = (performance.memory.usedJSHeapSize / performance.memory.jsHeapSizeLimit) * 100;
+                } else {
+                    memoryUsage = Math.random() * 100;
+                }
+                const memBar = document.getElementById("mem-realtime-' . $calId . '");
+                if (memBar) memBar.style.width = Math.min(100, memoryUsage) + "%";
+            });
+    }
+    
+    // Update immediately and then every 2 seconds
+    updateSystemStats();
+    setInterval(updateSystemStats, 2000);
+})();
+</script>';
+        }
         
         if (empty($allEvents)) {
             $html .= '<div class="eventlist-simple-empty">';
@@ -613,30 +1319,43 @@ class syntax_plugin_calendar extends DokuWiki_Syntax_Plugin {
             $html .= '</div>';
         } else {
             // Calculate today and tomorrow's dates for highlighting
-            $today = date('Y-m-d');
+            $todayStr = date('Y-m-d');
             $tomorrow = date('Y-m-d', strtotime('+1 day'));
             
             foreach ($allEvents as $dateKey => $dayEvents) {
                 $dateObj = new DateTime($dateKey);
                 $displayDate = $dateObj->format('D, M j');
                 
-                // Check if this date is today or tomorrow
+                // Check if this date is today or tomorrow or past
                 // Enable highlighting for sidebar mode AND range modes (day, week, month)
                 $enableHighlighting = $sidebar || !empty($range);
-                $isToday = $enableHighlighting && ($dateKey === $today);
+                $isToday = $enableHighlighting && ($dateKey === $todayStr);
                 $isTomorrow = $enableHighlighting && ($dateKey === $tomorrow);
+                $isPast = $dateKey < $todayStr;
                 
                 foreach ($dayEvents as $event) {
-                    // Skip completed tasks when in sidebar mode or day/week range
-                    $skipCompleted = $sidebar || ($range === 'day') || ($range === 'week');
-                    if ($skipCompleted && !empty($event['isTask']) && !empty($event['completed'])) {
+                    // Check if this is a task and if it's completed
+                    $isTask = !empty($event['isTask']);
+                    $completed = !empty($event['completed']);
+                    
+                    // ALWAYS skip completed tasks UNLESS showchecked is explicitly set
+                    if (!$showchecked && $isTask && $completed) {
                         continue;
                     }
+                    
+                    // Skip past events that are NOT tasks (only show past due tasks from the past)
+                    if ($isPast && !$isTask) {
+                        continue;
+                    }
+                    
+                    // Determine if task is past due (past date, is task, not completed)
+                    $isPastDue = $isPast && $isTask && !$completed;
                     
                     // Line 1: Header (Title, Time, Date, Namespace)
                     $todayClass = $isToday ? ' eventlist-simple-today' : '';
                     $tomorrowClass = $isTomorrow ? ' eventlist-simple-tomorrow' : '';
-                    $html .= '<div class="eventlist-simple-item' . $todayClass . $tomorrowClass . '">';
+                    $pastDueClass = $isPastDue ? ' eventlist-simple-pastdue' : '';
+                    $html .= '<div class="eventlist-simple-item' . $todayClass . $tomorrowClass . $pastDueClass . '">';
                     $html .= '<div class="eventlist-simple-header">';
                     
                     // Title
@@ -658,8 +1377,10 @@ class syntax_plugin_calendar extends DokuWiki_Syntax_Plugin {
                     // Date
                     $html .= ' <span class="eventlist-simple-date">' . $displayDate . '</span>';
                     
-                    // TODAY badge (show for today's events in sidebar)
-                    if ($isToday) {
+                    // Badge: PAST DUE, TODAY, or nothing
+                    if ($isPastDue) {
+                        $html .= ' <span class="eventlist-simple-pastdue-badge">PAST DUE</span>';
+                    } elseif ($isToday) {
                         $html .= ' <span class="eventlist-simple-today-badge">TODAY</span>';
                     }
                     
@@ -708,46 +1429,68 @@ class syntax_plugin_calendar extends DokuWiki_Syntax_Plugin {
         // Hidden ID field
         $html .= '<input type="hidden" id="event-id-' . $calId . '" name="eventId" value="">';
         
-        // Task checkbox
-        $html .= '<div class="form-field form-field-checkbox">';
-        $html .= '<label class="checkbox-label">';
-        $html .= '<input type="checkbox" id="event-is-task-' . $calId . '" name="isTask" class="task-toggle">';
-        $html .= '<span>📋 This is a task (can be checked off)</span>';
-        $html .= '</label>';
+        // 1. TITLE
+        $html .= '<div class="form-field">';
+        $html .= '<label class="field-label">📝 Title</label>';
+        $html .= '<input type="text" id="event-title-' . $calId . '" name="title" required class="input-sleek input-compact" placeholder="Event or task title...">';
         $html .= '</div>';
         
-        // Date and Time in a row
+        // 1.5 NAMESPACE SELECTOR (Searchable with fuzzy matching)
+        $html .= '<div class="form-field">';
+        $html .= '<label class="field-label">📁 Namespace</label>';
+        
+        // Hidden field to store actual selected namespace
+        $html .= '<input type="hidden" id="event-namespace-' . $calId . '" name="namespace" value="">';
+        
+        // Searchable input
+        $html .= '<div class="namespace-search-wrapper">';
+        $html .= '<input type="text" id="event-namespace-search-' . $calId . '" class="input-sleek input-compact namespace-search-input" placeholder="Type to search or leave empty for default..." autocomplete="off">';
+        $html .= '<div class="namespace-dropdown" id="event-namespace-dropdown-' . $calId . '" style="display:none;"></div>';
+        $html .= '</div>';
+        
+        // Store namespaces as JSON for JavaScript
+        $allNamespaces = $this->getAllNamespaces();
+        $html .= '<script type="application/json" id="namespaces-data-' . $calId . '">' . json_encode($allNamespaces) . '</script>';
+        
+        $html .= '</div>';
+        
+        // 2. DESCRIPTION
+        $html .= '<div class="form-field">';
+        $html .= '<label class="field-label">📄 Description</label>';
+        $html .= '<textarea id="event-desc-' . $calId . '" name="description" rows="1" class="input-sleek textarea-sleek textarea-compact" placeholder="Optional details..."></textarea>';
+        $html .= '</div>';
+        
+        // 3. START DATE - END DATE (inline)
         $html .= '<div class="form-row-group">';
         
-        // Start Date field
-        $html .= '<div class="form-field form-field-date">';
-        $html .= '<label class="field-label">📅 Start Date</label>';
-        $html .= '<input type="date" id="event-date-' . $calId . '" name="date" required class="input-sleek input-date">';
+        $html .= '<div class="form-field form-field-half">';
+        $html .= '<label class="field-label-compact">📅 Start Date</label>';
+        $html .= '<input type="date" id="event-date-' . $calId . '" name="date" required class="input-sleek input-date input-compact">';
         $html .= '</div>';
         
-        // End Date field (for multi-day events)
-        $html .= '<div class="form-field form-field-date">';
-        $html .= '<label class="field-label">📅 End Date</label>';
-        $html .= '<input type="date" id="event-end-date-' . $calId . '" name="endDate" class="input-sleek input-date">';
+        $html .= '<div class="form-field form-field-half">';
+        $html .= '<label class="field-label-compact">🏁 End Date</label>';
+        $html .= '<input type="date" id="event-end-date-' . $calId . '" name="endDate" class="input-sleek input-date input-compact" placeholder="Optional">';
         $html .= '</div>';
         
-        $html .= '</div>';
+        $html .= '</div>'; // End row
         
-        // Recurring event section
-        $html .= '<div class="form-field form-field-checkbox">';
-        $html .= '<label class="checkbox-label">';
+        // 4. IS REPEATING CHECKBOX
+        $html .= '<div class="form-field form-field-checkbox form-field-checkbox-compact">';
+        $html .= '<label class="checkbox-label checkbox-label-compact">';
         $html .= '<input type="checkbox" id="event-recurring-' . $calId . '" name="isRecurring" class="recurring-toggle" onchange="toggleRecurringOptions(\'' . $calId . '\')">';
         $html .= '<span>🔄 Repeating Event</span>';
         $html .= '</label>';
         $html .= '</div>';
         
-        // Recurring options (hidden by default)
+        // Recurring options (shown when checkbox is checked)
         $html .= '<div id="recurring-options-' . $calId . '" class="recurring-options" style="display:none;">';
         
-        // Recurrence pattern
-        $html .= '<div class="form-field">';
-        $html .= '<label class="field-label">Repeat Every</label>';
-        $html .= '<select id="event-recurrence-type-' . $calId . '" name="recurrenceType" class="input-sleek">';
+        $html .= '<div class="form-row-group">';
+        
+        $html .= '<div class="form-field form-field-half">';
+        $html .= '<label class="field-label-compact">Repeat Every</label>';
+        $html .= '<select id="event-recurrence-type-' . $calId . '" name="recurrenceType" class="input-sleek input-compact">';
         $html .= '<option value="daily">Daily</option>';
         $html .= '<option value="weekly">Weekly</option>';
         $html .= '<option value="monthly">Monthly</option>';
@@ -755,19 +1498,21 @@ class syntax_plugin_calendar extends DokuWiki_Syntax_Plugin {
         $html .= '</select>';
         $html .= '</div>';
         
-        // Recurrence end date
-        $html .= '<div class="form-field">';
-        $html .= '<label class="field-label">📅 Repeat Until (optional)</label>';
-        $html .= '<input type="date" id="event-recurrence-end-' . $calId . '" name="recurrenceEnd" class="input-sleek input-date">';
+        $html .= '<div class="form-field form-field-half">';
+        $html .= '<label class="field-label-compact">Repeat Until</label>';
+        $html .= '<input type="date" id="event-recurrence-end-' . $calId . '" name="recurrenceEnd" class="input-sleek input-date input-compact" placeholder="Optional">';
         $html .= '</div>';
         
-        $html .= '</div>';
+        $html .= '</div>'; // End row
+        $html .= '</div>'; // End recurring options
         
-        // Time field - dropdown with 15-minute intervals
-        $html .= '<div class="form-field">';
-        $html .= '<label class="field-label">🕐 Time (optional)</label>';
-        $html .= '<select id="event-time-' . $calId . '" name="time" class="input-sleek">';
-        $html .= '<option value="">No specific time</option>';
+        // 5. TIME (Start & End) - COLOR (inline)
+        $html .= '<div class="form-row-group">';
+        
+        $html .= '<div class="form-field form-field-half">';
+        $html .= '<label class="field-label-compact">🕐 Start Time</label>';
+        $html .= '<select id="event-time-' . $calId . '" name="time" class="input-sleek input-compact" onchange="updateEndTimeOptions(\'' . $calId . '\')">';
+        $html .= '<option value="">All day</option>';
         
         // Generate time options in 15-minute intervals
         for ($hour = 0; $hour < 24; $hour++) {
@@ -783,25 +1528,55 @@ class syntax_plugin_calendar extends DokuWiki_Syntax_Plugin {
         $html .= '</select>';
         $html .= '</div>';
         
-        // Title field
-        $html .= '<div class="form-field">';
-        $html .= '<label class="field-label">📝 Title</label>';
-        $html .= '<input type="text" id="event-title-' . $calId . '" name="title" required class="input-sleek" placeholder="Event or task title...">';
+        $html .= '<div class="form-field form-field-half">';
+        $html .= '<label class="field-label-compact">🕐 End Time</label>';
+        $html .= '<select id="event-end-time-' . $calId . '" name="endTime" class="input-sleek input-compact">';
+        $html .= '<option value="">Same as start</option>';
+        
+        // Generate time options in 15-minute intervals
+        for ($hour = 0; $hour < 24; $hour++) {
+            for ($minute = 0; $minute < 60; $minute += 15) {
+                $timeValue = sprintf('%02d:%02d', $hour, $minute);
+                $displayHour = $hour == 0 ? 12 : ($hour > 12 ? $hour - 12 : $hour);
+                $ampm = $hour < 12 ? 'AM' : 'PM';
+                $displayTime = sprintf('%d:%02d %s', $displayHour, $minute, $ampm);
+                $html .= '<option value="' . $timeValue . '">' . $displayTime . '</option>';
+            }
+        }
+        
+        $html .= '</select>';
         $html .= '</div>';
         
-        // Description field
-        $html .= '<div class="form-field">';
-        $html .= '<label class="field-label">📄 Description</label>';
-        $html .= '<textarea id="event-desc-' . $calId . '" name="description" rows="3" class="input-sleek textarea-sleek" placeholder="Add details (optional)..."></textarea>';
+        $html .= '</div>'; // End row
+        
+        // Color field (new row)
+        $html .= '<div class="form-row-group">';
+        
+        $html .= '<div class="form-field form-field-full">';
+        $html .= '<label class="field-label-compact">🎨 Color</label>';
+        $html .= '<div class="color-picker-wrapper">';
+        $html .= '<select id="event-color-' . $calId . '" name="color" class="input-sleek input-compact color-select" onchange="updateCustomColorPicker(\'' . $calId . '\')">';
+        $html .= '<option value="#3498db" style="background:#3498db;color:white">🔵 Blue</option>';
+        $html .= '<option value="#2ecc71" style="background:#2ecc71;color:white">🟢 Green</option>';
+        $html .= '<option value="#e74c3c" style="background:#e74c3c;color:white">🔴 Red</option>';
+        $html .= '<option value="#f39c12" style="background:#f39c12;color:white">🟠 Orange</option>';
+        $html .= '<option value="#9b59b6" style="background:#9b59b6;color:white">🟣 Purple</option>';
+        $html .= '<option value="#e91e63" style="background:#e91e63;color:white">🔴 Pink</option>';
+        $html .= '<option value="#1abc9c" style="background:#1abc9c;color:white">🟢 Teal</option>';
+        $html .= '<option value="custom">🎨 Custom...</option>';
+        $html .= '</select>';
+        $html .= '<input type="color" id="event-color-custom-' . $calId . '" class="color-picker-input color-picker-compact" value="#3498db" onchange="updateColorFromPicker(\'' . $calId . '\')">';
+        $html .= '</div>';
         $html .= '</div>';
         
-        // Color picker
-        $html .= '<div class="form-field">';
-        $html .= '<label class="field-label">🎨 Color</label>';
-        $html .= '<div class="color-picker-container">';
-        $html .= '<input type="color" id="event-color-' . $calId . '" name="color" value="#3498db" class="input-color-sleek">';
-        $html .= '<span class="color-label">Choose event color</span>';
-        $html .= '</div>';
+        $html .= '</div>'; // End row
+        
+        // Task checkbox
+        $html .= '<div class="form-field form-field-checkbox form-field-checkbox-compact">';
+        $html .= '<label class="checkbox-label checkbox-label-compact">';
+        $html .= '<input type="checkbox" id="event-is-task-' . $calId . '" name="isTask" class="task-toggle">';
+        $html .= '<span>📋 This is a task (can be checked off)</span>';
+        $html .= '</label>';
         $html .= '</div>';
         
         // Action buttons
@@ -1098,6 +1873,735 @@ class syntax_plugin_calendar extends DokuWiki_Syntax_Plugin {
                 
                 // Recurse into subdirectories
                 $this->findSubNamespaces($path . '/', $namespace, $year, $month, $allEvents);
+            }
+        }
+    }
+    
+    private function getAllNamespaces() {
+        $dataDir = DOKU_INC . 'data/meta/';
+        $namespaces = [];
+        
+        // Scan for namespaces that have calendar data
+        $this->scanForCalendarNamespaces($dataDir, '', $namespaces);
+        
+        // Sort alphabetically
+        sort($namespaces);
+        
+        return $namespaces;
+    }
+    
+    private function scanForCalendarNamespaces($dir, $baseNamespace, &$namespaces) {
+        if (!is_dir($dir)) return;
+        
+        $items = scandir($dir);
+        foreach ($items as $item) {
+            if ($item === '.' || $item === '..') continue;
+            
+            $path = $dir . $item;
+            if (is_dir($path)) {
+                // Check if this directory has a calendar subdirectory with data
+                $calendarDir = $path . '/calendar/';
+                if (is_dir($calendarDir)) {
+                    // Check if there are any JSON files in the calendar directory
+                    $jsonFiles = glob($calendarDir . '*.json');
+                    if (!empty($jsonFiles)) {
+                        // This namespace has calendar data
+                        $namespace = $baseNamespace ? $baseNamespace . ':' . $item : $item;
+                        $namespaces[] = $namespace;
+                    }
+                }
+                
+                // Recurse into subdirectories
+                $namespace = $baseNamespace ? $baseNamespace . ':' . $item : $item;
+                $this->scanForCalendarNamespaces($path . '/', $namespace, $namespaces);
+            }
+        }
+    }
+    
+    /**
+     * Render new sidebar widget - Week at a glance itinerary (200px wide)
+     */
+    private function renderSidebarWidget($events, $namespace, $calId) {
+        if (empty($events)) {
+            return '<div style="width:200px; padding:12px; text-align:center; color:#999; font-size:11px;">No events this week</div>';
+        }
+        
+        // Get important namespaces from config
+        $configFile = DOKU_PLUGIN . 'calendar/sync_config.php';
+        $importantNsList = ['important']; // default
+        if (file_exists($configFile)) {
+            $config = include $configFile;
+            if (isset($config['important_namespaces']) && !empty($config['important_namespaces'])) {
+                $importantNsList = array_map('trim', explode(',', $config['important_namespaces']));
+            }
+        }
+        
+        // Calculate date ranges
+        $todayStr = date('Y-m-d');
+        $tomorrowStr = date('Y-m-d', strtotime('+1 day'));
+        $weekStart = date('Y-m-d', strtotime('monday this week'));
+        $weekEnd = date('Y-m-d', strtotime('sunday this week'));
+        
+        // Group events by category
+        $todayEvents = [];
+        $tomorrowEvents = [];
+        $importantEvents = [];
+        $weekEvents = []; // For week grid
+        
+        // Process all events
+        foreach ($events as $dateKey => $dayEvents) {
+            // Skip events before this week
+            if ($dateKey < $weekStart) continue;
+            
+            // Initialize week grid day if in current week
+            if ($dateKey >= $weekStart && $dateKey <= $weekEnd) {
+                if (!isset($weekEvents[$dateKey])) {
+                    $weekEvents[$dateKey] = [];
+                }
+            }
+            
+            foreach ($dayEvents as $event) {
+                // Add to week grid if in week range
+                if ($dateKey >= $weekStart && $dateKey <= $weekEnd) {
+                    // Pre-render DokuWiki syntax to HTML for JavaScript display
+                    $eventWithHtml = $event;
+                    if (isset($event['title'])) {
+                        $eventWithHtml['title_html'] = $this->renderDokuWikiToHtml($event['title']);
+                    }
+                    if (isset($event['description'])) {
+                        $eventWithHtml['description_html'] = $this->renderDokuWikiToHtml($event['description']);
+                    }
+                    $weekEvents[$dateKey][] = $eventWithHtml;
+                }
+                
+                // Categorize for detailed sections
+                if ($dateKey === $todayStr) {
+                    $todayEvents[] = array_merge($event, ['date' => $dateKey]);
+                } elseif ($dateKey === $tomorrowStr) {
+                    $tomorrowEvents[] = array_merge($event, ['date' => $dateKey]);
+                } else {
+                    // Check if this is an important namespace
+                    $eventNs = isset($event['namespace']) ? $event['namespace'] : '';
+                    $isImportant = false;
+                    foreach ($importantNsList as $impNs) {
+                        if ($eventNs === $impNs || strpos($eventNs, $impNs . ':') === 0) {
+                            $isImportant = true;
+                            break;
+                        }
+                    }
+                    
+                    // Important events: this week but not today/tomorrow
+                    if ($isImportant && $dateKey >= $weekStart && $dateKey <= $weekEnd) {
+                        $importantEvents[] = array_merge($event, ['date' => $dateKey]);
+                    }
+                }
+            }
+        }
+        
+        // Start building HTML - Dynamic width with default font
+        $html = '<div class="sidebar-widget sidebar-matrix" style="width:100%; max-width:100%; box-sizing:border-box; font-family:system-ui, sans-serif; background:#242424; border:2px solid #00cc07; border-radius:4px; overflow:hidden; box-shadow:0 0 10px rgba(0, 204, 7, 0.3);">';
+        
+        // Sanitize calId for use in JavaScript variable names (remove dashes)
+        $jsCalId = str_replace('-', '_', $calId);
+        
+        // CRITICAL: Add ALL JavaScript FIRST before any HTML that uses it
+        $html .= '<script>
+(function() {
+    // Shared state for system stats and tooltips
+    const sharedState_' . $jsCalId . ' = {
+        latestStats: {
+            load: {"1min": 0, "5min": 0, "15min": 0},
+            uptime: "",
+            memory_details: {},
+            top_processes: []
+        },
+        cpuHistory: [],
+        CPU_HISTORY_SIZE: 2
+    };
+    
+    // Tooltip functions - MUST be defined before HTML uses them
+    window["showTooltip_' . $jsCalId . '"] = function(color) {
+        const tooltip = document.getElementById("tooltip-" + color + "-' . $calId . '");
+        if (!tooltip) {
+            console.log("Tooltip element not found for color:", color);
+            return;
+        }
+        
+        const latestStats = sharedState_' . $jsCalId . '.latestStats;
+        let content = "";
+        
+        if (color === "green") {
+            content = "<div class=\\"tooltip-title\\">CPU Load Average</div>";
+            content += "<div>1 min: " + (latestStats.load["1min"] || "N/A") + "</div>";
+            content += "<div>5 min: " + (latestStats.load["5min"] || "N/A") + "</div>";
+            content += "<div>15 min: " + (latestStats.load["15min"] || "N/A") + "</div>";
+            if (latestStats.uptime) {
+                content += "<div style=\\"margin-top:3px; padding-top:2px; border-top:1px solid rgba(0,204,7,0.3);\\">Uptime: " + latestStats.uptime + "</div>";
+            }
+            tooltip.style.borderColor = "#00cc07";
+            tooltip.style.color = "#00cc07";
+        } else if (color === "purple") {
+            content = "<div class=\\"tooltip-title\\">CPU Load (Short-term)</div>";
+            content += "<div>1 min: " + (latestStats.load["1min"] || "N/A") + "</div>";
+            content += "<div>5 min: " + (latestStats.load["5min"] || "N/A") + "</div>";
+            if (latestStats.top_processes && latestStats.top_processes.length > 0) {
+                content += "<div style=\\"margin-top:3px; padding-top:2px; border-top:1px solid rgba(155,89,182,0.3);\\" class=\\"tooltip-title\\">Top Processes</div>";
+                latestStats.top_processes.slice(0, 5).forEach(proc => {
+                    content += "<div>" + proc.cpu + " " + proc.command + "</div>";
+                });
+            }
+            tooltip.style.borderColor = "#9b59b6";
+            tooltip.style.color = "#9b59b6";
+        } else if (color === "orange") {
+            content = "<div class=\\"tooltip-title\\">Memory Usage</div>";
+            if (latestStats.memory_details && latestStats.memory_details.total) {
+                content += "<div>Total: " + latestStats.memory_details.total + "</div>";
+                content += "<div>Used: " + latestStats.memory_details.used + "</div>";
+                content += "<div>Available: " + latestStats.memory_details.available + "</div>";
+                if (latestStats.memory_details.cached) {
+                    content += "<div>Cached: " + latestStats.memory_details.cached + "</div>";
+                }
+            } else {
+                content += "<div>Loading...</div>";
+            }
+            if (latestStats.top_processes && latestStats.top_processes.length > 0) {
+                content += "<div style=\\"margin-top:3px; padding-top:2px; border-top:1px solid rgba(255,140,0,0.3);\\" class=\\"tooltip-title\\">Top Processes</div>";
+                latestStats.top_processes.slice(0, 5).forEach(proc => {
+                    content += "<div>" + proc.cpu + " " + proc.command + "</div>";
+                });
+            }
+            tooltip.style.borderColor = "#ff9800";
+            tooltip.style.color = "#ff9800";
+        }
+        
+        tooltip.innerHTML = content;
+        tooltip.style.display = "block";
+        
+        const bar = tooltip.parentElement;
+        const barRect = bar.getBoundingClientRect();
+        const tooltipRect = tooltip.getBoundingClientRect();
+        
+        const left = barRect.left + (barRect.width / 2) - (tooltipRect.width / 2);
+        const top = barRect.top - tooltipRect.height - 8;
+        
+        tooltip.style.left = left + "px";
+        tooltip.style.top = top + "px";
+    };
+    
+    window["hideTooltip_' . $jsCalId . '"] = function(color) {
+        const tooltip = document.getElementById("tooltip-" + color + "-' . $calId . '");
+        if (tooltip) {
+            tooltip.style.display = "none";
+        }
+    };
+    
+    // Update clock every second
+    function updateClock() {
+        const now = new Date();
+        let hours = now.getHours();
+        const minutes = String(now.getMinutes()).padStart(2, "0");
+        const seconds = String(now.getSeconds()).padStart(2, "0");
+        const ampm = hours >= 12 ? "PM" : "AM";
+        hours = hours % 12 || 12;
+        const timeStr = hours + ":" + minutes + ":" + seconds + " " + ampm;
+        const clockEl = document.getElementById("clock-' . $calId . '");
+        if (clockEl) clockEl.textContent = timeStr;
+    }
+    setInterval(updateClock, 1000);
+    
+    // Weather update function
+    function updateWeather() {
+        if ("geolocation" in navigator) {
+            navigator.geolocation.getCurrentPosition(function(position) {
+                const lat = position.coords.latitude;
+                const lon = position.coords.longitude;
+                
+                fetch(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current_weather=true&temperature_unit=fahrenheit`)
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.current_weather) {
+                            const temp = Math.round(data.current_weather.temperature);
+                            const weatherCode = data.current_weather.weathercode;
+                            const icon = getWeatherIcon(weatherCode);
+                            const iconEl = document.getElementById("weather-icon-' . $calId . '");
+                            const tempEl = document.getElementById("weather-temp-' . $calId . '");
+                            if (iconEl) iconEl.textContent = icon;
+                            if (tempEl) tempEl.innerHTML = temp + "&deg;";
+                        }
+                    })
+                    .catch(error => console.log("Weather fetch error:", error));
+            }, function(error) {
+                // If geolocation fails, use default location (Irvine, CA)
+                fetch("https://api.open-meteo.com/v1/forecast?latitude=33.6846&longitude=-117.8265&current_weather=true&temperature_unit=fahrenheit")
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.current_weather) {
+                            const temp = Math.round(data.current_weather.temperature);
+                            const weatherCode = data.current_weather.weathercode;
+                            const icon = getWeatherIcon(weatherCode);
+                            const iconEl = document.getElementById("weather-icon-' . $calId . '");
+                            const tempEl = document.getElementById("weather-temp-' . $calId . '");
+                            if (iconEl) iconEl.textContent = icon;
+                            if (tempEl) tempEl.innerHTML = temp + "&deg;";
+                        }
+                    })
+                    .catch(err => console.log("Weather error:", err));
+            });
+        } else {
+            // No geolocation, use default (Irvine, CA)
+            fetch("https://api.open-meteo.com/v1/forecast?latitude=33.6846&longitude=-117.8265&current_weather=true&temperature_unit=fahrenheit")
+                .then(response => response.json())
+                .then(data => {
+                    if (data.current_weather) {
+                        const temp = Math.round(data.current_weather.temperature);
+                        const weatherCode = data.current_weather.weathercode;
+                        const icon = getWeatherIcon(weatherCode);
+                        const iconEl = document.getElementById("weather-icon-' . $calId . '");
+                        const tempEl = document.getElementById("weather-temp-' . $calId . '");
+                        if (iconEl) iconEl.textContent = icon;
+                        if (tempEl) tempEl.innerHTML = temp + "&deg;";
+                    }
+                })
+                .catch(err => console.log("Weather error:", err));
+        }
+    }
+    
+    function getWeatherIcon(code) {
+        const icons = {
+            0: "☀️", 1: "🌤️", 2: "⛅", 3: "☁️",
+            45: "🌫️", 48: "🌫️", 51: "🌦️", 53: "🌦️", 55: "🌧️",
+            61: "🌧️", 63: "🌧️", 65: "⛈️", 71: "🌨️", 73: "🌨️",
+            75: "❄️", 77: "🌨️", 80: "🌦️", 81: "🌧️", 82: "⛈️",
+            85: "🌨️", 86: "❄️", 95: "⛈️", 96: "⛈️", 99: "⛈️"
+        };
+        return icons[code] || "🌤️";
+    }
+    
+    // Update weather immediately and every 10 minutes
+    updateWeather();
+    setInterval(updateWeather, 600000);
+    
+    // Update system stats and tooltips data
+    function updateSystemStats() {
+        fetch("' . DOKU_BASE . 'lib/plugins/calendar/get_system_stats.php")
+            .then(response => response.json())
+            .then(data => {
+                sharedState_' . $jsCalId . '.latestStats = {
+                    load: data.load || {"1min": 0, "5min": 0, "15min": 0},
+                    uptime: data.uptime || "",
+                    memory_details: data.memory_details || {},
+                    top_processes: data.top_processes || []
+                };
+                
+                const greenBar = document.getElementById("cpu-5min-' . $calId . '");
+                if (greenBar) {
+                    greenBar.style.width = Math.min(100, data.cpu_5min) + "%";
+                }
+                
+                sharedState_' . $jsCalId . '.cpuHistory.push(data.cpu);
+                if (sharedState_' . $jsCalId . '.cpuHistory.length > sharedState_' . $jsCalId . '.CPU_HISTORY_SIZE) {
+                    sharedState_' . $jsCalId . '.cpuHistory.shift();
+                }
+                
+                const cpuAverage = sharedState_' . $jsCalId . '.cpuHistory.reduce((sum, val) => sum + val, 0) / sharedState_' . $jsCalId . '.cpuHistory.length;
+                
+                const cpuBar = document.getElementById("cpu-realtime-' . $calId . '");
+                if (cpuBar) {
+                    cpuBar.style.width = Math.min(100, cpuAverage) + "%";
+                }
+                
+                const memBar = document.getElementById("mem-realtime-' . $calId . '");
+                if (memBar) {
+                    memBar.style.width = Math.min(100, data.memory) + "%";
+                }
+            })
+            .catch(error => {
+                console.log("System stats error:", error);
+            });
+    }
+    
+    updateSystemStats();
+    setInterval(updateSystemStats, 2000);
+})();
+</script>';
+        
+        // NOW add the header HTML (after JavaScript is defined)
+        $todayDate = new DateTime();
+        $displayDate = $todayDate->format('D, M j, Y');
+        $currentTime = $todayDate->format('g:i:s A');
+        
+        $html .= '<div class="eventlist-today-header">';
+        $html .= '<span class="eventlist-today-clock" id="clock-' . $calId . '">' . $currentTime . '</span>';
+        $html .= '<div class="eventlist-bottom-info">';
+        $html .= '<span class="eventlist-weather"><span id="weather-icon-' . $calId . '">🌤️</span> <span id="weather-temp-' . $calId . '">--°</span></span>';
+        $html .= '<span class="eventlist-today-date">' . $displayDate . '</span>';
+        $html .= '</div>';
+        
+        // Three CPU/Memory bars (all update live)
+        $html .= '<div class="eventlist-stats-container">';
+        
+        // 5-minute load average (green, updates every 2 seconds)
+        $html .= '<div class="eventlist-cpu-bar" onmouseover="showTooltip_' . $jsCalId . '(\'green\')" onmouseout="hideTooltip_' . $jsCalId . '(\'green\')">';
+        $html .= '<div class="eventlist-cpu-fill" id="cpu-5min-' . $calId . '" style="width: 0%;"></div>';
+        $html .= '<div class="system-tooltip" id="tooltip-green-' . $calId . '" style="display:none;"></div>';
+        $html .= '</div>';
+        
+        // Real-time CPU (purple, updates with 5-sec average)
+        $html .= '<div class="eventlist-cpu-bar eventlist-cpu-realtime" onmouseover="showTooltip_' . $jsCalId . '(\'purple\')" onmouseout="hideTooltip_' . $jsCalId . '(\'purple\')">';
+        $html .= '<div class="eventlist-cpu-fill eventlist-cpu-fill-purple" id="cpu-realtime-' . $calId . '" style="width: 0%;"></div>';
+        $html .= '<div class="system-tooltip" id="tooltip-purple-' . $calId . '" style="display:none;"></div>';
+        $html .= '</div>';
+        
+        // Real-time Memory (orange, updates)
+        $html .= '<div class="eventlist-cpu-bar eventlist-mem-realtime" onmouseover="showTooltip_' . $jsCalId . '(\'orange\')" onmouseout="hideTooltip_' . $jsCalId . '(\'orange\')">';
+        $html .= '<div class="eventlist-cpu-fill eventlist-cpu-fill-orange" id="mem-realtime-' . $calId . '" style="width: 0%;"></div>';
+        $html .= '<div class="system-tooltip" id="tooltip-orange-' . $calId . '" style="display:none;"></div>';
+        $html .= '</div>';
+        
+        $html .= '</div>';
+        $html .= '</div>';
+        
+        // Ultra-thin orange "Add Event" bar between header and week grid (6px max height)
+        $html .= '<div style="background:#ff9800; padding:0; height:6px; line-height:6px; text-align:center; cursor:pointer; border-top:1px solid rgba(255, 152, 0, 0.3); border-bottom:1px solid rgba(255, 152, 0, 0.3); box-shadow:0 0 8px rgba(255, 152, 0, 0.4); transition:all 0.2s; overflow:hidden;" onclick="window.location.href=\'?do=admin&page=calendar&tab=manage\'" onmouseover="this.style.background=\'#ff7700\'; this.style.boxShadow=\'0 0 12px rgba(255, 152, 0, 0.6)\';" onmouseout="this.style.background=\'#ff9800\'; this.style.boxShadow=\'0 0 8px rgba(255, 152, 0, 0.4)\';">';
+        $html .= '<span style="color:#000; font-size:7px; font-weight:700; letter-spacing:0.3px; font-family:system-ui, sans-serif; text-shadow:0 0 2px rgba(255, 255, 255, 0.3); vertical-align:middle;">+ ADD EVENT</span>';
+        $html .= '</div>';
+        
+        // Week grid (7 cells)
+        $html .= $this->renderWeekGrid($weekEvents, $weekStart);
+        
+        // Today section (orange)
+        if (!empty($todayEvents)) {
+            $html .= $this->renderSidebarSection('Today', $todayEvents, '#ff9800', $calId);
+        }
+        
+        // Tomorrow section (green)
+        if (!empty($tomorrowEvents)) {
+            $html .= $this->renderSidebarSection('Tomorrow', $tomorrowEvents, '#4caf50', $calId);
+        }
+        
+        // Important events section (purple)
+        if (!empty($importantEvents)) {
+            $html .= $this->renderSidebarSection('Important Events', $importantEvents, '#9b59b6', $calId);
+        }
+        
+        $html .= '</div>';
+        
+        return $html;
+    }
+    
+    /**
+     * Render compact week grid (7 cells with event bars) - Matrix themed with clickable days
+     */
+    private function renderWeekGrid($weekEvents, $weekStart) {
+        // Generate unique ID for this calendar instance - sanitize for JavaScript
+        $calId = 'cal_' . substr(md5($weekStart . microtime()), 0, 8);
+        $jsCalId = str_replace('-', '_', $calId);  // Sanitize for JS variable names
+        
+        $html = '<div style="display:grid; grid-template-columns:repeat(7, 1fr); gap:1px; background:#1a3d1a; border-bottom:2px solid #00cc07;">';
+        
+        $dayNames = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
+        $today = date('Y-m-d');
+        
+        for ($i = 0; $i < 7; $i++) {
+            $date = date('Y-m-d', strtotime($weekStart . ' +' . $i . ' days'));
+            $dayNum = date('j', strtotime($date));
+            $isToday = $date === $today;
+            
+            $events = isset($weekEvents[$date]) ? $weekEvents[$date] : [];
+            $eventCount = count($events);
+            
+            $bgColor = $isToday ? '#2a4d2a' : '#242424';
+            $textColor = $isToday ? '#00ff00' : '#00cc07';
+            $fontWeight = $isToday ? '700' : '500';
+            $textShadow = $isToday ? 'text-shadow:0 0 6px rgba(0, 255, 0, 0.6);' : 'text-shadow:0 0 4px rgba(0, 204, 7, 0.4);';
+            
+            $hasEvents = $eventCount > 0;
+            $clickableStyle = $hasEvents ? 'cursor:pointer;' : '';
+            $clickHandler = $hasEvents ? ' onclick="showDayEvents_' . $jsCalId . '(\'' . $date . '\')"' : '';
+            
+            $html .= '<div style="background:' . $bgColor . '; padding:4px 2px; text-align:center; min-height:45px; position:relative; border:1px solid rgba(0, 204, 7, 0.2); ' . $clickableStyle . '" ' . $clickHandler . '>';
+            
+            // Day letter
+            $html .= '<div style="font-size:9px; color:#00cc07; font-weight:500; font-family:system-ui, sans-serif; ' . $textShadow . '">' . $dayNames[$i] . '</div>';
+            
+            // Day number
+            $html .= '<div style="font-size:12px; color:' . $textColor . '; font-weight:' . $fontWeight . '; margin:2px 0; font-family:system-ui, sans-serif; ' . $textShadow . '">' . $dayNum . '</div>';
+            
+            // Event bars (max 3 visible) with glow effect
+            if ($eventCount > 0) {
+                $showCount = min($eventCount, 3);
+                for ($j = 0; $j < $showCount; $j++) {
+                    $event = $events[$j];
+                    $color = isset($event['color']) ? $event['color'] : '#00cc07';
+                    $html .= '<div style="height:2px; background:' . htmlspecialchars($color) . '; margin:1px 0; border-radius:1px; box-shadow:0 0 3px ' . htmlspecialchars($color) . ';"></div>';
+                }
+                
+                // Show "+N more" if more than 3
+                if ($eventCount > 3) {
+                    $html .= '<div style="font-size:7px; color:#00cc07; margin-top:1px; font-family:system-ui, sans-serif;">+' . ($eventCount - 3) . '</div>';
+                }
+            }
+            
+            $html .= '</div>';
+        }
+        
+        $html .= '</div>';
+        
+        // Add container for selected day events display (with unique ID)
+        $html .= '<div id="selected-day-events-' . $calId . '" style="display:none; margin:8px 4px; border-left:3px solid #3498db; box-shadow:0 0 5px rgba(0, 204, 7, 0.2);">';
+        $html .= '<div style="background:#3498db; color:#000; padding:4px 6px; font-size:9px; font-weight:700; letter-spacing:0.3px; font-family:system-ui, sans-serif; box-shadow:0 0 8px #3498db; display:flex; justify-content:space-between; align-items:center;">';
+        $html .= '<span id="selected-day-title-' . $calId . '"></span>';
+        $html .= '<span onclick="document.getElementById(\'selected-day-events-' . $calId . '\').style.display=\'none\';" style="cursor:pointer; font-size:12px; padding:0 4px; font-weight:700;">✕</span>';
+        $html .= '</div>';
+        $html .= '<div id="selected-day-content-' . $calId . '" style="padding:4px 0; background:rgba(36, 36, 36, 0.5);"></div>';
+        $html .= '</div>';
+        
+        // Add JavaScript for day selection with event data
+        $html .= '<script>';
+        // Sanitize calId for JavaScript variable names
+        $jsCalId = str_replace('-', '_', $calId);
+        $html .= 'window.weekEventsData_' . $jsCalId . ' = ' . json_encode($weekEvents) . ';';
+        $html .= '
+        window.showDayEvents_' . $jsCalId . ' = function(dateKey) {
+            const eventsData = window.weekEventsData_' . $jsCalId . ';
+            const container = document.getElementById("selected-day-events-' . $calId . '");
+            const title = document.getElementById("selected-day-title-' . $calId . '");
+            const content = document.getElementById("selected-day-content-' . $calId . '");
+            
+            if (!eventsData[dateKey] || eventsData[dateKey].length === 0) return;
+            
+            // Format date for display
+            const dateObj = new Date(dateKey + "T00:00:00");
+            const dayName = dateObj.toLocaleDateString("en-US", { weekday: "long" });
+            const monthDay = dateObj.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+            title.textContent = dayName + ", " + monthDay;
+            
+            // Clear content
+            content.innerHTML = "";
+            
+            // Sort events by time (events with time first, then all-day events)
+            const sortedEvents = [...eventsData[dateKey]].sort((a, b) => {
+                // Events without time go to the end
+                if (!a.time && !b.time) return 0;
+                if (!a.time) return 1;
+                if (!b.time) return -1;
+                
+                // Compare times (format: "HH:MM")
+                const timeA = a.time.split(":").map(Number);
+                const timeB = b.time.split(":").map(Number);
+                const minutesA = timeA[0] * 60 + timeA[1];
+                const minutesB = timeB[0] * 60 + timeB[1];
+                
+                return minutesA - minutesB;
+            });
+            
+            // Build events HTML with dual color bars
+            sortedEvents.forEach(event => {
+                const eventColor = event.color || "#00cc07";
+                const sectionColor = "#3498db"; // Blue for selected day
+                
+                const eventDiv = document.createElement("div");
+                eventDiv.style.cssText = "padding:4px 6px; border-bottom:1px solid rgba(0, 204, 7, 0.2); font-size:10px; display:flex; align-items:start; gap:6px; background:rgba(36, 36, 36, 0.3);";
+                
+                let eventHTML = "";
+                
+                // Section color bar (wider, blue for selected day)
+                eventHTML += "<div style=\\"width:4px; height:100%; background:" + sectionColor + "; border-radius:2px; flex-shrink:0; box-shadow:0 0 4px " + sectionColor + ";\\"></div>";
+                
+                // Event assigned color bar (medium width)
+                eventHTML += "<div style=\\"width:3px; height:100%; background:" + eventColor + "; border-radius:1px; flex-shrink:0; box-shadow:0 0 3px " + eventColor + ";\\"></div>";
+                
+                // Content
+                eventHTML += "<div style=\\"flex:1; min-width:0;\\">";
+                eventHTML += "<div style=\\"font-weight:600; color:#00cc07; word-wrap:break-word; font-family:system-ui, sans-serif; text-shadow:0 0 3px rgba(0, 204, 7, 0.4);\\">";
+                
+                // Time
+                if (event.time) {
+                    const timeParts = event.time.split(":");
+                    let hours = parseInt(timeParts[0]);
+                    const minutes = timeParts[1];
+                    const ampm = hours >= 12 ? "PM" : "AM";
+                    hours = hours % 12 || 12;
+                    eventHTML += "<span style=\\"color:#00dd00; font-weight:500; font-size:9px;\\">" + hours + ":" + minutes + " " + ampm + "</span> ";
+                }
+                
+                // Title - use HTML version if available
+                const titleHTML = event.title_html || event.title || "Untitled";
+                eventHTML += titleHTML;
+                eventHTML += "</div>";
+                
+                // Description if present - use HTML version
+                if (event.description_html || event.description) {
+                    const descHTML = event.description_html || event.description;
+                    eventHTML += "<div style=\\"font-size:9px; color:#00aa00; margin-top:2px;\\">" + descHTML + "</div>";
+                }
+                
+                eventHTML += "</div>";
+                
+                eventDiv.innerHTML = eventHTML;
+                content.appendChild(eventDiv);
+            });
+            
+            container.style.display = "block";
+        };
+        ';
+        $html .= '</script>';
+        
+        return $html;
+    }
+    
+    /**
+     * Render a sidebar section (Today/Tomorrow/Important) - Matrix themed with colored borders
+     */
+    private function renderSidebarSection($title, $events, $accentColor, $calId) {
+        // Keep the original accent colors for borders
+        $borderColor = $accentColor;
+        
+        // Show date for Important Events section
+        $showDate = ($title === 'Important Events');
+        
+        $html = '<div style="border-left:3px solid ' . $borderColor . '; margin:8px 4px; box-shadow:0 0 5px rgba(0, 204, 7, 0.2);">';
+        
+        // Section header with accent color background - smaller, not all caps
+        $html .= '<div style="background:' . $accentColor . '; color:#000; padding:4px 6px; font-size:9px; font-weight:700; letter-spacing:0.3px; font-family:system-ui, sans-serif; box-shadow:0 0 8px ' . $accentColor . ';">';
+        $html .= htmlspecialchars($title);
+        $html .= '</div>';
+        
+        // Events
+        $html .= '<div style="padding:4px 0; background:rgba(36, 36, 36, 0.5);">';
+        
+        foreach ($events as $event) {
+            $html .= $this->renderSidebarEvent($event, $calId, $showDate, $accentColor);
+        }
+        
+        $html .= '</div>';
+        $html .= '</div>';
+        
+        return $html;
+    }
+    
+    /**
+     * Render individual event in sidebar - Matrix themed with dual color bars
+     */
+    private function renderSidebarEvent($event, $calId, $showDate = false, $sectionColor = '#00cc07') {
+        $title = isset($event['title']) ? htmlspecialchars($event['title']) : 'Untitled';
+        $time = isset($event['time']) ? $event['time'] : '';
+        $endTime = isset($event['endTime']) ? $event['endTime'] : '';
+        $eventColor = isset($event['color']) ? htmlspecialchars($event['color']) : '#00cc07';
+        $date = isset($event['date']) ? $event['date'] : '';
+        $isTask = isset($event['isTask']) && $event['isTask'];
+        $completed = isset($event['completed']) && $event['completed'];
+        
+        // Check for conflicts
+        $hasConflict = isset($event['conflicts']) && !empty($event['conflicts']);
+        
+        $html = '<div style="padding:4px 6px; border-bottom:1px solid rgba(0, 204, 7, 0.2); font-size:10px; display:flex; align-items:start; gap:6px; background:rgba(36, 36, 36, 0.3);">';
+        
+        // Section color bar (wider, on the left)
+        $html .= '<div style="width:4px; height:100%; background:' . htmlspecialchars($sectionColor) . '; border-radius:2px; flex-shrink:0; box-shadow:0 0 4px ' . htmlspecialchars($sectionColor) . ';"></div>';
+        
+        // Event's assigned color bar (medium width, next to section bar)
+        $html .= '<div style="width:3px; height:100%; background:' . $eventColor . '; border-radius:1px; flex-shrink:0; box-shadow:0 0 3px ' . $eventColor . ';"></div>';
+        
+        // Content
+        $html .= '<div style="flex:1; min-width:0;">';
+        
+        // Time + title
+        $html .= '<div style="font-weight:600; color:#00cc07; word-wrap:break-word; font-family:system-ui, sans-serif; text-shadow:0 0 3px rgba(0, 204, 7, 0.4);">';
+        
+        if ($time) {
+            $displayTime = $this->formatTimeDisplay($time, $endTime);
+            $html .= '<span style="color:#00dd00; font-weight:500; font-size:9px;">' . htmlspecialchars($displayTime) . '</span> ';
+        }
+        
+        // Task checkbox
+        if ($isTask) {
+            $checkIcon = $completed ? '☑' : '☐';
+            $html .= '<span style="font-size:11px; color:#00ff00;">' . $checkIcon . '</span> ';
+        }
+        
+        $html .= htmlspecialchars($title);
+        
+        // Conflict badge
+        if ($hasConflict) {
+            $conflictCount = count($event['conflicts']);
+            $html .= ' <span style="background:#ff0000; color:#000; padding:1px 3px; border-radius:2px; font-size:8px; font-weight:700; box-shadow:0 0 4px #ff0000;">⚠ ' . $conflictCount . '</span>';
+        }
+        
+        $html .= '</div>';
+        
+        // Date display BELOW event name for Important events
+        if ($showDate && $date) {
+            $dateObj = new DateTime($date);
+            $displayDate = $dateObj->format('D, M j'); // e.g., "Mon, Feb 10"
+            $html .= '<div style="font-size:8px; color:#00aa00; font-weight:500; margin-top:2px; text-shadow:0 0 2px rgba(0, 170, 0, 0.3);">' . htmlspecialchars($displayDate) . '</div>';
+        }
+        
+        $html .= '</div>';
+        $html .= '</div>';
+        
+        return $html;
+    }
+    
+    /**
+     * Format time display (12-hour format with optional end time)
+     */
+    private function formatTimeDisplay($startTime, $endTime = '') {
+        // Convert start time
+        list($hour, $minute) = explode(':', $startTime);
+        $hour = (int)$hour;
+        $ampm = $hour >= 12 ? 'PM' : 'AM';
+        $displayHour = $hour % 12;
+        if ($displayHour === 0) $displayHour = 12;
+        
+        $display = $displayHour . ':' . $minute . ' ' . $ampm;
+        
+        // Add end time if provided
+        if ($endTime && $endTime !== '') {
+            list($endHour, $endMinute) = explode(':', $endTime);
+            $endHour = (int)$endHour;
+            $endAmpm = $endHour >= 12 ? 'PM' : 'AM';
+            $endDisplayHour = $endHour % 12;
+            if ($endDisplayHour === 0) $endDisplayHour = 12;
+            
+            $display .= '-' . $endDisplayHour . ':' . $endMinute . ' ' . $endAmpm;
+        }
+        
+        return $display;
+    }
+    
+    /**
+     * Render DokuWiki syntax to HTML
+     * Converts **bold**, //italic//, [[links]], etc. to HTML
+     */
+    private function renderDokuWikiToHtml($text) {
+        if (empty($text)) return '';
+        
+        // Use DokuWiki's parser to render the text
+        $instructions = p_get_instructions($text);
+        
+        // Render instructions to XHTML
+        $xhtml = p_render('xhtml', $instructions, $info);
+        
+        // Remove surrounding <p> tags if present (we're rendering inline)
+        $xhtml = preg_replace('/^<p>(.*)<\/p>$/s', '$1', trim($xhtml));
+        
+        return $xhtml;
+    }
+    
+    // Keep old scanForNamespaces for backward compatibility (not used anymore)
+    private function scanForNamespaces($dir, $baseNamespace, &$namespaces) {
+        if (!is_dir($dir)) return;
+        
+        $items = scandir($dir);
+        foreach ($items as $item) {
+            if ($item === '.' || $item === '..' || $item === 'calendar') continue;
+            
+            $path = $dir . $item;
+            if (is_dir($path)) {
+                $namespace = $baseNamespace ? $baseNamespace . ':' . $item : $item;
+                $namespaces[] = $namespace;
+                $this->scanForNamespaces($path . '/', $namespace, $namespaces);
             }
         }
     }

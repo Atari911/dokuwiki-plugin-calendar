@@ -51,6 +51,7 @@ class action_plugin_calendar extends DokuWiki_Action_Plugin {
         $eventId = $INPUT->str('eventId', '');
         $title = $INPUT->str('title');
         $time = $INPUT->str('time', '');
+        $endTime = $INPUT->str('endTime', '');
         $description = $INPUT->str('description', '');
         $color = $INPUT->str('color', '#3498db');
         $oldDate = $INPUT->str('oldDate', ''); // Track original date for moves
@@ -66,20 +67,34 @@ class action_plugin_calendar extends DokuWiki_Action_Plugin {
             return;
         }
         
-        // If editing, find the event's stored namespace first (before normalizing)
+        // If editing, find the event's stored namespace (for finding/deleting old event)
         $storedNamespace = '';
+        $oldNamespace = '';
         if ($eventId) {
-            $storedNamespace = $this->findEventNamespace($eventId, $date, $namespace);
+            // Use oldDate if available (date was changed), otherwise use current date
+            $searchDate = ($oldDate && $oldDate !== $date) ? $oldDate : $date;
+            $storedNamespace = $this->findEventNamespace($eventId, $searchDate, $namespace);
+            
+            // Store the old namespace for deletion purposes
+            if ($storedNamespace !== null) {
+                $oldNamespace = $storedNamespace;
+                error_log("Calendar saveEvent: Found existing event in namespace '$oldNamespace'");
+            }
         }
         
-        // Use stored namespace if editing, otherwise normalize wildcards to empty
-        if ($eventId && $storedNamespace !== null) {
-            $namespace = $storedNamespace;
-        } else {
+        // Use the namespace provided by the user (allow namespace changes!)
+        // But normalize wildcards and multi-namespace to empty for NEW events
+        if (!$eventId) {
+            error_log("Calendar saveEvent: NEW event, received namespace='$namespace'");
             // Normalize namespace: treat wildcards and multi-namespace as empty (default) for NEW events
             if (!empty($namespace) && (strpos($namespace, '*') !== false || strpos($namespace, ';') !== false)) {
+                error_log("Calendar saveEvent: Namespace contains wildcard/multi, clearing to empty");
                 $namespace = '';
+            } else {
+                error_log("Calendar saveEvent: Namespace is clean, keeping as '$namespace'");
             }
+        } else {
+            error_log("Calendar saveEvent: EDITING event $eventId, user selected namespace='$namespace'");
         }
         
         // Generate event ID if new
@@ -95,6 +110,7 @@ class action_plugin_calendar extends DokuWiki_Action_Plugin {
         
         list($year, $month, $day) = explode('-', $date);
         
+        // NEW namespace directory (where we'll save)
         $dataDir = DOKU_INC . 'data/meta/';
         if ($namespace) {
             $dataDir .= str_replace(':', '/', $namespace) . '/';
@@ -112,23 +128,35 @@ class action_plugin_calendar extends DokuWiki_Action_Plugin {
             $events = json_decode(file_get_contents($eventFile), true);
         }
         
-        // If editing and date changed, remove from old date first
-        if ($eventId && $oldDate && $oldDate !== $date) {
-            list($oldYear, $oldMonth, $oldDay) = explode('-', $oldDate);
-            $oldEventFile = $dataDir . sprintf('%04d-%02d.json', $oldYear, $oldMonth);
+        // If editing and (date changed OR namespace changed), remove from old location first
+        $namespaceChanged = ($eventId && $oldNamespace !== '' && $oldNamespace !== $namespace);
+        $dateChanged = ($eventId && $oldDate && $oldDate !== $date);
+        
+        if ($namespaceChanged || $dateChanged) {
+            // Construct OLD data directory using OLD namespace
+            $oldDataDir = DOKU_INC . 'data/meta/';
+            if ($oldNamespace) {
+                $oldDataDir .= str_replace(':', '/', $oldNamespace) . '/';
+            }
+            $oldDataDir .= 'calendar/';
+            
+            $deleteDate = $dateChanged ? $oldDate : $date;
+            list($oldYear, $oldMonth, $oldDay) = explode('-', $deleteDate);
+            $oldEventFile = $oldDataDir . sprintf('%04d-%02d.json', $oldYear, $oldMonth);
             
             if (file_exists($oldEventFile)) {
                 $oldEvents = json_decode(file_get_contents($oldEventFile), true);
-                if (isset($oldEvents[$oldDate])) {
-                    $oldEvents[$oldDate] = array_values(array_filter($oldEvents[$oldDate], function($evt) use ($eventId) {
+                if (isset($oldEvents[$deleteDate])) {
+                    $oldEvents[$deleteDate] = array_values(array_filter($oldEvents[$deleteDate], function($evt) use ($eventId) {
                         return $evt['id'] !== $eventId;
                     }));
                     
-                    if (empty($oldEvents[$oldDate])) {
-                        unset($oldEvents[$oldDate]);
+                    if (empty($oldEvents[$deleteDate])) {
+                        unset($oldEvents[$deleteDate]);
                     }
                     
                     file_put_contents($oldEventFile, json_encode($oldEvents, JSON_PRETTY_PRINT));
+                    error_log("Calendar saveEvent: Deleted event from old location - namespace:'$oldNamespace', date:'$deleteDate'");
                 }
             }
         }
@@ -146,6 +174,7 @@ class action_plugin_calendar extends DokuWiki_Action_Plugin {
             'id' => $generatedId,
             'title' => $title,
             'time' => $time,
+            'endTime' => $endTime,
             'description' => $description,
             'color' => $color,
             'isTask' => $isTask,
@@ -154,6 +183,9 @@ class action_plugin_calendar extends DokuWiki_Action_Plugin {
             'namespace' => $namespace, // Store namespace with event
             'created' => date('Y-m-d H:i:s')
         ];
+        
+        // Debug logging
+        error_log("Calendar saveEvent: Saving event '$title' with namespace='$namespace' to file $eventFile");
         
         // If editing, replace existing event
         if ($eventId) {
@@ -372,6 +404,8 @@ class action_plugin_calendar extends DokuWiki_Action_Plugin {
             if (isset($events[$date])) {
                 foreach ($events[$date] as $event) {
                     if ($event['id'] === $eventId) {
+                        // Include the namespace so JavaScript knows where this event actually lives
+                        $event['namespace'] = $namespace;
                         echo json_encode(['success' => true, 'event' => $event]);
                         return;
                     }
@@ -654,6 +688,7 @@ class action_plugin_calendar extends DokuWiki_Action_Plugin {
                 'id' => $baseId . '-' . $counter,
                 'title' => $title,
                 'time' => $time,
+                'endTime' => $endTime,
                 'description' => $description,
                 'color' => $color,
                 'isTask' => $isTask,
@@ -661,6 +696,7 @@ class action_plugin_calendar extends DokuWiki_Action_Plugin {
                 'endDate' => $occurrenceEndDate,
                 'recurring' => true,
                 'recurringId' => $baseId,
+                'namespace' => $namespace,  // Add namespace!
                 'created' => date('Y-m-d H:i:s')
             ];
             

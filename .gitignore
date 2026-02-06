@@ -1,0 +1,8 @@
+# DokuWiki Calendar - Outlook Sync
+# DO NOT commit these files - they contain credentials!
+
+sync_config.php
+sync_state.json
+sync.log
+*.backup.*
+.sync_abort
