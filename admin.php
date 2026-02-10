@@ -80,6 +80,8 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
             $this->previewCleanup();
         } elseif ($action === 'cleanup_events') {
             $this->cleanupEvents();
+        } elseif ($action === 'save_important_namespaces') {
+            $this->saveImportantNamespaces();
         }
     }
 
@@ -194,14 +196,6 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
         echo '</div>';
         
         echo '</div>'; // end grid
-        echo '</div>';
-        
-        // Important Namespaces for Sidebar Widget
-        echo '<div style="background:' . $colors['bg'] . '; padding:12px; margin:10px 0; border-left:3px solid #9b59b6; border-radius:3px;">';
-        echo '<h3 style="margin:0 0 8px 0; color:#9b59b6; font-size:16px;">📌 Important Namespaces (Sidebar Widget)</h3>';
-        echo '<p style="color:' . $colors['text'] . '; font-size:11px; margin:0 0 8px;">Events from these namespaces will be highlighted in purple in the sidebar widget</p>';
-        echo '<input type="text" name="important_namespaces" value="' . hsc(isset($config['important_namespaces']) ? $config['important_namespaces'] : 'important') . '" style="width:100%; padding:6px; border:1px solid ' . $colors['border'] . '; border-radius:3px; font-size:12px;" placeholder="important,urgent,priority">';
-        echo '<p style="color:' . $colors['text'] . '; font-size:10px; margin:4px 0 0;">Comma-separated list of namespace names</p>';
         echo '</div>';
         
         // Sync Options
@@ -761,6 +755,25 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
             echo '</details>';
         }
         
+        echo '</div>';
+        
+        // Important Namespaces Section
+        $configFile = DOKU_PLUGIN . 'calendar/sync_config.php';
+        $importantConfig = [];
+        if (file_exists($configFile)) {
+            $importantConfig = include $configFile;
+        }
+        $importantNsValue = isset($importantConfig['important_namespaces']) ? $importantConfig['important_namespaces'] : 'important';
+        
+        echo '<div style="background:' . $colors['bg'] . '; padding:12px; margin:10px 0; border-left:3px solid #00cc07; border-radius:3px; max-width:1200px;">';
+        echo '<h3 style="margin:0 0 8px 0; color:#00cc07; font-size:16px;">📌 Important Namespaces (Sidebar Widget)</h3>';
+        echo '<p style="color:' . $colors['text'] . '; font-size:11px; margin:0 0 8px;">Events from these namespaces will be highlighted in purple in the sidebar widget\'s "Important Events" section.</p>';
+        echo '<form method="post" action="?do=admin&page=calendar&tab=manage" style="display:flex; gap:8px; align-items:center;">';
+        echo '<input type="hidden" name="action" value="save_important_namespaces">';
+        echo '<input type="text" name="important_namespaces" value="' . hsc($importantNsValue) . '" style="flex:1; padding:6px; border:1px solid ' . $colors['border'] . '; border-radius:3px; font-size:12px;" placeholder="important,urgent,priority">';
+        echo '<button type="submit" style="background:#00cc07; color:white; padding:6px 16px; border:none; border-radius:3px; cursor:pointer; font-size:12px; font-weight:bold; white-space:nowrap;">Save</button>';
+        echo '</form>';
+        echo '<p style="color:' . $colors['text'] . '; font-size:10px; margin:4px 0 0;">Comma-separated list of namespace names</p>';
         echo '</div>';
         
         // Cleanup Events Section
@@ -2170,7 +2183,10 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
         $config['delete_outlook_events'] = $INPUT->bool('delete_outlook_events');
         $config['sync_all_namespaces'] = $INPUT->bool('sync_all_namespaces');
         $config['sync_namespaces'] = $INPUT->arr('sync_namespaces');
-        $config['important_namespaces'] = $INPUT->str('important_namespaces', 'important');
+        // important_namespaces is managed from the Manage tab, preserve existing value
+        if (!isset($config['important_namespaces'])) {
+            $config['important_namespaces'] = 'important';
+        }
         
         // Parse category mapping
         $config['category_mapping'] = [];
@@ -3201,6 +3217,25 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
     /**
      * Clear the event statistics cache so counts refresh after mutations
      */
+    private function saveImportantNamespaces() {
+        global $INPUT;
+        
+        $configFile = DOKU_PLUGIN . 'calendar/sync_config.php';
+        $config = [];
+        if (file_exists($configFile)) {
+            $config = include $configFile;
+        }
+        
+        $config['important_namespaces'] = $INPUT->str('important_namespaces', 'important');
+        
+        $content = "<?php\nreturn " . var_export($config, true) . ";\n";
+        if (file_put_contents($configFile, $content)) {
+            $this->redirect('Important namespaces saved', 'success', 'manage');
+        } else {
+            $this->redirect('Error: Could not save configuration', 'error', 'manage');
+        }
+    }
+    
     private function clearStatsCache() {
         $cacheFile = DOKU_PLUGIN . 'calendar/.event_stats_cache';
         if (file_exists($cacheFile)) {

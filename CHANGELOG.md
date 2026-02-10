@@ -1,4 +1,11 @@
 # Calendar Plugin Changelog
+## Version 6.0.3 (2026-02-09) - MOVE IMPORTANT NAMESPACES TO MANAGE TAB
+
+- **Moved:** Important Namespaces section from Outlook Sync tab to Manage Events tab (between Events Manager and Cleanup sections)
+- **Changed:** Section header color from purple (#9b59b6) to green (#00cc07) to match other Manage tab sections
+- **Added:** Dedicated Save button and `save_important_namespaces` action handler — setting is now independent of Outlook config save
+- **Fixed:** Saving Outlook config no longer overwrites important namespaces with the default value
+
 ## Version 6.0.2 (2026-02-09) - FIREFOX DAY HEADER FIX
 
 - **Fixed:** In Firefox, the SMTWTFS day-of-week header row was rendering at the same height as calendar day cells (58px instead of 22px). Firefox ignores `max-height` on `<th>` table cells per CSS spec. Replaced `<thead><tr><th>` with a CSS grid `<div>` outside the table, making header height fully independent of table cell sizing. Works consistently across Chrome, Firefox, Safari, and Edge.
