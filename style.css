@@ -1,32 +1,4 @@
-/* Calendar Plugin - Matrix Edition v5.5.0
- *
- * CSS VARIABLE REFERENCE
- * ======================
- * All theming is driven by CSS custom properties injected per-calendar instance.
- * The wiki theme maps these from the DokuWiki template's style.ini file.
- *
- * Variable               | Description                | Wiki Template Mapping (style.ini)
- * ------------------------|----------------------------|------------------------------------
- * --background-site       | Main container bg          | __background_site__
- * --background-alt        | Hover/alt bg               | __background_alt__
- * --background-header     | Header backgrounds         | __background_alt__
- * --text-primary          | Main text color            | __text__
- * --text-bright           | Accent text                | __link__
- * --text-dim              | Secondary/muted text       | __text_neu__
- * --border-color          | Grid lines, subtle borders | __border__
- * --border-main           | Accent border, buttons     | __link__
- * --cell-bg               | Cell/input backgrounds     | __background__
- * --cell-today-bg         | Today cell highlight       | __background_neu__
- * --grid-bg               | Calendar grid bg           | __background_site__
- * --shadow-color          | Box shadow color           | rgba(0,0,0,0.1)
- * --header-border         | Header bottom border       | __border__
- * --header-shadow         | Header box-shadow          | 0 2px 4px rgba(0,0,0,0.1)
- * --btn-text              | Button text color          | computed (contrast against --border-main)
- *
- * To customize for a specific DokuWiki template, edit the template's
- * conf/style.ini [replacements] section. The calendar will automatically
- * pick up the template colors.
- */
+/* Compact Calendar Plugin - Sleek Design */
 
 /* Main container: Responsive with flexible sizing */
 .calendar-compact-container {
@@ -36,10 +8,10 @@
     min-width: 320px;
     height: 600px;
     max-height: 90vh;
-    background-color: var(--background-site, #ffffff);
-    border: 2px solid var(--border-main, #d0d0d0);
+    background-color: var(--background-site, #ffffff);  /* Use CSS var with fallback for dark readers */
+    border: 1px solid #d0d0d0;
     border-radius: 4px;
-    box-shadow: 0 0 10px var(--shadow-color, rgba(0,0,0,0.06));
+    box-shadow: 0 2px 4px rgba(0,0,0,0.06);
     overflow: hidden;
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
     font-size: 12px;
@@ -58,7 +30,7 @@
         width: 100% !important;
         min-width: 100% !important;
         border-right: none !important;
-        border-bottom: 1px solid var(--border-main, #e0e0e0);
+        border-bottom: 1px solid #e0e0e0;
         height: auto;
         min-height: 300px;
     }
@@ -100,7 +72,7 @@
 .calendar-compact-left {
     flex: 1;
     min-width: 400px;
-    border-right: 1px solid var(--border-main, #e0e0e0);
+    border-right: 1px solid #e0e0e0;
     display: flex;
     flex-direction: column;
     background: var(--background-site);
@@ -126,8 +98,7 @@
     padding: 8px 12px;
     background: var(--background-header);
     color: var(--text-primary);
-    border-bottom: 1px solid var(--header-border, var(--border-main));
-    box-shadow: var(--header-shadow, none);
+    border-bottom: 1px solid #e0e0e0;
 }
 
 /* Namespace filter indicator at top of calendar */
@@ -136,21 +107,21 @@
     align-items: center;
     gap: 6px;
     padding: 6px 10px;
-    background: var(--cell-bg, #e8f5e9);
-    border: 1px solid var(--border-color, #81c784);
+    background: #e8f5e9;
+    border: 1px solid #81c784;
     border-radius: 4px;
     margin: 8px 12px 0 12px;
     font-size: 11px;
 }
 
 .namespace-filter-label {
-    color: var(--text-primary, #2e7d32);
+    color: #2e7d32;
     font-weight: 600;
 }
 
 .namespace-filter-name {
-    background: var(--border-main, #00cc07);
-    color: var(--btn-text, white);
+    background: #00cc07;
+    color: white;
     padding: 2px 6px;
     border-radius: 3px;
     font-weight: 500;
@@ -161,7 +132,7 @@
 .namespace-filter-clear {
     background: none;
     border: none;
-    color: var(--border-main, #00cc07);
+    color: #00cc07;
     cursor: pointer;
     font-size: 16px;
     padding: 0;
@@ -176,7 +147,7 @@
 }
 
 .namespace-filter-clear:hover {
-    background: var(--shadow-color, rgba(0, 204, 7, 0.1));
+    background: rgba(0, 204, 7, 0.1);
 }
 
 .namespace-filter-badge {
@@ -191,7 +162,9 @@
     transform: translateY(-50%);
     background: none;
     border: none;
-    color: var(--text-dim, #999);
+    color: #999;
+    cursor: pointer;
+    font-size: 12px;
     padding: 0;
     width: 16px;
     height: 16px;
@@ -212,7 +185,7 @@
     margin: 0;
     font-size: 14px;
     font-weight: 600;
-    color: var(--text-primary, #2c3e50);
+    color: #2c3e50;
     flex: 1;
     text-align: center;
 }
@@ -226,8 +199,8 @@
 }
 
 .calendar-month-picker:hover {
-    background: var(--background-alt, #f0f0f0);
-    color: var(--text-bright, #008800);
+    background: #f0f0f0;
+    color: #008800;
 }
 
 .month-picker-overlay {
@@ -244,11 +217,10 @@
 }
 
 .month-picker-dialog {
-    background: var(--background-site, white);
-    border: 2px solid var(--border-main, #d0d0d0);
+    background: white;
     border-radius: 8px;
     padding: 20px;
-    box-shadow: 0 0 20px var(--shadow-color, rgba(0, 0, 0, 0.3));
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
     min-width: 300px;
 }
 
@@ -256,7 +228,7 @@
     margin: 0 0 16px 0;
     font-size: 16px;
     font-weight: 600;
-    color: var(--text-primary, #2c3e50);
+    color: #2c3e50;
 }
 
 .month-picker-selects {
@@ -268,18 +240,17 @@
 .month-picker-select {
     flex: 1;
     padding: 8px 12px;
-    border: 1px solid var(--border-main, #d0d0d0);
+    border: 1px solid #d0d0d0;
     border-radius: 4px;
     font-size: 14px;
-    background: var(--cell-bg, white);
-    color: var(--text-primary, #333);
+    background: white;
     cursor: pointer;
 }
 
 .month-picker-select:focus {
     outline: none;
-    border-color: var(--border-main, #008800);
-    box-shadow: 0 0 0 2px var(--shadow-color, rgba(0, 136, 0, 0.1));
+    border-color: #008800;
+    box-shadow: 0 0 0 2px rgba(0, 136, 0, 0.1);
 }
 
 .month-picker-actions {
@@ -291,7 +262,7 @@
 .cal-nav-btn {
     background: var(--border-main);
     border: 1px solid var(--border-color);
-    color: var(--btn-text, var(--background-site));
+    color: var(--background-site);
     width: 28px;
     height: 28px;
     border-radius: 4px;
@@ -311,7 +282,7 @@
 .cal-today-btn {
     background: var(--border-main);
     border: 1px solid var(--border-color);
-    color: var(--btn-text, var(--background-site));
+    color: var(--background-site);
     font-size: 11px;
     font-weight: 600;
     padding: 4px 10px;
@@ -330,32 +301,43 @@
     border-collapse: collapse;
     table-layout: fixed;
     flex: 1;
-    background: var(--grid-bg, var(--background-site));
-}
-
-.calendar-compact-grid thead th {
-    height: 22px;
-    background: var(--background-header);
-    color: var(--text-primary);
-    border-bottom: 1px solid var(--border-color, #d0d0d0);
-    border-right: 1px solid var(--border-color, #e8e8e8);
-    font-size: 10px;
-    font-weight: 600;
-    text-align: center;
+    margin: 0 !important;
     padding: 0;
 }
 
-.calendar-compact-grid thead th:last-child {
+/* Day name headers (SMTWTFS) - rendered as a separate grid div above the table
+   to avoid Firefox table-cell height issues where th matches td height */
+.calendar-day-headers {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    background: var(--background-header);
+    border-bottom: 1px solid #d0d0d0;
+    margin: 0;
+    padding: 0;
+}
+
+.calendar-day-headers span {
+    height: 22px;
+    line-height: 22px;
+    font-size: 10px;
+    font-weight: 600;
+    text-align: center;
+    color: var(--text-primary);
+    border-right: 1px solid #e8e8e8;
+    box-sizing: border-box;
+}
+
+.calendar-day-headers span:last-child {
     border-right: none;
 }
 
 .calendar-compact-grid tbody td {
     height: 58px;
     min-height: 40px;
-    border: 1px solid var(--border-color, #e8e8e8);
+    border: 1px solid #e8e8e8;
     border-top: none;
     border-left: none;
-    background-color: var(--cell-bg, var(--background-site));
+    background-color: var(--background-site);  /* Use scoped CSS var from PHP */
     color: var(--text-primary);
     cursor: pointer;
     padding: 3px;
@@ -372,60 +354,57 @@
         padding: 2px;
     }
     
-    .calendar-compact-grid thead th {
+    .calendar-day-headers span {
         height: 18px;
+        line-height: 18px;
         font-size: 9px;
     }
 }
 
 .calendar-compact-grid tbody td:first-child {
-    border-left: 1px solid var(--border-color, #e8e8e8);
+    border-left: 1px solid #e8e8e8;
 }
 
 .calendar-compact-grid tbody td:hover {
-    background-color: var(--background-alt);
+    background-color: var(--background-alt);  /* Hover state uses scoped var */
 }
 
 .cal-empty {
-    background: var(--background-site) !important;
+    background: var(--background-site);
     cursor: default !important;
 }
 
 .cal-empty:hover {
-    background: var(--background-site) !important;
+    background: var(--background-site);
 }
 
 .cal-today {
-    background: var(--cell-today-bg) !important;
-    border: 2px solid var(--border-main) !important;
+    background: var(--cell-today-bg);
 }
 
 .cal-today:hover {
-    background: var(--cell-today-bg) !important;
+    /* background removed - inline style handles this */
 }
 
 .cal-has-events {
+    /* background removed - set via inline style with template colors */
 }
 
 .cal-has-events:hover {
+    /* background removed - inline style handles this */
 }
 
 .day-num {
     display: inline-block;
     font-size: 11px;
     font-weight: 500;
-    color: var(--text-primary);
+    /* color removed - set via inline style */
     padding: 1px 3px;
 }
 
-.day-num-today {
-    background: var(--border-main);
-    color: var(--btn-text, var(--background-site));
-    border-radius: 2px;
-    font-weight: 600;
-}
-
 .cal-today .day-num {
+    /* background removed - set via inline style with theme colors */
+    /* color removed - set via inline style with theme colors */
     border-radius: 2px;
     font-weight: 600;
 }
@@ -504,7 +483,7 @@
     align-items: center;
     justify-content: space-between;
     padding: 8px 10px;
-    border-bottom: 1px solid var(--header-border, var(--border-main, #e0e0e0));
+    border-bottom: 1px solid #e0e0e0;
     background: var(--background-header);
 }
 
@@ -523,8 +502,8 @@
 }
 
 .namespace-badge {
-    background: var(--border-main, #e8f5e9);
-    color: var(--btn-text, var(--background-site));
+    background: #e8f5e9;
+    color: #388e3c;
     padding: 2px 6px;
     border-radius: 10px;
     font-size: 9px;
@@ -544,7 +523,7 @@
 .event-search-input-inline {
     width: 100%;
     padding: 4px 24px 4px 8px;
-    border: 1px solid var(--border-color, #d0d0d0);
+    border: 1px solid #d0d0d0;
     border-radius: 3px;
     font-size: 11px;
     outline: none;
@@ -554,8 +533,8 @@
 }
 
 .event-search-input-inline:focus {
-    border-color: var(--border-main, #00cc07);
-    box-shadow: 0 0 0 2px var(--shadow-color, rgba(0, 204, 7, 0.1));
+    border-color: #00cc07;
+    box-shadow: 0 0 0 2px rgba(0, 204, 7, 0.1);
 }
 
 .event-search-input-inline::placeholder {
@@ -592,7 +571,7 @@
 
 .add-event-compact {
     background: var(--border-main);
-    color: var(--btn-text, var(--background-site));
+    color: var(--background-site);
     border: none;
     padding: 4px 8px;
     border-radius: 3px;
@@ -619,16 +598,16 @@
 }
 
 .event-list-compact::-webkit-scrollbar-track {
-    background: var(--background-site, #f5f5f5);
+    background: #f5f5f5;
 }
 
 .event-list-compact::-webkit-scrollbar-thumb {
-    background: var(--border-color, #ccc);
+    background: #ccc;
     border-radius: 3px;
 }
 
 .event-list-compact::-webkit-scrollbar-thumb:hover {
-    background: var(--text-dim, #aaa);
+    background: #aaa;
 }
 
 /* Event items in list - SUPER COMPACT with checkbox on right */
@@ -636,9 +615,9 @@
     display: flex;
     align-items: flex-start;
     margin-bottom: 4px;
-    background-color: var(--cell-bg, var(--background-site));
+    background-color: var(--background-site);  /* Use scoped CSS var */
     color: var(--text-primary);
-    border: 1px solid var(--border-color, #e0e0e0);
+    border: 1px solid #e0e0e0;
     border-left: 3px solid #3498db;
     border-radius: 3px;
     padding: 5px 6px;
@@ -648,8 +627,8 @@
 }
 
 .event-compact-item:hover {
-    box-shadow: 0 1px 3px var(--shadow-color, rgba(0,0,0,0.08));
-    background-color: var(--background-alt);
+    box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+    background-color: var(--background-alt);  /* Slightly different on hover */
 }
 
 .event-highlighted {
@@ -677,17 +656,17 @@
 
 .event-completed {
     opacity: 0.55;
-    background: var(--background-alt, #f5f5f5);
+    background: #f5f5f5;
 }
 
 .event-completed .event-title-compact {
     text-decoration: line-through;
-    color: var(--text-dim, #999);
+    color: #999;
 }
 
 .event-past {
     opacity: 0.35;
-    background: var(--background-site, #fafafa);
+    background: #fafafa;
     font-size: 10px;
     padding: 3px 6px;
     margin-bottom: 2px;
@@ -697,35 +676,35 @@
 
 .event-past:hover {
     opacity: 0.6;
-    background: var(--background-alt, #f5f5f5);
+    background: #f5f5f5;
 }
 
 .event-past-expanded {
     opacity: 0.8 !important;
-    background: var(--cell-bg, #f9f9f9) !important;
+    background: #f9f9f9 !important;
     padding: 5px 6px !important;
     font-size: 12px !important;
 }
 
 .event-past-expanded .event-title-compact {
     font-size: 12px !important;
-    color: var(--text-dim, #666) !important;
+    color: #666 !important;
 }
 
 .event-past-expanded .event-date-time {
     font-size: 11px !important;
-    color: var(--text-dim, #888) !important;
+    color: #888 !important;
 }
 
 .event-past .event-title-compact {
     font-size: 10px;
-    color: var(--text-dim, #aaa);
+    color: #aaa;
     font-weight: 400;
 }
 
 .event-past .event-date-time {
     font-size: 9px;
-    color: var(--text-dim, #bbb);
+    color: #bbb;
 }
 
 .event-past .event-action-btn {
@@ -738,8 +717,8 @@
 }
 
 .event-today-badge {
-    background: var(--border-main, #9b59b6);
-    color: var(--btn-text, white);
+    background: #9b59b6;
+    color: white;
     padding: 1px 4px;
     border-radius: 3px;
     font-size: 9px;
@@ -752,8 +731,8 @@
 }
 
 .event-pastdue-badge {
-    background: #ff9800;
-    color: #fff;
+    background: #e74c3c;
+    color: white;
     padding: 1px 4px;
     border-radius: 3px;
     font-size: 9px;
@@ -772,8 +751,8 @@
 }
 
 .event-namespace-badge {
-    background: var(--border-main, #008800);
-    color: var(--btn-text, white);
+    background: #008800;
+    color: white;
     padding: 1px 4px;
     border-radius: 3px;
     font-size: 9px;
@@ -786,7 +765,7 @@
 }
 
 .event-namespace-badge:hover {
-    opacity: 0.85;
+    background: #006600;
 }
 
 .event-conflict-badge {
@@ -915,8 +894,8 @@
 
 .conflict-item {
     padding: 2px 0;
-    color: var(--text-primary, #333);
-    border-bottom: 1px solid var(--border-color, #f0f0f0);
+    color: #333;
+    border-bottom: 1px solid #f0f0f0;
     font-size: 9px;
 }
 
@@ -940,7 +919,7 @@
 .event-title-compact {
     font-size: 12px;
     font-weight: 600;
-    color: var(--text-primary, #2c3e50);
+    color: #2c3e50;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -949,7 +928,7 @@
 
 .event-meta-compact {
     font-size: 10px;
-    color: var(--text-dim, #666);
+    color: #666;
     margin-top: 1px;
     text-align: left;
 }
@@ -960,7 +939,7 @@
 
 .event-desc-compact {
     font-size: 10px;
-    color: var(--text-dim, #666);
+    color: #666;
     line-height: 1.4;
     margin-top: 2px;
     text-align: left;
@@ -977,20 +956,20 @@
 }
 
 .event-desc-compact a {
-    color: var(--border-main, #008800);
+    color: #008800;
     text-decoration: none;
-    border-bottom: 1px dotted var(--border-main, #008800);
+    border-bottom: 1px dotted #008800;
 }
 
 .event-desc-compact a:hover {
-    opacity: 0.8;
+    color: #388e3c;
     border-bottom-style: solid;
 }
 
 .event-desc-compact strong,
 .event-desc-compact b {
     font-weight: 600;
-    color: var(--text-primary, #333);
+    color: #333;
 }
 
 .event-desc-compact em,
@@ -999,7 +978,7 @@
 }
 
 .event-desc-compact code {
-    background: var(--background-alt, #f5f5f5);
+    background: #f5f5f5;
     padding: 1px 3px;
     border-radius: 2px;
     font-family: monospace;
@@ -1043,7 +1022,7 @@
 
 .no-events-msg {
     text-align: center;
-    color: var(--text-dim, #999);
+    color: #999;
     font-size: 12px;
     font-style: italic;
     padding: 40px 20px;
@@ -1073,13 +1052,12 @@
 
 .dialog-content-sleek {
     position: relative;
-    background: var(--background-site, #ffffff);
-    border: 2px solid var(--border-main, #d0d0d0);
-    box-shadow: 0 0 20px var(--shadow-color, rgba(0,0,0,0.2));
+    background: #ffffff;
     width: 100%;
     max-width: 450px;
     max-height: calc(100vh - 40px);
     border-radius: 8px;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.2);
     z-index: 10000;
     animation: slideUp 0.3s ease;
     overflow: hidden;
@@ -1132,9 +1110,8 @@
     align-items: center;
     justify-content: space-between;
     padding: 10px 14px;
-    background: var(--background-header, #2c3e50);
-    color: var(--text-primary, white);
-    border-bottom: 1px solid var(--border-main, transparent);
+    background: #2c3e50;
+    color: white;
     cursor: move;
     flex-shrink: 0;
 }
@@ -1147,13 +1124,12 @@
     margin: 0;
     font-size: 15px;
     font-weight: 600;
-    color: var(--text-primary, white);
 }
 
 .dialog-close-btn {
     background: rgba(255,255,255,0.2);
     border: none;
-    color: var(--text-primary, white);
+    color: white;
     font-size: 22px;
     width: 28px;
     height: 28px;
@@ -1179,7 +1155,6 @@
     overflow-x: hidden;
     flex: 1;
     max-height: calc(100vh - 160px);
-    background: var(--background-site, #fff);
 }
 
 /* Ensure form is scrollable on small screens */
@@ -1217,7 +1192,7 @@
     font-size: 10px !important;
     margin-bottom: 2px !important;
     font-weight: 500;
-    color: var(--text-primary, #555);
+    color: #555;
 }
 
 .form-field-checkbox-compact {
@@ -1247,10 +1222,10 @@
 }
 
 .form-field-checkbox {
-    background: var(--background-site, #f1f8f4);
+    background: #f1f8f4;
     padding: 8px;
     border-radius: 4px;
-    border: 1px solid var(--border-color, #008800);
+    border: 1px solid #008800;
 }
 
 .checkbox-label {
@@ -1260,23 +1235,20 @@
     cursor: pointer;
     font-size: 11px;
     font-weight: 500;
-    color: var(--text-primary, #388e3c);
+    color: #388e3c;
 }
 
 .checkbox-label input[type="checkbox"] {
     width: 15px;
     height: 15px;
     cursor: pointer;
-    accent-color: var(--border-main);
 }
 
 .recurring-options {
-    background: var(--background-site, #f1f8f4);
-    padding: 8px;
+    background: #f1f8f4;
+    padding: 12px;
     border-radius: 4px;
-    border: 1px solid var(--border-color, #81c784);
-    border-left: 2px solid var(--border-main, #008800);
-    margin-left: 4px;
+    border: 1px solid #81c784;
     margin-top: 8px;
 }
 
@@ -1298,7 +1270,7 @@
     display: block;
     font-size: 11px;
     font-weight: 600;
-    color: var(--text-primary, #2c3e50);
+    color: #2c3e50;
     margin-bottom: 5px;
     text-transform: uppercase;
     letter-spacing: 0.3px;
@@ -1313,26 +1285,25 @@
 .input-sleek {
     width: 100%;
     padding: 8px 10px;
-    border: 2px solid var(--border-color, #e0e0e0);
+    border: 2px solid #e0e0e0;
     border-radius: 4px;
     font-size: 13px;
     font-family: inherit;
     transition: all 0.2s;
-    background: var(--cell-bg, #fafafa);
-    color: var(--text-primary, #333);
+    background: #fafafa;
     box-sizing: border-box;
 }
 
 .input-sleek:focus {
     outline: none;
-    border-color: var(--border-main, #008800);
-    background: var(--cell-bg, white);
-    box-shadow: 0 0 0 3px var(--shadow-color, rgba(33, 150, 243, 0.1));
+    border-color: #008800;
+    background: white;
+    box-shadow: 0 0 0 3px rgba(33, 150, 243, 0.1);
 }
 
 .input-date {
     font-weight: 500;
-    color: var(--text-primary, #2c3e50);
+    color: #2c3e50;
     cursor: pointer;
 }
 
@@ -1367,7 +1338,7 @@
 .color-picker-input {
     width: 45px;
     height: 38px;
-    border: 2px solid var(--border-color, #e0e0e0);
+    border: 2px solid #e0e0e0;
     border-radius: 6px;
     cursor: pointer;
     padding: 2px;
@@ -1375,26 +1346,26 @@
 }
 
 .color-picker-input:hover {
-    border-color: var(--border-main, #4CAF50);
+    border-color: #4CAF50;
 }
 
 .input-color-sleek {
     width: 50px;
     height: 38px;
-    border: 2px solid var(--border-color, #e0e0e0);
+    border: 2px solid #e0e0e0;
     border-radius: 6px;
     cursor: pointer;
     transition: all 0.2s;
 }
 
 .input-color-sleek:hover {
-    border-color: var(--border-main, #008800);
+    border-color: #008800;
     transform: scale(1.05);
 }
 
 .color-label {
     font-size: 11px;
-    color: var(--text-dim, #666);
+    color: #666;
 }
 
 .form-row-group {
@@ -1408,7 +1379,7 @@
     display: block;
     font-size: 13px;
     font-weight: 600;
-    color: var(--text-primary, #2c3e50);
+    color: #2c3e50;
     margin-bottom: 8px;
     text-transform: uppercase;
     letter-spacing: 0.5px;
@@ -1417,26 +1388,25 @@
 .input-sleek {
     width: 100%;
     padding: 12px 16px;
-    border: 2px solid var(--border-color, #e0e0e0);
+    border: 2px solid #e0e0e0;
     border-radius: 8px;
     font-size: 15px;
     font-family: inherit;
     transition: all 0.2s;
-    background: var(--cell-bg, #fafafa);
-    color: var(--text-primary, #333);
+    background: #fafafa;
     box-sizing: border-box;
 }
 
 .input-sleek:focus {
     outline: none;
-    border-color: var(--border-main, #667eea);
-    background: var(--cell-bg, white);
-    box-shadow: 0 0 0 3px var(--shadow-color, rgba(102, 126, 234, 0.1));
+    border-color: #667eea;
+    background: white;
+    box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
 }
 
 .input-date {
     font-weight: 500;
-    color: var(--text-primary, #2c3e50);
+    color: #2c3e50;
     cursor: pointer;
 }
 
@@ -1461,27 +1431,27 @@
 .input-color-sleek {
     width: 60px;
     height: 44px;
-    border: 2px solid var(--border-color, #e0e0e0);
+    border: 2px solid #e0e0e0;
     border-radius: 8px;
     cursor: pointer;
     transition: all 0.2s;
 }
 
 .input-color-sleek:hover {
-    border-color: var(--border-main, #667eea);
+    border-color: #667eea;
     transform: scale(1.05);
 }
 
 .color-label {
     font-size: 13px;
-    color: var(--text-dim, #666);
+    color: #666;
 }
 
 .form-field-checkbox {
-    background: var(--background-site, #f1f8f4);
+    background: #f1f8f4;
     padding: 12px;
     border-radius: 6px;
-    border: 1px solid var(--border-color, #008800);
+    border: 1px solid #008800;
 }
 
 .checkbox-label {
@@ -1491,7 +1461,7 @@
     cursor: pointer;
     font-size: 13px;
     font-weight: 500;
-    color: var(--text-primary, #388e3c);
+    color: #388e3c;
 }
 
 .checkbox-label input[type="checkbox"] {
@@ -1517,8 +1487,8 @@
     display: flex;
     gap: 8px;
     padding: 12px 14px;
-    background: var(--background-site, #f8f9fa);
-    border-top: 1px solid var(--border-color, #e0e0e0);
+    background: #f8f9fa;
+    border-top: 1px solid #e0e0e0;
     justify-content: flex-end;
     flex-shrink: 0;
 }
@@ -1549,25 +1519,23 @@
 }
 
 .btn-cancel-sleek {
-    background: var(--cell-bg, #e0e0e0);
-    color: var(--text-primary, #555);
-    border: 1px solid var(--border-color, #d0d0d0);
+    background: #e0e0e0;
+    color: #555;
 }
 
 .btn-cancel-sleek:hover {
-    opacity: 0.85;
+    background: #d0d0d0;
 }
 
 .btn-save-sleek {
-    background: var(--border-main, #008800);
-    color: var(--btn-text, white);
-    border: 1px solid var(--border-main, #008800);
-    box-shadow: 0 2px 4px var(--shadow-color, rgba(33, 150, 243, 0.3));
+    background: #008800;
+    color: white;
+    box-shadow: 0 2px 4px rgba(33, 150, 243, 0.3);
 }
 
 .btn-save-sleek:hover {
-    opacity: 0.9;
-    box-shadow: 0 4px 8px var(--shadow-color, rgba(33, 150, 243, 0.4));
+    background: #388e3c;
+    box-shadow: 0 4px 8px rgba(33, 150, 243, 0.4);
 }
 
 .btn-save-sleek:active {
@@ -1600,13 +1568,12 @@
 
 .day-popup-content {
     position: relative;
-    background: var(--background-site, white);
-    border: 2px solid var(--border-main, #d0d0d0);
-    box-shadow: 0 0 20px var(--shadow-color, rgba(0,0,0,0.3));
+    background: white;
     width: 100%;
     max-width: 450px;
     max-height: calc(100vh - 40px);
     border-radius: 8px;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.3);
     z-index: 10001;
     display: flex;
     flex-direction: column;
@@ -1642,8 +1609,8 @@
     align-items: center;
     justify-content: space-between;
     padding: 10px 14px;
-    border-bottom: 1px solid var(--border-main, #e0e0e0);
-    background: var(--background-header, #fafafa);
+    border-bottom: 2px solid #e0e0e0;
+    background: #fafafa;
     border-radius: 8px 8px 0 0;
 }
 
@@ -1651,14 +1618,14 @@
     margin: 0;
     font-size: 15px;
     font-weight: 600;
-    color: var(--text-primary, #2c3e50);
+    color: #2c3e50;
 }
 
 .popup-close {
     background: none;
     border: none;
     font-size: 24px;
-    color: var(--text-primary, #999);
+    color: #999;
     cursor: pointer;
     width: 28px;
     height: 28px;
@@ -1672,7 +1639,8 @@
 }
 
 .popup-close:hover {
-    opacity: 0.7;
+    background: #f0f0f0;
+    color: #333;
 }
 
 .day-popup-body {
@@ -1680,7 +1648,6 @@
     overflow-y: auto;
     padding: 10px 14px;
     max-height: 400px;
-    background: var(--background-site);
 }
 
 .popup-events-list {
@@ -1691,19 +1658,19 @@
 
 .popup-continuation-notice {
     font-size: 10px;
-    color: var(--text-dim, #666);
-    background: var(--background-alt, #f0f0f0);
+    color: #666;
+    background: #f0f0f0;
     padding: 3px 8px;
     border-radius: 3px;
     margin-bottom: 4px;
-    border-left: 3px solid var(--border-main, #00cc07);
+    border-left: 3px solid #00cc07;
     font-weight: 500;
 }
 
 .popup-event-item {
     display: flex;
-    background: var(--cell-bg, #f8f9fa);
-    border: 1px solid var(--border-color, #e0e0e0);
+    background: #f8f9fa;
+    border: 1px solid #e0e0e0;
     border-radius: 4px;
     overflow: hidden;
     transition: box-shadow 0.15s;
@@ -1736,7 +1703,7 @@
 .popup-event-title {
     font-size: 13px;
     font-weight: 600;
-    color: var(--text-primary, #2c3e50);
+    color: #2c3e50;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -1745,7 +1712,7 @@
 
 .popup-event-time {
     font-size: 11px;
-    color: var(--text-dim, #008800);
+    color: #008800;
     font-weight: 500;
     white-space: nowrap;
     flex-shrink: 0;
@@ -1753,7 +1720,7 @@
 
 .popup-event-multiday {
     font-size: 11px;
-    color: var(--text-dim, #666);
+    color: #666;
     font-weight: 500;
     white-space: nowrap;
     flex-shrink: 0;
@@ -1761,8 +1728,8 @@
 
 .popup-event-namespace {
     font-size: 10px;
-    color: var(--btn-text, #fff);
-    background: var(--border-main, #008800);
+    color: #fff;
+    background: #008800;
     padding: 2px 6px;
     border-radius: 3px;
     font-weight: 500;
@@ -1772,7 +1739,7 @@
 
 .popup-event-desc {
     font-size: 11px;
-    color: var(--text-dim, #666);
+    color: #666;
     line-height: 1.4;
     margin-top: 4px;
     padding-left: 0;
@@ -1802,35 +1769,35 @@
 }
 
 .event-edit-btn:hover {
-    background: var(--background-alt, #e8f5e9);
+    background: #e8f5e9;
 }
 
 .event-delete-btn:hover {
-    background: var(--background-alt, #ffebee);
+    background: #ffebee;
 }
 
 .day-popup-footer {
     padding: 10px 14px;
-    border-top: 1px solid var(--border-color, #e0e0e0);
-    background: var(--background-site, #fafafa);
+    border-top: 1px solid #e0e0e0;
+    background: #fafafa;
     border-radius: 0 0 8px 8px;
 }
 
 .btn-add-event {
     width: 100%;
-    background: var(--border-main, #008800);
-    color: var(--btn-text, white);
-    border: 1px solid var(--border-main, #008800);
+    background: #008800;
+    color: white;
+    border: none;
     padding: 10px 16px;
     border-radius: 6px;
     font-size: 14px;
     font-weight: 500;
     cursor: pointer;
-    transition: opacity 0.15s;
+    transition: background 0.15s;
 }
 
 .btn-add-event:hover {
-    opacity: 0.9;
+    background: #45a049;
 }
 
 .dialog-overlay {
@@ -1844,10 +1811,10 @@
 
 .dialog-content-compact {
     position: relative;
-    background: var(--background-site, white);
+    background: white;
     width: 400px;
     border-radius: 6px;
-    box-shadow: 0 4px 12px var(--shadow-color, rgba(0,0,0,0.2));
+    box-shadow: 0 4px 12px rgba(0,0,0,0.2);
     padding: 20px;
     z-index: 10000;
 }
@@ -1856,7 +1823,7 @@
     margin: 0 0 16px 0;
     font-size: 16px;
     font-weight: 600;
-    color: var(--text-primary, #2c3e50);
+    color: #2c3e50;
 }
 
 .form-row {
@@ -1864,15 +1831,15 @@
 }
 
 .form-row-date {
-    background: var(--background-site, #f1f8f4);
+    background: #f1f8f4;
     padding: 10px;
     border-radius: 6px;
-    border: 2px solid var(--border-main, #008800);
+    border: 2px solid #008800;
     margin-bottom: 18px;
 }
 
 .form-row-date label {
-    color: var(--text-primary, #388e3c);
+    color: #388e3c;
     font-size: 13px;
 }
 
@@ -1880,7 +1847,7 @@
     display: block;
     font-size: 12px;
     font-weight: 600;
-    color: var(--text-primary, #555);
+    color: #555;
     margin-bottom: 4px;
 }
 
@@ -1891,13 +1858,11 @@
 .form-row textarea {
     width: 100%;
     padding: 8px;
-    border: 1px solid var(--border-color, #d0d0d0);
+    border: 1px solid #d0d0d0;
     border-radius: 4px;
     font-size: 13px;
     box-sizing: border-box;
     font-family: inherit;
-    background: var(--cell-bg, #fff);
-    color: var(--text-primary, #333);
 }
 
 .form-row input[type="color"] {
@@ -1928,22 +1893,22 @@
 }
 
 .btn-save {
-    background: var(--border-main, #008800);
-    color: var(--btn-text, white);
+    background: #008800;
+    color: white;
 }
 
 .btn-save:hover {
-    opacity: 0.9;
+    background: #45a049;
 }
 
 .btn-cancel {
-    background: var(--cell-bg, #f5f5f5);
-    color: var(--text-primary, #555);
-    border: 1px solid var(--border-color, #d0d0d0);
+    background: #f5f5f5;
+    color: #555;
+    border: 1px solid #d0d0d0;
 }
 
 .btn-cancel:hover {
-    opacity: 0.85;
+    background: #e8e8e8;
 }
 
 /* Standalone event list */
@@ -2890,8 +2855,7 @@
 /* Past Events Collapsible Section */
 .past-events-section {
     margin-bottom: 10px;
-    border-bottom: 1px solid var(--border-color, #e0e0e0);
-    border-top: 1px solid var(--border-color, #e0e0e0);
+    border-bottom: 1px solid #e0e0e0;
 }
 
 .past-events-toggle {
@@ -2945,11 +2909,11 @@
     right: 0;
     max-height: 200px;
     overflow-y: auto;
-    background: var(--cell-bg, white);
-    border: 1px solid var(--border-color, #ddd);
+    background: white;
+    border: 1px solid #ddd;
     border-top: none;
     border-radius: 0 0 4px 4px;
-    box-shadow: 0 4px 8px var(--shadow-color, rgba(0,0,0,0.1));
+    box-shadow: 0 4px 8px rgba(0,0,0,0.1);
     z-index: 1000;
     margin-top: -1px;
 }
@@ -2958,18 +2922,17 @@
     padding: 8px 12px;
     cursor: pointer;
     font-size: 12px;
-    color: var(--text-primary, #333);
-    border-bottom: 1px solid var(--border-color, #f0f0f0);
+    border-bottom: 1px solid #f0f0f0;
     transition: background-color 0.15s;
 }
 
 .namespace-option:hover {
-    background-color: var(--background-alt, #f5f5f5);
+    background-color: #f5f5f5;
 }
 
 .namespace-option.selected {
-    background-color: var(--cell-today-bg, #e3f2fd);
-    color: var(--text-bright, #1976d2);
+    background-color: #e3f2fd;
+    color: #1976d2;
 }
 
 .namespace-option:last-child {

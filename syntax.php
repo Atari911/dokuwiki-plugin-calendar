@@ -87,8 +87,8 @@ class syntax_plugin_calendar extends DokuWiki_Syntax_Plugin {
         $month = (int)$data['month'];
         $namespace = $data['namespace'];
         
-        // Get theme
-        $theme = $this->getSidebarTheme();
+        // Get theme - prefer inline theme= parameter, fall back to admin default
+        $theme = !empty($data['theme']) ? $data['theme'] : $this->getSidebarTheme();
         $themeStyles = $this->getSidebarThemeStyles($theme);
         $themeClass = 'calendar-theme-' . $theme;
         
@@ -169,11 +169,12 @@ class syntax_plugin_calendar extends DokuWiki_Syntax_Plugin {
         $html .= '<button class="cal-today-btn" onclick="jumpToToday(\'' . $calId . '\', \'' . $namespace . '\')">Today</button>';
         $html .= '</div>';
         
-        // Calendar grid
+        // Calendar grid - day name headers as a separate div (avoids Firefox th height issues)
+        $html .= '<div class="calendar-day-headers">';
+        $html .= '<span>S</span><span>M</span><span>T</span><span>W</span><span>T</span><span>F</span><span>S</span>';
+        $html .= '</div>';
         $html .= '<table class="calendar-compact-grid">';
-        $html .= '<thead><tr>';
-        $html .= '<th>S</th><th>M</th><th>T</th><th>W</th><th>T</th><th>F</th><th>S</th>';
-        $html .= '</tr></thead><tbody>';
+        $html .= '<tbody>';
         
         $firstDay = mktime(0, 0, 0, $month, 1, $year);
         $daysInMonth = date('t', $firstDay);
@@ -329,7 +330,7 @@ class syntax_plugin_calendar extends DokuWiki_Syntax_Plugin {
         $html .= '</div>'; // End calendar-right
         
         // Event dialog
-        $html .= $this->renderEventDialog($calId, $namespace);
+        $html .= $this->renderEventDialog($calId, $namespace, $theme);
         
         // Month/Year picker dialog (at container level for proper overlay)
         $html .= $this->renderMonthPicker($calId, $year, $month, $namespace, $theme, $themeStyles);
@@ -765,9 +766,8 @@ class syntax_plugin_calendar extends DokuWiki_Syntax_Plugin {
             $height = '400px'; // Default fallback
         }
         
-        // Get theme
-        $theme = $this->getSidebarTheme();
-        $themeStyles = $this->getSidebarThemeStyles($theme);
+        // Get theme - prefer inline theme= parameter, fall back to admin default
+        $theme = !empty($data['theme']) ? $data['theme'] : $this->getSidebarTheme();        $themeStyles = $this->getSidebarThemeStyles($theme);
         
         // Check if multiple namespaces or wildcard specified
         $isMultiNamespace = !empty($namespace) && (strpos($namespace, ';') !== false || strpos($namespace, '*') !== false);
@@ -879,7 +879,7 @@ class syntax_plugin_calendar extends DokuWiki_Syntax_Plugin {
         $html .= $this->renderEventListContent($events, $calId, $namespace);
         $html .= '</div>';
         
-        $html .= $this->renderEventDialog($calId, $namespace);
+        $html .= $this->renderEventDialog($calId, $namespace, $theme);
         
         // Month/Year picker for event panel
         $html .= $this->renderMonthPicker($calId, $year, $month, $namespace, $theme, $themeStyles);
@@ -992,7 +992,8 @@ class syntax_plugin_calendar extends DokuWiki_Syntax_Plugin {
             $calId = 'sidebar-' . substr(md5($namespace . $weekStart), 0, 8);
             
             // Render sidebar widget and return immediately
-            return $this->renderSidebarWidget($allEvents, $namespace, $calId);
+            $themeOverride = !empty($data['theme']) ? $data['theme'] : null;
+            return $this->renderSidebarWidget($allEvents, $namespace, $calId, $themeOverride);
         } elseif ($today) {
             $startDate = date('Y-m-d');
             $endDate = date('Y-m-d');
@@ -1503,9 +1504,11 @@ class syntax_plugin_calendar extends DokuWiki_Syntax_Plugin {
         return $html;
     }
     
-    private function renderEventDialog($calId, $namespace) {
+    private function renderEventDialog($calId, $namespace, $theme = null) {
         // Get theme for dialog
-        $theme = $this->getSidebarTheme();
+        if ($theme === null) {
+            $theme = $this->getSidebarTheme();
+        }
         $themeStyles = $this->getSidebarThemeStyles($theme);
         
         $html = '<div class="event-dialog-compact" id="dialog-' . $calId . '" style="display:none;">';
@@ -2035,7 +2038,7 @@ class syntax_plugin_calendar extends DokuWiki_Syntax_Plugin {
     /**
      * Render new sidebar widget - Week at a glance itinerary (200px wide)
      */
-    private function renderSidebarWidget($events, $namespace, $calId) {
+    private function renderSidebarWidget($events, $namespace, $calId, $themeOverride = null) {
         if (empty($events)) {
             return '<div style="width:200px; padding:12px; text-align:center; color:#999; font-size:11px;">No events this week</div>';
         }
@@ -2153,8 +2156,8 @@ class syntax_plugin_calendar extends DokuWiki_Syntax_Plugin {
             return strcmp($dateA, $dateB);
         });
         
-        // Get theme and apply appropriate CSS
-        $theme = $this->getSidebarTheme();
+        // Get theme - prefer override from syntax parameter, fall back to admin default
+        $theme = !empty($themeOverride) ? $themeOverride : $this->getSidebarTheme();
         $themeStyles = $this->getSidebarThemeStyles($theme);
         $themeClass = 'sidebar-' . $theme;
         
@@ -2598,7 +2601,7 @@ class syntax_plugin_calendar extends DokuWiki_Syntax_Plugin {
         $html .= '</div>';
         
         // Add event dialog for sidebar widget
-        $html .= $this->renderEventDialog($calId, $namespace);
+        $html .= $this->renderEventDialog($calId, $namespace, $theme);
         
         // Add JavaScript for positioning data-tooltip elements
         $html .= '<script>

@@ -1,4 +1,14 @@
 # Calendar Plugin Changelog
+## Version 6.0.2 (2026-02-09) - FIREFOX DAY HEADER FIX
+
+- **Fixed:** In Firefox, the SMTWTFS day-of-week header row was rendering at the same height as calendar day cells (58px instead of 22px). Firefox ignores `max-height` on `<th>` table cells per CSS spec. Replaced `<thead><tr><th>` with a CSS grid `<div>` outside the table, making header height fully independent of table cell sizing. Works consistently across Chrome, Firefox, Safari, and Edge.
+
+## Version 6.0.1 (2026-02-09) - THEME PARAMETER FIX
+
+- **Fixed:** `theme=wiki` (and all `theme=` parameters) had no effect — all three render functions (`renderCompactCalendar`, `renderEventPanelOnly`, `renderSidebarWidget`) were ignoring the syntax parameter and always reading the admin global default via `getSidebarTheme()`
+- **Fixed:** `renderEventDialog` also ignored theme context — now receives theme from its caller
+- **How it works now:** `{{calendar theme=wiki}}`, `{{eventlist sidebar theme=purple}}`, `{{eventpanel theme=professional}}` all correctly apply the specified theme. The admin-configured default is used as fallback only when no `theme=` parameter is present.
+
 
 ## Version 6.0.0 (2026-02-09) - CODE AUDIT & v6 RELEASE
 
