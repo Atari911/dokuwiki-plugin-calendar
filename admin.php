@@ -34,8 +34,6 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
             $this->deleteRecurringSeries();
         } elseif ($action === 'edit_recurring_series') {
             $this->editRecurringSeries();
-        } elseif ($action === 'move_events') {
-            $this->moveEvents();
         } elseif ($action === 'move_selected_events') {
             $this->moveEvents();
         } elseif ($action === 'move_single_event') {
@@ -46,6 +44,8 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
             $this->createNamespace();
         } elseif ($action === 'delete_namespace') {
             $this->deleteNamespace();
+        } elseif ($action === 'rename_namespace') {
+            $this->renameNamespace();
         } elseif ($action === 'run_sync') {
             $this->runSync();
         } elseif ($action === 'stop_sync') {
@@ -58,6 +58,8 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
             $this->renameBackup();
         } elseif ($action === 'restore_backup') {
             $this->restoreBackup();
+        } elseif ($action === 'create_manual_backup') {
+            $this->createManualBackup();
         } elseif ($action === 'export_config') {
             $this->exportConfig();
         } elseif ($action === 'import_config') {
@@ -84,28 +86,40 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
     public function html() {
         global $INPUT;
         
-        // Get current tab - default to 'update' (Update Plugin tab)
-        $tab = $INPUT->str('tab', 'update');
+        // Get current tab - default to 'manage' (Manage Events tab)
+        $tab = $INPUT->str('tab', 'manage');
         
-        // Tab navigation
-        echo '<div style="border-bottom:2px solid #ddd; margin:10px 0 15px 0;">';
-        echo '<a href="?do=admin&page=calendar&tab=update" style="display:inline-block; padding:8px 16px; text-decoration:none; color:' . ($tab === 'update' ? '#00cc07' : '#333') . '; border-bottom:3px solid ' . ($tab === 'update' ? '#00cc07' : 'transparent') . '; font-weight:' . ($tab === 'update' ? 'bold' : 'normal') . ';">📦 Update Plugin</a>';
-        echo '<a href="?do=admin&page=calendar&tab=config" style="display:inline-block; padding:8px 16px; text-decoration:none; color:' . ($tab === 'config' ? '#00cc07' : '#333') . '; border-bottom:3px solid ' . ($tab === 'config' ? '#00cc07' : 'transparent') . '; font-weight:' . ($tab === 'config' ? 'bold' : 'normal') . ';">⚙️ Outlook Sync</a>';
-        echo '<a href="?do=admin&page=calendar&tab=manage" style="display:inline-block; padding:8px 16px; text-decoration:none; color:' . ($tab === 'manage' ? '#00cc07' : '#333') . '; border-bottom:3px solid ' . ($tab === 'manage' ? '#00cc07' : 'transparent') . '; font-weight:' . ($tab === 'manage' ? 'bold' : 'normal') . ';">📅 Manage Events</a>';
+        // Get template colors
+        $colors = $this->getTemplateColors();
+        $accentColor = '#00cc07'; // Keep calendar plugin accent color
+        
+        // Tab navigation (Manage Events, Update Plugin, Outlook Sync, Themes)
+        echo '<div style="border-bottom:2px solid ' . $colors['border'] . '; margin:10px 0 15px 0;">';
+        echo '<a href="?do=admin&page=calendar&tab=manage" style="display:inline-block; padding:8px 16px; text-decoration:none; color:' . ($tab === 'manage' ? $accentColor : $colors['text']) . '; border-bottom:3px solid ' . ($tab === 'manage' ? $accentColor : 'transparent') . '; font-weight:' . ($tab === 'manage' ? 'bold' : 'normal') . ';">📅 Manage Events</a>';
+        echo '<a href="?do=admin&page=calendar&tab=update" style="display:inline-block; padding:8px 16px; text-decoration:none; color:' . ($tab === 'update' ? $accentColor : $colors['text']) . '; border-bottom:3px solid ' . ($tab === 'update' ? $accentColor : 'transparent') . '; font-weight:' . ($tab === 'update' ? 'bold' : 'normal') . ';">📦 Update Plugin</a>';
+        echo '<a href="?do=admin&page=calendar&tab=config" style="display:inline-block; padding:8px 16px; text-decoration:none; color:' . ($tab === 'config' ? $accentColor : $colors['text']) . '; border-bottom:3px solid ' . ($tab === 'config' ? $accentColor : 'transparent') . '; font-weight:' . ($tab === 'config' ? 'bold' : 'normal') . ';">⚙️ Outlook Sync</a>';
+        echo '<a href="?do=admin&page=calendar&tab=themes" style="display:inline-block; padding:8px 16px; text-decoration:none; color:' . ($tab === 'themes' ? $accentColor : $colors['text']) . '; border-bottom:3px solid ' . ($tab === 'themes' ? $accentColor : 'transparent') . '; font-weight:' . ($tab === 'themes' ? 'bold' : 'normal') . ';">🎨 Themes</a>';
         echo '</div>';
         
         // Render appropriate tab
         if ($tab === 'config') {
-            $this->renderConfigTab();
+            $this->renderConfigTab($colors);
         } elseif ($tab === 'manage') {
-            $this->renderManageTab();
+            $this->renderManageTab($colors);
+        } elseif ($tab === 'themes') {
+            $this->renderThemesTab($colors);
         } else {
-            $this->renderUpdateTab();
+            $this->renderUpdateTab($colors);
         }
     }
     
-    private function renderConfigTab() {
+    private function renderConfigTab($colors = null) {
         global $INPUT;
+        
+        // Use defaults if not provided
+        if ($colors === null) {
+            $colors = $this->getTemplateColors();
+        }
         
         // Load current config
         $configFile = DOKU_PLUGIN . 'calendar/sync_config.php';
@@ -138,60 +152,60 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
         echo '<input type="hidden" name="action" value="save_config">';
         
         // Azure Credentials
-        echo '<div style="background:#f9f9f9; padding:12px; margin:10px 0; border-left:3px solid #00cc07; border-radius:3px;">';
+        echo '<div style="background:' . $colors['bg'] . '; padding:12px; margin:10px 0; border-left:3px solid #00cc07; border-radius:3px;">';
         echo '<h3 style="margin:0 0 8px 0; color:#00cc07; font-size:16px;">Microsoft Azure App Credentials</h3>';
-        echo '<p style="color:#666; font-size:0.85em; margin:0 0 10px 0;">Register at <a href="https://portal.azure.com" target="_blank" style="color:#00cc07;">Azure Portal</a> → App registrations</p>';
+        echo '<p style="color:' . $colors['text'] . '; font-size:0.85em; margin:0 0 10px 0;">Register at <a href="https://portal.azure.com" target="_blank" style="color:#00cc07;">Azure Portal</a> → App registrations</p>';
         
         echo '<label style="display:block; font-weight:bold; margin:8px 0 3px; font-size:13px;">Tenant ID</label>';
-        echo '<input type="text" name="tenant_id" value="' . hsc($config['tenant_id'] ?? '') . '" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" required style="width:100%; padding:6px; border:1px solid #ddd; border-radius:3px; font-size:13px;">';
+        echo '<input type="text" name="tenant_id" value="' . hsc($config['tenant_id'] ?? '') . '" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" required style="width:100%; padding:6px; border:1px solid ' . $colors['border'] . '; border-radius:3px; font-size:13px;">';
         
         echo '<label style="display:block; font-weight:bold; margin:8px 0 3px; font-size:13px;">Client ID (Application ID)</label>';
-        echo '<input type="text" name="client_id" value="' . hsc($config['client_id'] ?? '') . '" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" required style="width:100%; padding:6px; border:1px solid #ddd; border-radius:3px; font-size:13px;">';
+        echo '<input type="text" name="client_id" value="' . hsc($config['client_id'] ?? '') . '" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" required style="width:100%; padding:6px; border:1px solid ' . $colors['border'] . '; border-radius:3px; font-size:13px;">';
         
         echo '<label style="display:block; font-weight:bold; margin:8px 0 3px; font-size:13px;">Client Secret</label>';
-        echo '<input type="password" name="client_secret" value="' . hsc($config['client_secret'] ?? '') . '" placeholder="Enter client secret" required style="width:100%; padding:6px; border:1px solid #ddd; border-radius:3px; font-size:13px;">';
+        echo '<input type="password" name="client_secret" value="' . hsc($config['client_secret'] ?? '') . '" placeholder="Enter client secret" required style="width:100%; padding:6px; border:1px solid ' . $colors['border'] . '; border-radius:3px; font-size:13px;">';
         echo '<p style="color:#999; font-size:0.8em; margin:3px 0 0;">⚠️ Keep this secret safe!</p>';
         echo '</div>';
         
         // Outlook Settings
-        echo '<div style="background:#f9f9f9; padding:12px; margin:10px 0; border-left:3px solid #00cc07; border-radius:3px;">';
+        echo '<div style="background:' . $colors['bg'] . '; padding:12px; margin:10px 0; border-left:3px solid #00cc07; border-radius:3px;">';
         echo '<h3 style="margin:0 0 8px 0; color:#00cc07; font-size:16px;">Outlook Settings</h3>';
         
         echo '<div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">';
         
         echo '<div>';
         echo '<label style="display:block; font-weight:bold; margin:0 0 3px; font-size:13px;">User Email</label>';
-        echo '<input type="email" name="user_email" value="' . hsc($config['user_email'] ?? '') . '" placeholder="your.email@company.com" required style="width:100%; padding:6px; border:1px solid #ddd; border-radius:3px; font-size:13px;">';
+        echo '<input type="email" name="user_email" value="' . hsc($config['user_email'] ?? '') . '" placeholder="your.email@company.com" required style="width:100%; padding:6px; border:1px solid ' . $colors['border'] . '; border-radius:3px; font-size:13px;">';
         echo '</div>';
         
         echo '<div>';
         echo '<label style="display:block; font-weight:bold; margin:0 0 3px; font-size:13px;">Timezone</label>';
-        echo '<input type="text" name="timezone" value="' . hsc($config['timezone'] ?? 'America/Los_Angeles') . '" placeholder="America/Los_Angeles" style="width:100%; padding:6px; border:1px solid #ddd; border-radius:3px; font-size:13px;">';
+        echo '<input type="text" name="timezone" value="' . hsc($config['timezone'] ?? 'America/Los_Angeles') . '" placeholder="America/Los_Angeles" style="width:100%; padding:6px; border:1px solid ' . $colors['border'] . '; border-radius:3px; font-size:13px;">';
         echo '</div>';
         
         echo '<div>';
         echo '<label style="display:block; font-weight:bold; margin:0 0 3px; font-size:13px;">Default Category</label>';
-        echo '<input type="text" name="default_category" value="' . hsc($config['default_category'] ?? 'Blue category') . '" placeholder="Blue category" style="width:100%; padding:6px; border:1px solid #ddd; border-radius:3px; font-size:13px;">';
+        echo '<input type="text" name="default_category" value="' . hsc($config['default_category'] ?? 'Blue category') . '" placeholder="Blue category" style="width:100%; padding:6px; border:1px solid ' . $colors['border'] . '; border-radius:3px; font-size:13px;">';
         echo '</div>';
         
         echo '<div>';
         echo '<label style="display:block; font-weight:bold; margin:0 0 3px; font-size:13px;">Reminder (minutes)</label>';
-        echo '<input type="number" name="reminder_minutes" value="' . hsc($config['reminder_minutes'] ?? 15) . '" placeholder="15" style="width:100%; padding:6px; border:1px solid #ddd; border-radius:3px; font-size:13px;">';
+        echo '<input type="number" name="reminder_minutes" value="' . hsc($config['reminder_minutes'] ?? 15) . '" placeholder="15" style="width:100%; padding:6px; border:1px solid ' . $colors['border'] . '; border-radius:3px; font-size:13px;">';
         echo '</div>';
         
         echo '</div>'; // end grid
         echo '</div>';
         
         // Important Namespaces for Sidebar Widget
-        echo '<div style="background:#f9f9f9; padding:12px; margin:10px 0; border-left:3px solid #9b59b6; border-radius:3px;">';
+        echo '<div style="background:' . $colors['bg'] . '; padding:12px; margin:10px 0; border-left:3px solid #9b59b6; border-radius:3px;">';
         echo '<h3 style="margin:0 0 8px 0; color:#9b59b6; font-size:16px;">📌 Important Namespaces (Sidebar Widget)</h3>';
-        echo '<p style="color:#666; font-size:11px; margin:0 0 8px;">Events from these namespaces will be highlighted in purple in the sidebar widget</p>';
-        echo '<input type="text" name="important_namespaces" value="' . hsc(isset($config['important_namespaces']) ? $config['important_namespaces'] : 'important') . '" style="width:100%; padding:6px; border:1px solid #ddd; border-radius:3px; font-size:12px;" placeholder="important,urgent,priority">';
-        echo '<p style="color:#666; font-size:10px; margin:4px 0 0;">Comma-separated list of namespace names</p>';
+        echo '<p style="color:' . $colors['text'] . '; font-size:11px; margin:0 0 8px;">Events from these namespaces will be highlighted in purple in the sidebar widget</p>';
+        echo '<input type="text" name="important_namespaces" value="' . hsc(isset($config['important_namespaces']) ? $config['important_namespaces'] : 'important') . '" style="width:100%; padding:6px; border:1px solid ' . $colors['border'] . '; border-radius:3px; font-size:12px;" placeholder="important,urgent,priority">';
+        echo '<p style="color:' . $colors['text'] . '; font-size:10px; margin:4px 0 0;">Comma-separated list of namespace names</p>';
         echo '</div>';
         
         // Sync Options
-        echo '<div style="background:#f9f9f9; padding:12px; margin:10px 0; border-left:3px solid #00cc07; border-radius:3px;">';
+        echo '<div style="background:' . $colors['bg'] . '; padding:12px; margin:10px 0; border-left:3px solid #00cc07; border-radius:3px;">';
         echo '<h3 style="margin:0 0 8px 0; color:#00cc07; font-size:16px;">Sync Options</h3>';
         
         $syncCompleted = isset($config['sync_completed_tasks']) ? $config['sync_completed_tasks'] : false;
@@ -211,7 +225,7 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
         $availableNamespaces = $this->getAllNamespaces();
         $selectedNamespaces = isset($config['sync_namespaces']) ? $config['sync_namespaces'] : [];
         
-        echo '<div style="max-height:150px; overflow-y:auto; border:1px solid #ddd; border-radius:3px; padding:8px; background:white;">';
+        echo '<div style="max-height:150px; overflow-y:auto; border:1px solid ' . $colors['border'] . '; border-radius:3px; padding:8px; background:' . $colors['bg'] . ';">';
         echo '<label style="display:block; margin:3px 0;"><input type="checkbox" name="sync_namespaces[]" value=""> (default)</label>';
         foreach ($availableNamespaces as $ns) {
             if ($ns !== '') {
@@ -234,10 +248,10 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
         echo '<div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; margin:10px 0;">';
         
         // Namespace Mapping
-        echo '<div style="background:#f9f9f9; padding:12px; border-left:3px solid #00cc07; border-radius:3px;">';
+        echo '<div style="background:' . $colors['bg'] . '; padding:12px; border-left:3px solid #00cc07; border-radius:3px;">';
         echo '<h3 style="margin:0 0 8px 0; color:#00cc07; font-size:16px;">Namespace → Category</h3>';
-        echo '<p style="color:#666; font-size:0.8em; margin:0 0 5px;">One per line: namespace=Category</p>';
-        echo '<textarea name="category_mapping" rows="6" style="width:100%; padding:6px; border:1px solid #ddd; border-radius:3px; font-family:monospace; font-size:12px; resize:vertical;" placeholder="work=Blue category&#10;personal=Green category">';
+        echo '<p style="color:' . $colors['text'] . '; font-size:0.8em; margin:0 0 5px;">One per line: namespace=Category</p>';
+        echo '<textarea name="category_mapping" rows="6" style="width:100%; padding:6px; border:1px solid ' . $colors['border'] . '; border-radius:3px; font-family:monospace; font-size:12px; resize:vertical;" placeholder="work=Blue category&#10;personal=Green category">';
         if (isset($config['category_mapping']) && is_array($config['category_mapping'])) {
             foreach ($config['category_mapping'] as $ns => $cat) {
                 echo hsc($ns) . '=' . hsc($cat) . "\n";
@@ -247,9 +261,9 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
         echo '</div>';
         
         // Color Mapping with Color Picker
-        echo '<div style="background:#f9f9f9; padding:12px; border-left:3px solid #00cc07; border-radius:3px;">';
+        echo '<div style="background:' . $colors['bg'] . '; padding:12px; border-left:3px solid #00cc07; border-radius:3px;">';
         echo '<h3 style="margin:0 0 8px 0; color:#00cc07; font-size:16px;">🎨 Event Color → Category</h3>';
-        echo '<p style="color:#666; font-size:0.8em; margin:0 0 8px;">Map calendar colors to Outlook categories</p>';
+        echo '<p style="color:' . $colors['text'] . '; font-size:0.8em; margin:0 0 8px;">Map calendar colors to Outlook categories</p>';
         
         // Define calendar colors and Outlook categories (only the main 6 colors)
         $calendarColors = [
@@ -288,13 +302,13 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
             echo '<div style="width:24px; height:24px; background:' . $hexColor . '; border:2px solid #ddd; border-radius:3px; flex-shrink:0;"></div>';
             
             // Color name
-            echo '<span style="font-size:12px; min-width:90px; color:#666;">' . $colorName . '</span>';
+            echo '<span style="font-size:12px; min-width:90px; color:' . $colors['text'] . ';">' . $colorName . '</span>';
             
             // Arrow
             echo '<span style="color:#999; font-size:12px;">→</span>';
             
             // Outlook category dropdown
-            echo '<select name="color_map_' . $rowIndex . '" style="flex:1; padding:4px; border:1px solid #ddd; border-radius:3px; font-size:12px;">';
+            echo '<select name="color_map_' . $rowIndex . '" style="flex:1; padding:4px; border:1px solid ' . $colors['border'] . '; border-radius:3px; font-size:12px;">';
             echo '<option value="">-- None --</option>';
             foreach ($outlookCategories as $category) {
                 $selected = ($selectedCategory === $category) ? 'selected' : '';
@@ -393,7 +407,7 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
         </script>';
         
         // Sync Controls Section
-        echo '<div style="background:#f9f9f9; padding:12px; margin:15px 0; border-left:3px solid #00cc07; border-radius:3px; max-width:900px;">';
+        echo '<div style="background:' . $colors['bg'] . '; padding:12px; margin:15px 0; border-left:3px solid #00cc07; border-radius:3px; max-width:900px;">';
         echo '<h3 style="margin:0 0 8px 0; color:#00cc07; font-size:16px;">🔄 Sync Controls</h3>';
         
         // Check cron job status
@@ -408,12 +422,12 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
         echo '<button onclick="stopSyncNow()" id="stopBtn" style="background:#e74c3c; color:white; padding:8px 16px; border:none; border-radius:3px; cursor:pointer; font-size:13px; font-weight:bold; display:none;">⏹️ Stop Sync</button>';
         
         if ($cronStatus['active']) {
-            echo '<span style="color:#666; font-size:12px;">⏰ ' . hsc($cronStatus['frequency']) . '</span>';
+            echo '<span style="color:' . $colors['text'] . '; font-size:12px;">⏰ ' . hsc($cronStatus['frequency']) . '</span>';
         } else {
             echo '<span style="color:#999; font-size:12px;">⚠️ No cron job detected</span>';
         }
         
-        echo '<span id="syncStatus" style="color:#666; font-size:12px; margin-left:auto;"></span>';
+        echo '<span id="syncStatus" style="color:' . $colors['text'] . '; font-size:12px; margin-left:auto;"></span>';
         echo '</div>';
         
         // Show permission warning if log not writable
@@ -534,9 +548,9 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
         </script>';
         
         // Log Viewer Section - More Compact
-        echo '<div style="background:#f9f9f9; padding:12px; margin:15px 0 10px 0; border-left:3px solid #00cc07; border-radius:3px; max-width:900px;">';
+        echo '<div style="background:' . $colors['bg'] . '; padding:12px; margin:15px 0 10px 0; border-left:3px solid #00cc07; border-radius:3px; max-width:900px;">';
         echo '<h3 style="margin:0 0 5px 0; color:#00cc07; font-size:16px;">📜 Live Sync Log</h3>';
-        echo '<p style="color:#666; font-size:0.8em; margin:0 0 8px;">Updates every 2 seconds</p>';
+        echo '<p style="color:' . $colors['text'] . '; font-size:0.8em; margin:0 0 8px;">Updates every 2 seconds</p>';
         
         // Log viewer container
         echo '<div style="background:#1e1e1e; border-radius:5px; overflow:hidden; box-shadow:0 2px 4px rgba(0,0,0,0.3);">';
@@ -631,8 +645,13 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
         </script>';
     }
     
-    private function renderManageTab() {
+    private function renderManageTab($colors = null) {
         global $INPUT;
+        
+        // Use defaults if not provided
+        if ($colors === null) {
+            $colors = $this->getTemplateColors();
+        }
         
         // Show message if present
         if ($INPUT->has('msg')) {
@@ -645,43 +664,43 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
         
         echo '<h2 style="margin:10px 0; font-size:20px;">Manage Calendar Events</h2>';
         
-        // Events Manager Section - NEW!
-        echo '<div style="background:#f9f9f9; padding:12px; margin:10px 0; border-left:3px solid #00cc07; border-radius:3px; max-width:1200px;">';
+        // Events Manager Section
+        echo '<div style="background:' . $colors['bg'] . '; padding:12px; margin:10px 0; border-left:3px solid #00cc07; border-radius:3px; max-width:1200px;">';
         echo '<h3 style="margin:0 0 8px 0; color:#00cc07; font-size:16px;">📊 Events Manager</h3>';
-        echo '<p style="color:#666; font-size:11px; margin:0 0 10px;">Scan, export, and import all calendar events across all namespaces.</p>';
+        echo '<p style="color:' . $colors['text'] . '; font-size:11px; margin:0 0 10px;">Scan, export, and import all calendar events across all namespaces.</p>';
         
         // Get event statistics
         $stats = $this->getEventStatistics();
         
         // Statistics display
-        echo '<div style="background:white; padding:10px; border-radius:3px; margin-bottom:10px; border:1px solid #ddd;">';
+        echo '<div style="background:' . $colors['bg'] . '; padding:10px; border-radius:3px; margin-bottom:10px; border:1px solid ' . $colors['border'] . ';">';
         echo '<div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(150px, 1fr)); gap:10px; font-size:12px;">';
         
         echo '<div style="background:#f3e5f5; padding:8px; border-radius:3px; text-align:center;">';
         echo '<div style="font-size:24px; font-weight:bold; color:#7b1fa2;">' . $stats['total_events'] . '</div>';
-        echo '<div style="color:#666; font-size:10px;">Total Events</div>';
+        echo '<div style="color:' . $colors['text'] . '; font-size:10px;">Total Events</div>';
         echo '</div>';
         
         echo '<div style="background:#f3e5f5; padding:8px; border-radius:3px; text-align:center;">';
         echo '<div style="font-size:24px; font-weight:bold; color:#7b1fa2;">' . $stats['total_namespaces'] . '</div>';
-        echo '<div style="color:#666; font-size:10px;">Namespaces</div>';
+        echo '<div style="color:' . $colors['text'] . '; font-size:10px;">Namespaces</div>';
         echo '</div>';
         
         echo '<div style="background:#e8f5e9; padding:8px; border-radius:3px; text-align:center;">';
         echo '<div style="font-size:24px; font-weight:bold; color:#388e3c;">' . $stats['total_files'] . '</div>';
-        echo '<div style="color:#666; font-size:10px;">JSON Files</div>';
+        echo '<div style="color:' . $colors['text'] . '; font-size:10px;">JSON Files</div>';
         echo '</div>';
         
         echo '<div style="background:#fff3e0; padding:8px; border-radius:3px; text-align:center;">';
         echo '<div style="font-size:24px; font-weight:bold; color:#f57c00;">' . $stats['total_recurring'] . '</div>';
-        echo '<div style="color:#666; font-size:10px;">Recurring</div>';
+        echo '<div style="color:' . $colors['text'] . '; font-size:10px;">Recurring</div>';
         echo '</div>';
         
         echo '</div>';
         
         // Last scan time
         if (!empty($stats['last_scan'])) {
-            echo '<div style="margin-top:8px; color:#666; font-size:10px;">Last scanned: ' . hsc($stats['last_scan']) . '</div>';
+            echo '<div style="margin-top:8px; color:' . $colors['text'] . '; font-size:10px;">Last scanned: ' . hsc($stats['last_scan']) . '</div>';
         }
         
         echo '</div>';
@@ -720,7 +739,7 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
         if (!empty($stats['by_namespace'])) {
             echo '<details style="margin-top:12px;">';
             echo '<summary style="cursor:pointer; padding:6px; background:#e9e9e9; border-radius:3px; font-size:11px; font-weight:bold;">View Breakdown by Namespace</summary>';
-            echo '<div style="margin-top:8px; max-height:200px; overflow-y:auto; border:1px solid #ddd; border-radius:3px;">';
+            echo '<div style="margin-top:8px; max-height:200px; overflow-y:auto; border:1px solid ' . $colors['border'] . '; border-radius:3px;">';
             echo '<table style="width:100%; border-collapse:collapse; font-size:11px;">';
             echo '<thead style="position:sticky; top:0; background:#f5f5f5;">';
             echo '<tr>';
@@ -744,16 +763,16 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
         
         echo '</div>';
         
-        // Cleanup Events Section - Redesigned for compact, sleek look
-        echo '<div style="background:#f9f9f9; padding:12px; margin:10px 0; border-left:3px solid #ff9800; border-radius:3px; max-width:1200px;">';
-        echo '<h3 style="margin:0 0 6px 0; color:#f57c00; font-size:16px;">🧹 Cleanup Old Events</h3>';
-        echo '<p style="color:#666; font-size:11px; margin:0 0 12px;">Delete events based on criteria below. Automatic backup created before deletion.</p>';
+        // Cleanup Events Section
+        echo '<div style="background:' . $colors['bg'] . '; padding:12px; margin:10px 0; border-left:3px solid #00cc07; border-radius:3px; max-width:1200px;">';
+        echo '<h3 style="margin:0 0 6px 0; color:#00cc07; font-size:16px;">🧹 Cleanup Old Events</h3>';
+        echo '<p style="color:' . $colors['text'] . '; font-size:11px; margin:0 0 12px;">Delete events based on criteria below. Automatic backup created before deletion.</p>';
         
         echo '<form method="post" action="?do=admin&page=calendar&tab=manage" id="cleanupForm">';
         echo '<input type="hidden" name="action" value="cleanup_events">';
         
         // Compact options layout
-        echo '<div style="background:white; padding:10px; border:1px solid #e0e0e0; border-radius:3px; margin-bottom:10px;">';
+        echo '<div style="background:' . $colors['bg'] . '; padding:10px; border:1px solid ' . $colors['border'] . '; border-radius:3px; margin-bottom:10px;">';
         
         // Radio buttons in a row
         echo '<div style="display:flex; gap:20px; margin-bottom:10px; padding-bottom:8px; border-bottom:1px solid #f0f0f0;">';
@@ -773,7 +792,7 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
         
         // Age options
         echo '<div id="age-options" style="padding:6px 0;">';
-        echo '<span style="font-size:11px; color:#666; margin-right:8px;">Delete events older than:</span>';
+        echo '<span style="font-size:11px; color:' . $colors['text'] . '; margin-right:8px;">Delete events older than:</span>';
         echo '<select name="age_value" style="width:50px; padding:3px 4px; font-size:11px; border:1px solid #d0d0d0; border-radius:3px; margin-right:4px;">';
         for ($i = 1; $i <= 24; $i++) {
             $sel = $i === 6 ? ' selected' : '';
@@ -788,23 +807,23 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
         
         // Status options
         echo '<div id="status-options" style="padding:6px 0; opacity:0.4;">';
-        echo '<span style="font-size:11px; color:#666; margin-right:8px;">Delete:</span>';
+        echo '<span style="font-size:11px; color:' . $colors['text'] . '; margin-right:8px;">Delete:</span>';
         echo '<label style="display:inline-block; font-size:11px; margin-right:12px; cursor:pointer;"><input type="checkbox" name="delete_completed" value="1" style="margin-right:3px;"> Completed tasks</label>';
         echo '<label style="display:inline-block; font-size:11px; cursor:pointer;"><input type="checkbox" name="delete_past" value="1" style="margin-right:3px;"> Past events</label>';
         echo '</div>';
         
         // Range options
         echo '<div id="range-options" style="padding:6px 0; opacity:0.4;">';
-        echo '<span style="font-size:11px; color:#666; margin-right:8px;">From:</span>';
+        echo '<span style="font-size:11px; color:' . $colors['text'] . '; margin-right:8px;">From:</span>';
         echo '<input type="date" name="range_start" style="padding:3px 6px; font-size:11px; border:1px solid #d0d0d0; border-radius:3px; margin-right:10px;">';
-        echo '<span style="font-size:11px; color:#666; margin-right:8px;">To:</span>';
+        echo '<span style="font-size:11px; color:' . $colors['text'] . '; margin-right:8px;">To:</span>';
         echo '<input type="date" name="range_end" style="padding:3px 6px; font-size:11px; border:1px solid #d0d0d0; border-radius:3px;">';
         echo '</div>';
         
         echo '</div>';
         
         // Namespace filter - compact
-        echo '<div style="background:white; padding:8px 10px; border:1px solid #e0e0e0; border-radius:3px; margin-bottom:10px; display:flex; align-items:center; gap:8px;">';
+        echo '<div style="background:' . $colors['bg'] . '; padding:8px 10px; border:1px solid ' . $colors['border'] . '; border-radius:3px; margin-bottom:10px; display:flex; align-items:center; gap:8px;">';
         echo '<label style="font-size:11px; font-weight:600; white-space:nowrap; color:#555;">Namespace:</label>';
         echo '<input type="text" name="namespace_filter" placeholder="Leave empty for all, or specify: work, personal, etc." style="flex:1; padding:4px 8px; font-size:11px; border:1px solid #d0d0d0; border-radius:3px;">';
         echo '</div>';
@@ -842,7 +861,7 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
             formData.set(\'action\', \'preview_cleanup\');
             
             const preview = document.getElementById(\'cleanup-preview\');
-            preview.innerHTML = \'<div style="text-align:center; padding:20px; color:#666;">Loading preview...</div>\';
+            preview.innerHTML = \'<div style="text-align:center; padding:20px; color:' . $colors['text'] . ';">Loading preview...</div>\';
             preview.style.display = \'block\';
             
             fetch(\'?do=admin&page=calendar&tab=manage\', {
@@ -856,7 +875,7 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
                     
                     // Show debug info if available
                     if (data.debug) {
-                        html += \'<details style="margin-top:8px; font-size:11px; color:#666;">\';
+                        html += \'<details style="margin-top:8px; font-size:11px; color:' . $colors['text'] . ';">\';
                         html += \'<summary style="cursor:pointer;">Debug Info</summary>\';
                         html += \'<pre style="background:#f5f5f5; padding:6px; margin-top:4px; border-radius:3px; overflow-x:auto;">\' + JSON.stringify(data.debug, null, 2) + \'</pre>\';
                         html += \'</details>\';
@@ -866,7 +885,7 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
                 } else {
                     let html = \'<div style="background:#f8d7da; border:1px solid #f5c6cb; padding:10px; border-radius:3px; font-size:12px; color:#721c24;">\';
                     html += \'<strong>⚠️ Warning:</strong> The following \' + data.count + \' event(s) would be deleted:<br><br>\';
-                    html += \'<div style="max-height:150px; overflow-y:auto; margin-top:6px; background:white; padding:6px; border-radius:3px;">\';
+                    html += \'<div style="max-height:150px; overflow-y:auto; margin-top:6px; background:' . $colors['bg'] . '; padding:6px; border-radius:3px;">\';
                     data.events.forEach(evt => {
                         html += \'<div style="padding:3px; border-bottom:1px solid #eee; font-size:11px;">\';
                         html += \'• \' + evt.title + \' (\' + evt.date + \')\';
@@ -892,17 +911,17 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
         echo '</div>';
         
         // Recurring Events Section
-        echo '<div style="background:#f9f9f9; padding:12px; margin:10px 0; border-left:3px solid #00cc07; border-radius:3px; max-width:1200px;">';
+        echo '<div style="background:' . $colors['bg'] . '; padding:12px; margin:10px 0; border-left:3px solid #00cc07; border-radius:3px; max-width:1200px;">';
         echo '<h3 style="margin:0 0 8px 0; color:#00cc07; font-size:16px;">🔄 Recurring Events</h3>';
         
         $recurringEvents = $this->findRecurringEvents();
         
         if (empty($recurringEvents)) {
-            echo '<p style="color:#666; font-size:13px; margin:5px 0;">No recurring events found.</p>';
+            echo '<p style="color:' . $colors['text'] . '; font-size:13px; margin:5px 0;">No recurring events found.</p>';
         } else {
             // Search bar
             echo '<div style="margin-bottom:8px;">';
-            echo '<input type="text" id="searchRecurring" onkeyup="filterRecurringEvents()" placeholder="🔍 Search recurring events..." style="width:100%; padding:6px 10px; border:1px solid #ddd; border-radius:3px; font-size:12px;">';
+            echo '<input type="text" id="searchRecurring" onkeyup="filterRecurringEvents()" placeholder="🔍 Search recurring events..." style="width:100%; padding:6px 10px; border:1px solid ' . $colors['border'] . '; border-radius:3px; font-size:12px;">';
             echo '</div>';
             
             echo '<style>
@@ -922,7 +941,7 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
                     display: none;
                 }
             </style>';
-            echo '<div style="max-height:250px; overflow-y:auto; border:1px solid #ddd; border-radius:3px;">';
+            echo '<div style="max-height:250px; overflow-y:auto; border:1px solid ' . $colors['border'] . '; border-radius:3px;">';
             echo '<table id="recurringTable" style="width:100%; border-collapse:collapse; font-size:11px;">';
             echo '<thead style="position:sticky; top:0; background:#e9e9e9;">';
             echo '<tr>';
@@ -950,18 +969,18 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
             
             echo '</tbody></table>';
             echo '</div>';
-            echo '<p style="color:#666; font-size:10px; margin:5px 0 0;">Total: ' . count($recurringEvents) . ' series</p>';
+            echo '<p style="color:' . $colors['text'] . '; font-size:10px; margin:5px 0 0;">Total: ' . count($recurringEvents) . ' series</p>';
         }
         echo '</div>';
         
         // Compact Tree-based Namespace Manager
-        echo '<div style="background:#f9f9f9; padding:12px; margin:10px 0; border-left:3px solid #00cc07; border-radius:3px; max-width:1200px;">';
+        echo '<div style="background:' . $colors['bg'] . '; padding:12px; margin:10px 0; border-left:3px solid #00cc07; border-radius:3px; max-width:1200px;">';
         echo '<h3 style="margin:0 0 8px 0; color:#00cc07; font-size:16px;">📁 Namespace Explorer</h3>';
-        echo '<p style="color:#666; font-size:11px; margin:0 0 8px;">Select events and move between namespaces. Drag & drop also supported.</p>';
+        echo '<p style="color:' . $colors['text'] . '; font-size:11px; margin:0 0 8px;">Select events and move between namespaces. Drag & drop also supported.</p>';
         
         // Search bar
         echo '<div style="margin-bottom:8px;">';
-        echo '<input type="text" id="searchEvents" onkeyup="filterEvents()" placeholder="🔍 Search events by title..." style="width:100%; padding:6px 10px; border:1px solid #ddd; border-radius:3px; font-size:12px;">';
+        echo '<input type="text" id="searchEvents" onkeyup="filterEvents()" placeholder="🔍 Search events by title..." style="width:100%; padding:6px 10px; border:1px solid ' . $colors['border'] . '; border-radius:3px; font-size:12px;">';
         echo '</div>';
         
         $eventsByNamespace = $this->getEventsByNamespace();
@@ -974,7 +993,7 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
         echo '<button type="button" onclick="deselectAll()" style="background:#666; color:white; border:none; padding:4px 8px; border-radius:2px; cursor:pointer; font-size:11px;">☐ None</button>';
         echo '<button type="button" onclick="deleteSelected()" style="background:#e74c3c; color:white; border:none; padding:4px 8px; border-radius:2px; cursor:pointer; font-size:11px; margin-left:10px;">🗑️ Delete</button>';
         echo '<span style="margin-left:10px;">Move to:</span>';
-        echo '<input list="namespaceList" name="target_namespace" required style="padding:3px 6px; border:1px solid #ddd; border-radius:2px; font-size:11px; min-width:150px;" placeholder="Type or select...">';
+        echo '<input list="namespaceList" name="target_namespace" required style="padding:3px 6px; border:1px solid ' . $colors['border'] . '; border-radius:2px; font-size:11px; min-width:150px;" placeholder="Type or select...">';
         echo '<datalist id="namespaceList">';
         echo '<option value="">(default)</option>';
         foreach (array_keys($eventsByNamespace) as $ns) {
@@ -992,7 +1011,7 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
         
         // Event list with checkboxes
         echo '<div>';
-        echo '<div style="max-height:450px; overflow-y:auto; border:1px solid #ddd; border-radius:3px; background:white;">';
+        echo '<div style="max-height:450px; overflow-y:auto; border:1px solid ' . $colors['border'] . '; border-radius:3px; background:' . $colors['bg'] . ';">';
         
         foreach ($eventsByNamespace as $namespace => $data) {
             $nsId = 'ns_' . md5($namespace);
@@ -1009,6 +1028,7 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
             echo '</div>';
             echo '<div style="display:flex; gap:3px; align-items:center;">';
             echo '<span style="background:#00cc07; color:white; padding:0px 4px; border-radius:6px; font-size:9px; line-height:14px;">' . $eventCount . '</span>';
+            echo '<button type="button" onclick="renameNamespace(\'' . hsc($namespace) . '\')" style="background:#3498db; color:white; border:none; padding:1px 4px; border-radius:2px; cursor:pointer; font-size:9px; line-height:14px;" title="Rename namespace">✏️</button>';
             echo '<button type="button" onclick="deleteNamespace(\'' . hsc($namespace) . '\')" style="background:#e74c3c; color:white; border:none; padding:1px 4px; border-radius:2px; cursor:pointer; font-size:9px; line-height:14px;">🗑️</button>';
             echo '</div>';
             echo '</div>';
@@ -1037,10 +1057,10 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
         // Drop zones - ultra compact
         echo '<div>';
         echo '<div style="background:#00cc07; color:white; padding:3px 6px; border-radius:3px 3px 0 0; font-size:11px; font-weight:bold;">🎯 Drop Target</div>';
-        echo '<div style="border:1px solid #ddd; border-top:none; border-radius:0 0 3px 3px; max-height:450px; overflow-y:auto; background:white;">';
+        echo '<div style="border:1px solid ' . $colors['border'] . '; border-top:none; border-radius:0 0 3px 3px; max-height:450px; overflow-y:auto; background:' . $colors['bg'] . ';">';
         
         foreach (array_keys($eventsByNamespace) as $namespace) {
-            echo '<div ondrop="drop(event, \'' . hsc($namespace) . '\')" ondragover="allowDrop(event)" style="padding:5px 6px; border-bottom:1px solid #eee; background:white; min-height:28px;" onmouseover="this.style.background=\'#f0fff0\'" onmouseout="this.style.background=\'white\'">';
+            echo '<div ondrop="drop(event, \'' . hsc($namespace) . '\')" ondragover="allowDrop(event)" style="padding:5px 6px; border-bottom:1px solid #eee; background:' . $colors['bg'] . '; min-height:28px;" onmouseover="this.style.background=\'#f0fff0\'" onmouseout="this.style.background=\'white\'">';
             echo '<div style="font-size:11px; font-weight:600; color:#00cc07;">📁 ' . hsc($namespace ?: '(default)') . '</div>';
             echo '<div style="color:#999; font-size:9px; margin-top:1px;">Drop here</div>';
             echo '</div>';
@@ -1060,23 +1080,13 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
         let sortDirection = {}; // Track sort direction for each column
         
         function sortRecurringTable(columnIndex) {
-            console.log("sortRecurringTable called with column:", columnIndex);
             const table = document.getElementById("recurringTable");
             const tbody = document.getElementById("recurringTableBody");
-            console.log("Table:", table, "Tbody:", tbody);
             
-            if (!table || !tbody) {
-                console.error("Table or tbody not found!");
-                return;
-            }
+            if (!table || !tbody) return;
             
             const rows = Array.from(tbody.querySelectorAll("tr"));
-            console.log("Rows found:", rows.length);
-            
-            if (rows.length === 0) {
-                console.warn("No rows to sort");
-                return;
-            }
+            if (rows.length === 0) return;
             
             // Toggle sort direction for this column
             if (!sortDirection[columnIndex]) {
@@ -1086,7 +1096,6 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
             }
             
             const direction = sortDirection[columnIndex];
-            console.log("Sorting column", columnIndex, "in", direction, "order");
             const isNumeric = columnIndex === 4; // Count column
             
             // Sort rows
@@ -1379,6 +1388,34 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
             form.submit();
         }
         
+        function renameNamespace(oldNamespace) {
+            const displayName = oldNamespace || "(default)";
+            const newName = prompt("Rename namespace: " + displayName + "\\n\\nEnter new name:", oldNamespace);
+            if (newName === null || newName === oldNamespace) {
+                return; // Cancelled or no change
+            }
+            const form = document.createElement("form");
+            form.method = "POST";
+            form.action = "?do=admin&page=calendar&tab=manage";
+            const actionInput = document.createElement("input");
+            actionInput.type = "hidden";
+            actionInput.name = "action";
+            actionInput.value = "rename_namespace";
+            form.appendChild(actionInput);
+            const oldInput = document.createElement("input");
+            oldInput.type = "hidden";
+            oldInput.name = "old_namespace";
+            oldInput.value = oldNamespace;
+            form.appendChild(oldInput);
+            const newInput = document.createElement("input");
+            newInput.type = "hidden";
+            newInput.name = "new_namespace";
+            newInput.value = newName;
+            form.appendChild(newInput);
+            document.body.appendChild(form);
+            form.submit();
+        }
+        
         let draggedEvent = null;
         
         function dragStart(event, eventId) {
@@ -1469,22 +1506,42 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
         }
         
         function editRecurringSeries(title, namespace) {
-            // Get available namespaces
-            const namespaces = Array.from(document.querySelectorAll("[id^=ns_]"))
-                .map(el => {
-                    const match = el.id.match(/^ns_[a-f0-9]+$/);
-                    if (!match) return null;
-                    const nsSpan = el.querySelector("span:nth-child(3)");
-                    if (!nsSpan) return null;
-                    return nsSpan.textContent.replace("📁 ", "").replace("(default)", "").trim();
-                })
-                .filter((ns, idx, arr) => ns && arr.indexOf(ns) === idx);
+            // Get available namespaces from the namespace explorer
+            const namespaces = new Set();
             
-            let nsOptions = `<option value="">Keep current (${namespace || "(default)"})</option>`;
-            nsOptions += `<option value="">(default)</option>`;
-            for (const ns of namespaces) {
-                if (ns && ns !== "(default)" && ns !== namespace) {
-                    nsOptions += `<option value="${ns}">${ns}</option>`;
+            // Method 1: Try to get from namespace explorer folder names
+            document.querySelectorAll("[id^=ns_]").forEach(el => {
+                const nsSpan = el.querySelector("span:nth-child(3)");
+                if (nsSpan) {
+                    let nsText = nsSpan.textContent.replace("📁 ", "").trim();
+                    if (nsText && nsText !== "(default)") {
+                        namespaces.add(nsText);
+                    }
+                }
+            });
+            
+            // Method 2: Get from datalist if it exists
+            document.querySelectorAll("#namespaceList option").forEach(opt => {
+                if (opt.value && opt.value !== "") {
+                    namespaces.add(opt.value);
+                }
+            });
+            
+            // Convert to sorted array
+            const nsArray = Array.from(namespaces).sort();
+            
+            // Build options - include current namespace AND all others
+            let nsOptions = "<option value=\\"\\">(default)</option>";
+            
+            // Add current namespace if it\'s not default
+            if (namespace && namespace !== "") {
+                nsOptions += "<option value=\\"" + namespace + "\\" selected>" + namespace + " (current)</option>";
+            }
+            
+            // Add all other namespaces
+            for (const ns of nsArray) {
+                if (ns !== namespace) {
+                    nsOptions += "<option value=\\"" + ns + "\\">" + ns + "</option>";
                 }
             }
             
@@ -1500,32 +1557,32 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
             });
             
             dialog.innerHTML = `
-                <div style="background:white; padding:20px; border-radius:8px; min-width:500px; max-width:700px; max-height:90vh; overflow-y:auto;">
+                <div style="background:' . $colors['bg'] . '; padding:20px; border-radius:8px; min-width:500px; max-width:700px; max-height:90vh; overflow-y:auto;">
                     <h3 style="margin:0 0 15px; color:#00cc07;">Edit Recurring Event</h3>
-                    <p style="margin:0 0 15px; color:#666; font-size:13px;">Changes will apply to ALL occurrences of: <strong>${title}</strong></p>
+                    <p style="margin:0 0 15px; color:' . $colors['text'] . '; font-size:13px;">Changes will apply to ALL occurrences of: <strong>${title}</strong></p>
                     
                     <form id="editRecurringForm" style="display:flex; flex-direction:column; gap:12px;">
                         <div>
                             <label style="display:block; font-weight:bold; margin-bottom:4px; font-size:13px;">New Title:</label>
-                            <input type="text" name="new_title" value="${title}" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:3px;" required>
+                            <input type="text" name="new_title" value="${title}" style="width:100%; padding:8px; border:1px solid ' . $colors['border'] . '; border-radius:3px;" required>
                         </div>
                         
                         <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">
                             <div>
                                 <label style="display:block; font-weight:bold; margin-bottom:4px; font-size:13px;">Start Time:</label>
-                                <input type="time" name="start_time" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:3px;">
+                                <input type="time" name="start_time" style="width:100%; padding:8px; border:1px solid ' . $colors['border'] . '; border-radius:3px;">
                                 <small style="color:#999; font-size:11px;">Leave blank to keep current</small>
                             </div>
                             <div>
                                 <label style="display:block; font-weight:bold; margin-bottom:4px; font-size:13px;">End Time:</label>
-                                <input type="time" name="end_time" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:3px;">
+                                <input type="time" name="end_time" style="width:100%; padding:8px; border:1px solid ' . $colors['border'] . '; border-radius:3px;">
                                 <small style="color:#999; font-size:11px;">Leave blank to keep current</small>
                             </div>
                         </div>
                         
                         <div>
                             <label style="display:block; font-weight:bold; margin-bottom:4px; font-size:13px;">Interval (days between occurrences):</label>
-                            <select name="interval" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:3px;">
+                            <select name="interval" style="width:100%; padding:8px; border:1px solid ' . $colors['border'] . '; border-radius:3px;">
                                 <option value="">Keep current interval</option>
                                 <option value="1">Daily (1 day)</option>
                                 <option value="7">Weekly (7 days)</option>
@@ -1537,7 +1594,7 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
                         
                         <div>
                             <label style="display:block; font-weight:bold; margin-bottom:4px; font-size:13px;">Move to Namespace:</label>
-                            <select name="new_namespace" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:3px;">
+                            <select name="new_namespace" style="width:100%; padding:8px; border:1px solid ' . $colors['border'] . '; border-radius:3px;">
                                 ${nsOptions}
                             </select>
                         </div>
@@ -1634,40 +1691,35 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
         </script>';
     }
     
-    private function renderUpdateTab() {
+    private function renderUpdateTab($colors = null) {
         global $INPUT;
         
-        echo '<h2 style="margin:10px 0; font-size:20px;">📦 Update Plugin</h2>';
+        // Use defaults if not provided
+        if ($colors === null) {
+            $colors = $this->getTemplateColors();
+        }
         
-        // Clear Cache button
-        echo '<div style="margin-bottom:15px;">';
-        echo '<form method="post" action="?do=admin&page=calendar&tab=update" style="display:inline; margin:0;">';
-        echo '<input type="hidden" name="action" value="clear_cache">';
-        echo '<input type="hidden" name="tab" value="update">';
-        echo '<button type="submit" onclick="return confirm(\'Clear all DokuWiki cache? This will refresh all plugin files.\')" style="background:#ff9800; color:white; padding:10px 20px; border:none; border-radius:3px; cursor:pointer; font-size:14px; font-weight:bold; box-shadow:0 2px 4px rgba(0,0,0,0.1);">🗑️ Clear Cache</button>';
-        echo '</form>';
-        echo '<p style="margin:8px 0 0 0; font-size:12px; color:#666;">Clear the DokuWiki cache if changes aren\'t appearing or after updating the plugin.</p>';
-        echo '</div>';
+        echo '<h2 style="margin:10px 0; font-size:20px;">📦 Update Plugin</h2>';
         
         // Show message if present
         if ($INPUT->has('msg')) {
             $msg = hsc($INPUT->str('msg'));
             $type = $INPUT->str('msgtype', 'success');
             $class = ($type === 'success') ? 'msg success' : 'msg error';
-            echo "<div class=\"$class\" style=\"padding:10px; margin:10px 0; border-left:3px solid " . ($type === 'success' ? '#28a745' : '#dc3545') . "; background:" . ($type === 'success' ? '#d4edda' : '#f8d7da') . "; border-radius:3px; max-width:900px;\">";
+            echo "<div class=\"$class\" style=\"padding:10px; margin:10px 0; border-left:3px solid " . ($type === 'success' ? '#28a745' : '#dc3545') . "; background:" . ($type === 'success' ? '#d4edda' : '#f8d7da') . "; border-radius:3px; max-width:1200px;\">";
             echo $msg;
             echo "</div>";
         }
         
-        // Show current version
+        // Show current version FIRST (MOVED TO TOP)
         $pluginInfo = DOKU_PLUGIN . 'calendar/plugin.info.txt';
         $info = ['version' => 'Unknown', 'date' => 'Unknown', 'name' => 'Calendar Plugin', 'author' => 'Unknown', 'email' => '', 'desc' => ''];
         if (file_exists($pluginInfo)) {
             $info = array_merge($info, confToHash($pluginInfo));
         }
         
-        echo '<div style="background:#f9f9f9; padding:12px; margin:10px 0; border-left:3px solid #00cc07; border-radius:3px; max-width:900px;">';
-        echo '<h3 style="margin:0 0 8px 0; color:#00cc07; font-size:16px;">' . hsc($info['name']) . '</h3>';
+        echo '<div style="background:' . $colors['bg'] . '; padding:12px; margin:10px 0; border-left:3px solid #00cc07; border-radius:3px; max-width:1200px;">';
+        echo '<h3 style="margin:0 0 8px 0; color:#00cc07; font-size:16px;">📋 Current Version</h3>';
         echo '<div style="font-size:12px; line-height:1.6;">';
         echo '<div style="margin:4px 0;"><strong>Version:</strong> ' . hsc($info['version']) . ' (' . hsc($info['date']) . ')</div>';
         echo '<div style="margin:4px 0;"><strong>Author:</strong> ' . hsc($info['author']) . ($info['email'] ? ' &lt;' . hsc($info['email']) . '&gt;' : '') . '</div>';
@@ -1682,7 +1734,7 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
         $pluginWritable = is_writable($pluginDir);
         $parentWritable = is_writable(DOKU_PLUGIN);
         
-        echo '<div style="margin-top:8px; padding-top:8px; border-top:1px solid #ddd;">';
+        echo '<div style="margin-top:8px; padding-top:8px; border-top:1px solid ' . $colors['border'] . ';">';
         if ($pluginWritable && $parentWritable) {
             echo '<p style="margin:5px 0; font-size:13px; color:#28a745;"><strong>✅ Permissions:</strong> OK - ready to update</p>';
         } else {
@@ -1693,87 +1745,25 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
             if (!$parentWritable) {
                 echo '<p style="margin:2px 0 2px 20px; font-size:12px; color:#dc3545;">Parent directory not writable</p>';
             }
-            echo '<p style="margin:5px 0; font-size:12px; color:#666;">Fix with: <code style="background:#f0f0f0; padding:2px 4px; border-radius:2px;">chmod -R 755 ' . DOKU_PLUGIN . 'calendar/</code></p>';
-            echo '<p style="margin:2px 0; font-size:12px; color:#666;">Or: <code style="background:#f0f0f0; padding:2px 4px; border-radius:2px;">chown -R www-data:www-data ' . DOKU_PLUGIN . 'calendar/</code></p>';
+            echo '<p style="margin:5px 0; font-size:12px; color:' . $colors['text'] . ';">Fix with: <code style="background:#f0f0f0; padding:2px 4px; border-radius:2px;">chmod -R 755 ' . DOKU_PLUGIN . 'calendar/</code></p>';
+            echo '<p style="margin:2px 0; font-size:12px; color:' . $colors['text'] . ';">Or: <code style="background:#f0f0f0; padding:2px 4px; border-radius:2px;">chown -R www-data:www-data ' . DOKU_PLUGIN . 'calendar/</code></p>';
         }
         echo '</div>';
         
         echo '</div>';
         
-        // Changelog section
-        echo '<div style="background:#f9f9f9; padding:12px; margin:10px 0; border-left:3px solid #7b1fa2; border-radius:3px; max-width:900px;">';
-        echo '<h3 style="margin:0 0 8px 0; color:#7b1fa2; font-size:16px;">📋 Recent Changes</h3>';
+        // Combined upload and notes section (SIDE BY SIDE)
+        echo '<div style="display:flex; gap:15px; max-width:1200px; margin:10px 0;">';
         
-        $changelogFile = DOKU_PLUGIN . 'calendar/CHANGELOG.md';
-        if (file_exists($changelogFile)) {
-            $changelog = file_get_contents($changelogFile);
-            
-            // Parse markdown and show last 10 versions
-            $lines = explode("\n", $changelog);
-            $versionsShown = 0;
-            $maxVersions = 10;
-            $inVersion = false;
-            $changelogHtml = '<div style="font-size:12px; line-height:1.7; max-height:100px; overflow-y:auto; padding-right:10px;">';
-            
-            foreach ($lines as $line) {
-                $line = trim($line);
-                
-                // Version header (## Version X.X.X)
-                if (preg_match('/^## Version (.+)$/', $line, $matches)) {
-                    if ($versionsShown >= $maxVersions) break;
-                    $versionsShown++;
-                    $inVersion = true;
-                    $changelogHtml .= '<div style="margin-top:' . ($versionsShown > 1 ? '16px' : '0') . '; padding:8px; background:#fff; border-radius:3px; border-left:3px solid #00cc07;">';
-                    $changelogHtml .= '<div style="font-weight:bold; color:#00cc07; margin-bottom:6px;">🏷️ ' . hsc($matches[1]) . '</div>';
-                }
-                // List items (- **Added:** text)
-                elseif (preg_match('/^- \*\*(.+?):\*\* (.+)$/', $line, $matches)) {
-                    $type = $matches[1];
-                    $description = $matches[2];
-                    
-                    // Color-code by type
-                    $color = '#666';
-                    $icon = '•';
-                    if ($type === 'Added') { $color = '#28a745'; $icon = '✨'; }
-                    elseif ($type === 'Fixed') { $color = '#dc3545'; $icon = '🔧'; }
-                    elseif ($type === 'Changed') { $color = '#7b1fa2'; $icon = '🔄'; }
-                    elseif ($type === 'Improved') { $color = '#ff9800'; $icon = '⚡'; }
-                    elseif ($type === 'Development') { $color = '#6c757d'; $icon = '🛠️'; }
-                    
-                    $changelogHtml .= '<div style="margin:3px 0 3px 10px; color:' . $color . ';">';
-                    $changelogHtml .= '<strong>' . $icon . ' ' . hsc($type) . ':</strong> <span style="color:#333;">' . hsc($description) . '</span>';
-                    $changelogHtml .= '</div>';
-                }
-                // Close version block on empty line after items
-                elseif ($inVersion && $line === '' && $versionsShown > 0) {
-                    $changelogHtml .= '</div>';
-                    $inVersion = false;
-                }
-            }
-            
-            // Close last version if still open
-            if ($inVersion) {
-                $changelogHtml .= '</div>';
-            }
-            
-            $changelogHtml .= '</div>';
-            
-            echo $changelogHtml;
-        } else {
-            echo '<p style="color:#999; font-size:13px; font-style:italic;">Changelog not available</p>';
-        }
-        
-        echo '</div>';
-        
-        // Upload form
-        echo '<div style="background:#f9f9f9; padding:12px; margin:10px 0; border-left:3px solid #00cc07; border-radius:3px; max-width:900px;">';
-        echo '<h3 style="margin:0 0 8px 0; color:#00cc07; font-size:16px;">Upload New Version</h3>';
-        echo '<p style="color:#666; font-size:13px; margin:0 0 10px;">Upload a calendar plugin ZIP file to update. Your configuration will be preserved.</p>';
+        // Left side - Upload form (60% width)
+        echo '<div style="flex:1; min-width:0; background:' . $colors['bg'] . '; padding:12px; border-left:3px solid #00cc07; border-radius:3px;">';
+        echo '<h3 style="margin:0 0 8px 0; color:#00cc07; font-size:16px;">📤 Upload New Version</h3>';
+        echo '<p style="color:' . $colors['text'] . '; font-size:13px; margin:0 0 10px;">Upload a calendar plugin ZIP file to update. Your configuration will be preserved.</p>';
         
         echo '<form method="post" action="?do=admin&page=calendar&tab=update" enctype="multipart/form-data" id="uploadForm">';
         echo '<input type="hidden" name="action" value="upload_update">';
         echo '<div style="margin:10px 0;">';
-        echo '<input type="file" name="plugin_zip" accept=".zip" required style="padding:8px; border:1px solid #ddd; border-radius:3px; font-size:13px;">';
+        echo '<input type="file" name="plugin_zip" accept=".zip" required style="padding:8px; border:1px solid ' . $colors['border'] . '; border-radius:3px; font-size:13px; width:100%;">';
         echo '</div>';
         echo '<div style="margin:10px 0;">';
         echo '<label style="display:flex; align-items:center; gap:8px; font-size:13px;">';
@@ -1781,23 +1771,187 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
         echo '<span>Create backup before updating (Recommended)</span>';
         echo '</label>';
         echo '</div>';
+        
+        // Buttons side by side
+        echo '<div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">';
         echo '<button type="submit" onclick="return confirmUpload()" style="background:#00cc07; color:white; padding:10px 20px; border:none; border-radius:3px; cursor:pointer; font-size:14px; font-weight:bold;">📤 Upload & Install</button>';
+        echo '</form>';
+        
+        // Clear Cache button (next to Upload button)
+        echo '<form method="post" action="?do=admin&page=calendar&tab=update" style="display:inline; margin:0;">';
+        echo '<input type="hidden" name="action" value="clear_cache">';
+        echo '<input type="hidden" name="tab" value="update">';
+        echo '<button type="submit" onclick="return confirm(\'Clear all DokuWiki cache? This will refresh all plugin files.\')" style="background:#ff9800; color:white; padding:10px 20px; border:none; border-radius:3px; cursor:pointer; font-size:14px; font-weight:bold;">🗑️ Clear Cache</button>';
         echo '</form>';
         echo '</div>';
         
-        // Warning box
-        echo '<div style="background:#fff3e0; border-left:3px solid #ff9800; padding:12px; margin:10px 0; border-radius:3px; max-width:900px;">';
+        echo '<p style="margin:8px 0 0 0; font-size:12px; color:' . $colors['text'] . ';">Clear the DokuWiki cache if changes aren\'t appearing or after updating the plugin.</p>';
+        echo '</div>';
+        
+        // Right side - Important Notes (40% width)
+        echo '<div style="flex:0 0 350px; min-width:0; background:#fff3e0; border-left:3px solid #ff9800; padding:12px; border-radius:3px;">';
         echo '<h4 style="margin:0 0 5px 0; color:#e65100; font-size:14px;">⚠️ Important Notes</h4>';
-        echo '<ul style="margin:5px 0; padding-left:20px; font-size:12px; color:#e65100;">';
+        echo '<ul style="margin:5px 0; padding-left:20px; font-size:12px; color:#e65100; line-height:1.6;">';
         echo '<li>This will replace all plugin files</li>';
         echo '<li>Configuration files (sync_config.php) will be preserved</li>';
         echo '<li>Event data will not be affected</li>';
-        echo '<li>Backup will be saved to: <code>calendar.backup.vX.X.X.YYYY-MM-DD_HH-MM-SS.zip</code></li>';
+        echo '<li>Backup will be saved to: <code style="font-size:10px;">calendar.backup.vX.X.X.YYYY-MM-DD_HH-MM-SS.zip</code></li>';
         echo '<li>Make sure the ZIP file is a valid calendar plugin</li>';
         echo '</ul>';
         echo '</div>';
         
-        // Backup list
+        echo '</div>'; // End flex container
+        
+        // Changelog section - Timeline viewer
+        echo '<div style="background:' . $colors['bg'] . '; padding:12px; margin:10px 0; border-left:3px solid #7b1fa2; border-radius:3px; max-width:1200px;">';
+        echo '<h3 style="margin:0 0 8px 0; color:#7b1fa2; font-size:16px;">📋 Version History</h3>';
+        
+        $changelogFile = DOKU_PLUGIN . 'calendar/CHANGELOG.md';
+        if (file_exists($changelogFile)) {
+            $changelog = file_get_contents($changelogFile);
+            
+            // Parse ALL versions into structured data
+            $lines = explode("\n", $changelog);
+            $versions = [];
+            $currentVersion = null;
+            
+            foreach ($lines as $line) {
+                $line = trim($line);
+                
+                // Version header (## Version X.X.X or ## Version X.X.X (date) - title)
+                if (preg_match('/^## Version (.+?)(?:\s*\(([^)]+)\))?\s*(?:-\s*(.+))?$/', $line, $matches)) {
+                    if ($currentVersion !== null) {
+                        $versions[] = $currentVersion;
+                    }
+                    $currentVersion = [
+                        'number' => trim($matches[1]),
+                        'date' => isset($matches[2]) ? trim($matches[2]) : '',
+                        'title' => isset($matches[3]) ? trim($matches[3]) : '',
+                        'items' => []
+                    ];
+                }
+                // List items (- **Type:** description)
+                elseif ($currentVersion !== null && preg_match('/^- \*\*(.+?):\*\* (.+)$/', $line, $matches)) {
+                    $currentVersion['items'][] = [
+                        'type' => $matches[1],
+                        'desc' => $matches[2]
+                    ];
+                }
+            }
+            // Don\'t forget last version
+            if ($currentVersion !== null) {
+                $versions[] = $currentVersion;
+            }
+            
+            $totalVersions = count($versions);
+            $uniqueId = 'changelog_' . substr(md5(microtime()), 0, 6);
+            
+            if ($totalVersions > 0) {
+                // Timeline navigation bar
+                echo '<div id="' . $uniqueId . '_wrap" style="position:relative;">';
+                
+                // Nav controls
+                echo '<div style="display:flex; align-items:center; gap:8px; margin-bottom:10px;">';
+                echo '<button id="' . $uniqueId . '_prev" onclick="changelogNav(\'' . $uniqueId . '\', -1)" style="background:none; border:1px solid ' . $colors['border'] . '; color:' . $colors['text'] . '; width:32px; height:32px; border-radius:50%; cursor:pointer; font-size:16px; display:flex; align-items:center; justify-content:center; transition:all 0.15s;" onmouseover="this.style.borderColor=\'#7b1fa2\'; this.style.color=\'#7b1fa2\'" onmouseout="this.style.borderColor=\'' . $colors['border'] . '\'; this.style.color=\'' . $colors['text'] . '\'">‹</button>';
+                echo '<div style="flex:1; text-align:center;">';
+                echo '<span id="' . $uniqueId . '_counter" style="font-size:11px; color:' . $colors['text'] . '; opacity:0.7;">1 of ' . $totalVersions . '</span>';
+                echo '</div>';
+                echo '<button id="' . $uniqueId . '_next" onclick="changelogNav(\'' . $uniqueId . '\', 1)" style="background:none; border:1px solid ' . $colors['border'] . '; color:' . $colors['text'] . '; width:32px; height:32px; border-radius:50%; cursor:pointer; font-size:16px; display:flex; align-items:center; justify-content:center; transition:all 0.15s;" onmouseover="this.style.borderColor=\'#7b1fa2\'; this.style.color=\'#7b1fa2\'" onmouseout="this.style.borderColor=\'' . $colors['border'] . '\'; this.style.color=\'' . $colors['text'] . '\'">›</button>';
+                echo '</div>';
+                
+                // Version cards (one per version, only first visible)
+                foreach ($versions as $i => $ver) {
+                    $display = ($i === 0) ? 'block' : 'none';
+                    echo '<div class="' . $uniqueId . '_card" id="' . $uniqueId . '_card_' . $i . '" style="display:' . $display . '; padding:10px; background:' . $colors['bg'] . '; border:1px solid ' . $colors['border'] . '; border-left:3px solid #7b1fa2; border-radius:4px; transition:opacity 0.2s;">';
+                    
+                    // Version header
+                    echo '<div style="display:flex; align-items:baseline; gap:8px; margin-bottom:8px;">';
+                    echo '<span style="font-weight:bold; color:#7b1fa2; font-size:14px;">v' . hsc($ver['number']) . '</span>';
+                    if ($ver['date']) {
+                        echo '<span style="font-size:11px; color:' . $colors['text'] . '; opacity:0.6;">' . hsc($ver['date']) . '</span>';
+                    }
+                    echo '</div>';
+                    if ($ver['title']) {
+                        echo '<div style="font-size:12px; font-weight:600; color:' . $colors['text'] . '; margin-bottom:8px;">' . hsc($ver['title']) . '</div>';
+                    }
+                    
+                    // Change items
+                    if (!empty($ver['items'])) {
+                        echo '<div style="font-size:12px; line-height:1.7;">';
+                        foreach ($ver['items'] as $item) {
+                            $color = '#666'; $icon = '•';
+                            $t = $item['type'];
+                            if ($t === 'Added') { $color = '#28a745'; $icon = '✨'; }
+                            elseif ($t === 'Fixed') { $color = '#dc3545'; $icon = '🔧'; }
+                            elseif ($t === 'Changed') { $color = '#7b1fa2'; $icon = '🔄'; }
+                            elseif ($t === 'Improved') { $color = '#ff9800'; $icon = '⚡'; }
+                            elseif ($t === 'Removed') { $color = '#e91e63'; $icon = '🗑️'; }
+                            elseif ($t === 'Development' || $t === 'Refactored') { $color = '#6c757d'; $icon = '🛠️'; }
+                            elseif ($t === 'Result') { $color = '#2196f3'; $icon = '✅'; }
+                            
+                            echo '<div style="margin:2px 0; padding-left:4px;">';
+                            echo '<span style="color:' . $color . '; font-weight:600;">' . $icon . ' ' . hsc($item['type']) . ':</span> ';
+                            echo '<span style="color:' . $colors['text'] . ';">' . hsc($item['desc']) . '</span>';
+                            echo '</div>';
+                        }
+                        echo '</div>';
+                    } else {
+                        echo '<div style="font-size:11px; color:' . $colors['text'] . '; opacity:0.5; font-style:italic;">No detailed changes recorded</div>';
+                    }
+                    
+                    echo '</div>';
+                }
+                
+                echo '</div>'; // wrap
+                
+                // JavaScript for navigation
+                echo '<script>
+                (function() {
+                    var id = "' . $uniqueId . '";
+                    var total = ' . $totalVersions . ';
+                    var current = 0;
+                    
+                    window.changelogNav = function(uid, dir) {
+                        if (uid !== id) return;
+                        var next = current + dir;
+                        if (next < 0 || next >= total) return;
+                        
+                        // Hide current
+                        var curCard = document.getElementById(id + "_card_" + current);
+                        if (curCard) curCard.style.display = "none";
+                        
+                        // Show next
+                        current = next;
+                        var nextCard = document.getElementById(id + "_card_" + current);
+                        if (nextCard) nextCard.style.display = "block";
+                        
+                        // Update counter
+                        var counter = document.getElementById(id + "_counter");
+                        if (counter) counter.textContent = (current + 1) + " of " + total;
+                        
+                        // Update button states
+                        var prevBtn = document.getElementById(id + "_prev");
+                        var nextBtn = document.getElementById(id + "_next");
+                        if (prevBtn) prevBtn.style.opacity = (current === 0) ? "0.3" : "1";
+                        if (nextBtn) nextBtn.style.opacity = (current === total - 1) ? "0.3" : "1";
+                    };
+                    
+                    // Initialize button states
+                    var prevBtn = document.getElementById(id + "_prev");
+                    if (prevBtn) prevBtn.style.opacity = "0.3";
+                })();
+                </script>';
+                
+            } else {
+                echo '<p style="color:#999; font-size:13px; font-style:italic;">No versions found in changelog</p>';
+            }
+        } else {
+            echo '<p style="color:#999; font-size:13px; font-style:italic;">Changelog not available</p>';
+        }
+        
+        echo '</div>';
+        
+        // Backup list or manual backup section
         $backupDir = DOKU_PLUGIN;
         $backups = glob($backupDir . 'calendar*.zip');
         
@@ -1808,17 +1962,27 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
             return $name !== 'calendar.zip';
         });
         
+        // Always show backup section (even if no backups yet)
+        echo '<div id="backupSection" style="background:' . $colors['bg'] . '; padding:12px; margin:10px 0; border-left:3px solid #00cc07; border-radius:3px; max-width:900px;">';
+        echo '<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">';
+        echo '<h3 style="margin:0; color:#00cc07; font-size:16px;">📁 Backups</h3>';
+        
+        // Manual backup button
+        echo '<form method="post" action="?do=admin&page=calendar&tab=update" style="margin:0;">';
+        echo '<input type="hidden" name="action" value="create_manual_backup">';
+        echo '<button type="submit" onclick="return confirm(\'Create a backup of the current plugin version?\')" style="background:#00cc07; color:white; padding:6px 12px; border:none; border-radius:3px; cursor:pointer; font-size:12px; font-weight:bold;">💾 Create Backup Now</button>';
+        echo '</form>';
+        echo '</div>';
+        
         if (!empty($backups)) {
             rsort($backups); // Newest first
-            echo '<div style="background:#f9f9f9; padding:12px; margin:10px 0; border-left:3px solid #00cc07; border-radius:3px; max-width:900px;">';
-            echo '<h3 style="margin:0 0 8px 0; color:#00cc07; font-size:16px;">📁 Available Backups</h3>';
-            echo '<div style="max-height:200px; overflow-y:auto; border:1px solid #ddd; border-radius:3px; background:white;">';
-            echo '<table style="width:100%; border-collapse:collapse; font-size:12px;">';
+            echo '<div style="max-height:200px; overflow-y:auto; border:1px solid ' . $colors['border'] . '; border-radius:3px; background:' . $colors['bg'] . ';">';
+            echo '<table id="backupTable" style="width:100%; border-collapse:collapse; font-size:12px;">';
             echo '<thead style="position:sticky; top:0; background:#e9e9e9;">';
             echo '<tr>';
-            echo '<th style="padding:6px; text-align:left; border-bottom:2px solid #ddd;">Backup File</th>';
-            echo '<th style="padding:6px; text-align:left; border-bottom:2px solid #ddd;">Size</th>';
-            echo '<th style="padding:6px; text-align:left; border-bottom:2px solid #ddd;">Actions</th>';
+            echo '<th style="padding:6px; text-align:left; border-bottom:2px solid ' . $colors['border'] . ';">Backup File</th>';
+            echo '<th style="padding:6px; text-align:left; border-bottom:2px solid ' . $colors['border'] . ';">Size</th>';
+            echo '<th style="padding:6px; text-align:left; border-bottom:2px solid ' . $colors['border'] . ';">Actions</th>';
             echo '</tr></thead><tbody>';
             
             foreach ($backups as $backup) {
@@ -1838,8 +2002,10 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
             
             echo '</tbody></table>';
             echo '</div>';
-            echo '</div>';
+        } else {
+            echo '<p style="color:' . $colors['text'] . '; font-size:13px; margin:8px 0;">No backups yet. Click "Create Backup Now" to create your first backup.</p>';
         }
+        echo '</div>';
         
         echo '<script>
         function confirmUpload() {
@@ -1863,24 +2029,52 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
                 return;
             }
             
-            const form = document.createElement("form");
-            form.method = "POST";
-            form.action = "?do=admin&page=calendar&tab=update";
+            // Use AJAX to delete without page refresh
+            const formData = new FormData();
+            formData.append(\'action\', \'delete_backup\');
+            formData.append(\'backup_file\', filename);
             
-            const actionInput = document.createElement("input");
-            actionInput.type = "hidden";
-            actionInput.name = "action";
-            actionInput.value = "delete_backup";
-            form.appendChild(actionInput);
-            
-            const filenameInput = document.createElement("input");
-            filenameInput.type = "hidden";
-            filenameInput.name = "backup_file";
-            filenameInput.value = filename;
-            form.appendChild(filenameInput);
-            
-            document.body.appendChild(form);
-            form.submit();
+            fetch(\'?do=admin&page=calendar&tab=update\', {
+                method: \'POST\',
+                body: formData
+            })
+            .then(response => response.text())
+            .then(data => {
+                // Remove the row from the table
+                const rows = document.querySelectorAll(\'tr\');
+                rows.forEach(row => {
+                    if (row.textContent.includes(filename)) {
+                        row.style.transition = \'opacity 0.3s\';
+                        row.style.opacity = \'0\';
+                        setTimeout(() => {
+                            row.remove();
+                            // Check if table is now empty
+                            const tbody = document.querySelector(\'#backupTable tbody\');
+                            if (tbody && tbody.children.length === 0) {
+                                const backupSection = document.querySelector(\'#backupSection\');
+                                if (backupSection) {
+                                    backupSection.style.transition = \'opacity 0.3s\';
+                                    backupSection.style.opacity = \'0\';
+                                    setTimeout(() => backupSection.remove(), 300);
+                                }
+                            }
+                        }, 300);
+                    }
+                });
+                
+                // Show success message
+                const msg = document.createElement(\'div\');
+                msg.style.cssText = \'padding:10px; margin:10px 0; border-left:3px solid #28a745; background:#d4edda; border-radius:3px; max-width:900px; transition:opacity 0.3s;\';
+                msg.textContent = \'✓ Backup deleted: \' + filename;
+                document.querySelector(\'h2\').after(msg);
+                setTimeout(() => {
+                    msg.style.opacity = \'0\';
+                    setTimeout(() => msg.remove(), 300);
+                }, 3000);
+            })
+            .catch(error => {
+                alert(\'Error deleting backup: \' + error);
+            });
         }
         
         function restoreBackup(filename) {
@@ -2360,11 +2554,21 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
                 }
                 
                 if ($modified) {
-                    file_put_contents($file, json_encode($data, JSON_PRETTY_PRINT));
+                    // Clean up empty date keys
+                    foreach ($data as $dk => $evts) {
+                        if (empty($evts)) unset($data[$dk]);
+                    }
+                    
+                    if (empty($data)) {
+                        unlink($file);
+                    } else {
+                        file_put_contents($file, json_encode($data, JSON_PRETTY_PRINT));
+                    }
                 }
             }
         }
         
+        $this->clearStatsCache();
         $this->redirect("Deleted $count occurrences of recurring event: " . $eventTitle, 'success', 'manage');
     }
     
@@ -2393,6 +2597,7 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
         
         $count = 0;
         $eventsToMove = [];
+        $firstEventDate = null;
         
         if (is_dir($oldDataDir)) {
             foreach (glob($oldDataDir . '/*.json') as $file) {
@@ -2409,12 +2614,12 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
                             
                             // Update start time if provided
                             if (!empty($startTime)) {
-                                $data[$dateKey][$key]['start'] = $startTime;
+                                $data[$dateKey][$key]['time'] = $startTime;
                             }
                             
                             // Update end time if provided
                             if (!empty($endTime)) {
-                                $data[$dateKey][$key]['end'] = $endTime;
+                                $data[$dateKey][$key]['endTime'] = $endTime;
                             }
                             
                             // Update namespace
@@ -2547,6 +2752,7 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
         if ($newNamespace !== $oldNamespace) $changes[] = "namespace";
         
         $changeStr = !empty($changes) ? " (" . implode(", ", $changes) . ")" : "";
+        $this->clearStatsCache();
         $this->redirect("Updated $count occurrences of recurring event$changeStr", 'success', 'manage');
     }
     
@@ -2579,12 +2785,19 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
             
             // Find and remove event from old file
             $event = null;
-            foreach ($oldData[$date] as $key => $evt) {
-                if ($evt['id'] === $id) {
-                    $event = $evt;
-                    unset($oldData[$date][$key]);
-                    $oldData[$date] = array_values($oldData[$date]);
-                    break;
+            if (isset($oldData[$date])) {
+                foreach ($oldData[$date] as $key => $evt) {
+                    if ($evt['id'] === $id) {
+                        $event = $evt;
+                        unset($oldData[$date][$key]);
+                        $oldData[$date] = array_values($oldData[$date]);
+                        break;
+                    }
+                }
+                
+                // Remove empty date arrays
+                if (empty($oldData[$date])) {
+                    unset($oldData[$date]);
                 }
             }
             
@@ -2624,6 +2837,7 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
         }
         
         $displayTarget = $targetNamespace ?: '(default)';
+        $this->clearStatsCache();
         $this->redirect("Moved $moved event(s) to namespace: " . $displayTarget, 'success', 'manage');
     }
     
@@ -2653,12 +2867,19 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
         
         // Find and remove event from old file
         $event = null;
-        foreach ($oldData[$date] as $key => $evt) {
-            if ($evt['id'] === $id) {
-                $event = $evt;
-                unset($oldData[$date][$key]);
-                $oldData[$date] = array_values($oldData[$date]);
-                break;
+        if (isset($oldData[$date])) {
+            foreach ($oldData[$date] as $key => $evt) {
+                if ($evt['id'] === $id) {
+                    $event = $evt;
+                    unset($oldData[$date][$key]);
+                    $oldData[$date] = array_values($oldData[$date]);
+                    break;
+                }
+            }
+            
+            // Remove empty date arrays
+            if (empty($oldData[$date])) {
+                unset($oldData[$date]);
             }
         }
         
@@ -2666,8 +2887,12 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
             $this->redirect('Event not found', 'error', 'manage');
         }
         
-        // Save old file
-        file_put_contents($oldFile, json_encode($oldData, JSON_PRETTY_PRINT));
+        // Save old file (or delete if empty)
+        if (empty($oldData)) {
+            unlink($oldFile);
+        } else {
+            file_put_contents($oldFile, json_encode($oldData, JSON_PRETTY_PRINT));
+        }
         
         // Update event namespace
         $event['namespace'] = $targetNamespace;
@@ -2698,6 +2923,7 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
         file_put_contents($newFile, json_encode($newData, JSON_PRETTY_PRINT));
         
         $displayTarget = $targetNamespace ?: '(default)';
+        $this->clearStatsCache();
         $this->redirect('Moved "' . $event['title'] . '" to ' . $displayTarget, 'success', 'manage');
     }
     
@@ -2822,7 +3048,103 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
         }
         
         $displayName = $namespace ?: '(default)';
+        $this->clearStatsCache();
         $this->redirect("Deleted namespace '$displayName': $eventsDeleted events in $filesDeleted files", 'success', 'manage');
+    }
+    
+    private function renameNamespace() {
+        global $INPUT;
+        
+        $oldNamespace = $INPUT->str('old_namespace');
+        $newNamespace = $INPUT->str('new_namespace');
+        
+        // Validate new namespace name
+        if ($newNamespace === '') {
+            $this->redirect("Cannot rename to empty namespace", 'error', 'manage');
+            return;
+        }
+        
+        // Convert namespaces to directory paths
+        $oldPath = str_replace(':', '/', $oldNamespace);
+        $newPath = str_replace(':', '/', $newNamespace);
+        
+        // Determine source and destination directories
+        if ($oldNamespace === '') {
+            $sourceDir = DOKU_INC . 'data/meta/calendar';
+        } else {
+            $sourceDir = DOKU_INC . 'data/meta/' . $oldPath . '/calendar';
+        }
+        
+        if ($newNamespace === '') {
+            $targetDir = DOKU_INC . 'data/meta/calendar';
+        } else {
+            $targetDir = DOKU_INC . 'data/meta/' . $newPath . '/calendar';
+        }
+        
+        // Check if source exists
+        if (!is_dir($sourceDir)) {
+            $this->redirect("Source namespace not found: $oldNamespace", 'error', 'manage');
+            return;
+        }
+        
+        // Check if target already exists
+        if (is_dir($targetDir)) {
+            $this->redirect("Target namespace already exists: $newNamespace", 'error', 'manage');
+            return;
+        }
+        
+        // Create target directory
+        if (!file_exists(dirname($targetDir))) {
+            mkdir(dirname($targetDir), 0755, true);
+        }
+        
+        // Rename directory
+        if (!rename($sourceDir, $targetDir)) {
+            $this->redirect("Failed to rename namespace", 'error', 'manage');
+            return;
+        }
+        
+        // Update event namespace field in all JSON files
+        $eventsUpdated = 0;
+        foreach (glob($targetDir . '/*.json') as $file) {
+            $data = json_decode(file_get_contents($file), true);
+            if ($data) {
+                foreach ($data as $date => &$events) {
+                    foreach ($events as &$event) {
+                        if (isset($event['namespace']) && $event['namespace'] === $oldNamespace) {
+                            $event['namespace'] = $newNamespace;
+                            $eventsUpdated++;
+                        }
+                    }
+                }
+                file_put_contents($file, json_encode($data, JSON_PRETTY_PRINT));
+            }
+        }
+        
+        // Clean up old directory structure if empty
+        if ($oldNamespace !== '') {
+            $currentDir = dirname($sourceDir);
+            $metaDir = DOKU_INC . 'data/meta';
+            
+            while ($currentDir !== $metaDir && $currentDir !== dirname($metaDir)) {
+                if (is_dir($currentDir)) {
+                    $contents = scandir($currentDir);
+                    $isEmpty = count($contents) === 2; // Only . and ..
+                    
+                    if ($isEmpty) {
+                        @rmdir($currentDir);
+                        $currentDir = dirname($currentDir);
+                    } else {
+                        break;
+                    }
+                } else {
+                    break;
+                }
+            }
+        }
+        
+        $this->clearStatsCache();
+        $this->redirect("Renamed namespace from '$oldNamespace' to '$newNamespace' ($eventsUpdated events updated)", 'success', 'manage');
     }
     
     private function deleteSelectedEvents() {
@@ -2872,7 +3194,18 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
             }
         }
         
+        $this->clearStatsCache();
         $this->redirect("Deleted $deletedCount event(s)", 'success', 'manage');
+    }
+    
+    /**
+     * Clear the event statistics cache so counts refresh after mutations
+     */
+    private function clearStatsCache() {
+        $cacheFile = DOKU_PLUGIN . 'calendar/.event_stats_cache';
+        if (file_exists($cacheFile)) {
+            unlink($cacheFile);
+        }
     }
     
     private function getCronStatus() {
@@ -3139,13 +3472,35 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
             try {
                 $zip = new ZipArchive();
                 if ($zip->open($backupPath, ZipArchive::CREATE) === TRUE) {
-                    $this->addDirectoryToZip($zip, $pluginDir, 'calendar/');
+                    $fileCount = $this->addDirectoryToZip($zip, $pluginDir, 'calendar/');
                     $zip->close();
+                    
+                    // Verify backup was created and has content
+                    if (!file_exists($backupPath)) {
+                        $this->redirect('Backup file was not created', 'error', 'update');
+                        return;
+                    }
+                    
+                    $backupSize = filesize($backupPath);
+                    if ($backupSize < 1000) { // Backup should be at least 1KB
+                        @unlink($backupPath);
+                        $this->redirect('Backup file is too small (' . $backupSize . ' bytes). Only ' . $fileCount . ' files were added. Backup aborted.', 'error', 'update');
+                        return;
+                    }
+                    
+                    if ($fileCount < 10) { // Should have at least 10 files
+                        @unlink($backupPath);
+                        $this->redirect('Backup incomplete: Only ' . $fileCount . ' files were added (expected 30+). Backup aborted.', 'error', 'update');
+                        return;
+                    }
                 } else {
                     $this->redirect('Failed to create backup ZIP file', 'error', 'update');
                     return;
                 }
             } catch (Exception $e) {
+                if (file_exists($backupPath)) {
+                    @unlink($backupPath);
+                }
                 $this->redirect('Backup failed: ' . $e->getMessage(), 'error', 'update');
                 return;
             }
@@ -3369,7 +3724,85 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
         $this->redirect('Plugin restored from backup: ' . $filename, 'success', 'update');
     }
     
+    private function createManualBackup() {
+        $pluginDir = DOKU_PLUGIN . 'calendar/';
+        
+        // Check if plugin directory is readable
+        if (!is_readable($pluginDir)) {
+            $this->redirect('Plugin directory is not readable. Please check permissions.', 'error', 'update');
+            return;
+        }
+        
+        // Check if parent directory is writable (for saving backup)
+        if (!is_writable(DOKU_PLUGIN)) {
+            $this->redirect('Plugin parent directory is not writable. Cannot save backup.', 'error', 'update');
+            return;
+        }
+        
+        // Get current version
+        $pluginInfo = $pluginDir . 'plugin.info.txt';
+        $version = 'unknown';
+        if (file_exists($pluginInfo)) {
+            $info = confToHash($pluginInfo);
+            $version = $info['version'] ?? ($info['date'] ?? 'unknown');
+        }
+        
+        $backupName = 'calendar.backup.v' . $version . '.manual.' . date('Y-m-d_H-i-s') . '.zip';
+        $backupPath = DOKU_PLUGIN . $backupName;
+        
+        try {
+            $zip = new ZipArchive();
+            if ($zip->open($backupPath, ZipArchive::CREATE) === TRUE) {
+                $fileCount = $this->addDirectoryToZip($zip, $pluginDir, 'calendar/');
+                $zip->close();
+                
+                // Verify backup was created and has content
+                if (!file_exists($backupPath)) {
+                    $this->redirect('Backup file was not created', 'error', 'update');
+                    return;
+                }
+                
+                $backupSize = filesize($backupPath);
+                if ($backupSize < 1000) { // Backup should be at least 1KB
+                    @unlink($backupPath);
+                    $this->redirect('Backup file is too small (' . $this->formatBytes($backupSize) . '). Only ' . $fileCount . ' files were added. Backup failed.', 'error', 'update');
+                    return;
+                }
+                
+                if ($fileCount < 10) { // Should have at least 10 files
+                    @unlink($backupPath);
+                    $this->redirect('Backup incomplete: Only ' . $fileCount . ' files were added (expected 30+). Backup failed.', 'error', 'update');
+                    return;
+                }
+                
+                // Success!
+                $this->redirect('✓ Manual backup created successfully: ' . $backupName . ' (' . $this->formatBytes($backupSize) . ', ' . $fileCount . ' files)', 'success', 'update');
+                
+            } else {
+                $this->redirect('Failed to create backup ZIP file', 'error', 'update');
+                return;
+            }
+        } catch (Exception $e) {
+            if (file_exists($backupPath)) {
+                @unlink($backupPath);
+            }
+            $this->redirect('Backup failed: ' . $e->getMessage(), 'error', 'update');
+            return;
+        }
+    }
+    
     private function addDirectoryToZip($zip, $dir, $zipPath = '') {
+        $fileCount = 0;
+        $errors = [];
+        
+        if (!is_dir($dir)) {
+            throw new Exception("Directory does not exist: $dir");
+        }
+        
+        if (!is_readable($dir)) {
+            throw new Exception("Directory is not readable: $dir");
+        }
+        
         try {
             $files = new RecursiveIteratorIterator(
                 new RecursiveDirectoryIterator($dir, RecursiveDirectoryIterator::SKIP_DOTS),
@@ -3381,14 +3814,36 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
                     $filePath = $file->getRealPath();
                     if ($filePath && is_readable($filePath)) {
                         $relativePath = $zipPath . substr($filePath, strlen($dir));
-                        $zip->addFile($filePath, $relativePath);
+                        
+                        if ($zip->addFile($filePath, $relativePath)) {
+                            $fileCount++;
+                        } else {
+                            $errors[] = "Failed to add: " . basename($filePath);
+                        }
+                    } else {
+                        $errors[] = "Cannot read: " . ($filePath ? basename($filePath) : 'unknown');
                     }
                 }
             }
+            
+            // Log any errors but don't fail if we got most files
+            if (!empty($errors) && count($errors) < 5) {
+                foreach ($errors as $error) {
+                    error_log('Calendar plugin backup warning: ' . $error);
+                }
+            }
+            
+            // If too many errors, fail
+            if (count($errors) > 5) {
+                throw new Exception("Too many errors adding files to backup: " . implode(', ', array_slice($errors, 0, 5)));
+            }
+            
         } catch (Exception $e) {
-            // Log error but continue - some files might not be readable
-            error_log('Calendar plugin backup warning: ' . $e->getMessage());
+            error_log('Calendar plugin backup error: ' . $e->getMessage());
+            throw $e;
         }
+        
+        return $fileCount;
     }
     
     private function deleteDirectory($dir) {
@@ -3799,10 +4254,7 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
     
     private function rescanEvents() {
         // Clear the cache to force a rescan
-        $cacheFile = DOKU_PLUGIN . 'calendar/.event_stats_cache';
-        if (file_exists($cacheFile)) {
-            unlink($cacheFile);
-        }
+        $this->clearStatsCache();
         
         // Get fresh statistics
         $stats = $this->getEventStatistics();
@@ -3823,9 +4275,14 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
         $this->collectAllEvents($metaDir, '', $allEvents);
         
         // Create export package
+        // Get current version
+        $pluginInfo = DOKU_PLUGIN . 'calendar/plugin.info.txt';
+        $info = file_exists($pluginInfo) ? confToHash($pluginInfo) : [];
+        $currentVersion = isset($info['version']) ? trim($info['version']) : 'unknown';
+        
         $exportData = [
             'export_date' => date('Y-m-d H:i:s'),
-            'version' => '3.4.6',
+            'version' => $currentVersion,
             'total_events' => 0,
             'namespaces' => []
         ];
@@ -3962,10 +4419,7 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
         }
         
         // Clear cache
-        $cacheFile = DOKU_PLUGIN . 'calendar/.event_stats_cache';
-        if (file_exists($cacheFile)) {
-            unlink($cacheFile);
-        }
+        $this->clearStatsCache();
         
         $message = "Import complete! Imported $importedCount new events";
         if ($mergedCount > 0) {
@@ -4074,10 +4528,7 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
         }
         
         // Clear cache
-        $cacheFile = DOKU_PLUGIN . 'calendar/.event_stats_cache';
-        if (file_exists($cacheFile)) {
-            unlink($cacheFile);
-        }
+        $this->clearStatsCache();
         
         $message = "Cleanup complete! Deleted $deletedCount event(s). Backup created: " . basename($backupFile);
         $redirectUrl = DOKU_URL . 'doku.php?do=admin&page=calendar&tab=manage&msg=' . urlencode($message) . '&msgtype=success';
@@ -4215,5 +4666,225 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
                 }
             }
         }
+    }
+    
+    /**
+     * Render Themes tab for sidebar widget theme selection
+     */
+    private function renderThemesTab($colors = null) {
+        global $INPUT;
+        
+        // Use defaults if not provided
+        if ($colors === null) {
+            $colors = $this->getTemplateColors();
+        }
+        
+        // Handle theme save
+        if ($INPUT->str('action') === 'save_theme') {
+            $theme = $INPUT->str('theme', 'matrix');
+            $weekStart = $INPUT->str('week_start', 'monday');
+            $this->saveSidebarTheme($theme);
+            $this->saveWeekStartDay($weekStart);
+            echo '<div style="background:#d4edda; border:1px solid #c3e6cb; color:#155724; padding:12px; border-radius:4px; margin-bottom:20px;">';
+            echo '✓ Theme and settings saved successfully! Refresh any page with the sidebar to see changes.';
+            echo '</div>';
+        }
+        
+        $currentTheme = $this->getSidebarTheme();
+        $currentWeekStart = $this->getWeekStartDay();
+        
+        echo '<h2 style="margin:0 0 20px 0; color:' . $colors['text'] . ';">🎨 Sidebar Widget Settings</h2>';
+        echo '<p style="color:' . $colors['text'] . '; margin-bottom:20px;">Customize the appearance and behavior of the sidebar calendar widget.</p>';
+        
+        echo '<form method="post" action="?do=admin&page=calendar&tab=themes">';
+        echo '<input type="hidden" name="action" value="save_theme">';
+        
+        // Week Start Day Section
+        echo '<div style="background:' . $colors['bg'] . '; border:1px solid ' . $colors['border'] . '; border-radius:6px; padding:20px; margin-bottom:30px;">';
+        echo '<h3 style="margin:0 0 15px 0; color:' . $colors['text'] . '; font-size:16px;">📅 Week Start Day</h3>';
+        echo '<p style="color:' . $colors['text'] . '; margin-bottom:15px; font-size:13px;">Choose which day the week calendar grid starts with:</p>';
+        
+        echo '<div style="display:flex; gap:15px;">';
+        echo '<label style="flex:1; padding:12px; border:2px solid ' . ($currentWeekStart === 'monday' ? '#00cc07' : $colors['border']) . '; border-radius:4px; background:' . ($currentWeekStart === 'monday' ? 'rgba(0, 204, 7, 0.05)' : $colors['bg']) . '; cursor:pointer; display:flex; align-items:center;">';
+        echo '<input type="radio" name="week_start" value="monday" ' . ($currentWeekStart === 'monday' ? 'checked' : '') . ' style="margin-right:10px; width:18px; height:18px;">';
+        echo '<div>';
+        echo '<div style="font-weight:bold; color:' . $colors['text'] . '; margin-bottom:3px;">Monday</div>';
+        echo '<div style="font-size:11px; color:' . $colors['text'] . ';">Week starts on Monday (ISO standard)</div>';
+        echo '</div>';
+        echo '</label>';
+        
+        echo '<label style="flex:1; padding:12px; border:2px solid ' . ($currentWeekStart === 'sunday' ? '#00cc07' : $colors['border']) . '; border-radius:4px; background:' . ($currentWeekStart === 'sunday' ? 'rgba(0, 204, 7, 0.05)' : $colors['bg']) . '; cursor:pointer; display:flex; align-items:center;">';
+        echo '<input type="radio" name="week_start" value="sunday" ' . ($currentWeekStart === 'sunday' ? 'checked' : '') . ' style="margin-right:10px; width:18px; height:18px;">';
+        echo '<div>';
+        echo '<div style="font-weight:bold; color:' . $colors['text'] . '; margin-bottom:3px;">Sunday</div>';
+        echo '<div style="font-size:11px; color:' . $colors['text'] . ';">Week starts on Sunday (US/Canada standard)</div>';
+        echo '</div>';
+        echo '</label>';
+        echo '</div>';
+        echo '</div>';
+        
+        // Visual Theme Section
+        echo '<h3 style="margin:0 0 15px 0; color:' . $colors['text'] . '; font-size:16px;">🎨 Visual Theme</h3>';
+        
+        // Matrix Theme
+        echo '<div style="border:2px solid ' . ($currentTheme === 'matrix' ? '#00cc07' : $colors['border']) . '; border-radius:6px; padding:20px; margin-bottom:20px; background:' . ($currentTheme === 'matrix' ? 'rgba(0, 204, 7, 0.05)' : $colors['bg']) . ';">';
+        echo '<label style="display:flex; align-items:center; cursor:pointer;">';
+        echo '<input type="radio" name="theme" value="matrix" ' . ($currentTheme === 'matrix' ? 'checked' : '') . ' style="margin-right:12px; width:20px; height:20px;">';
+        echo '<div style="flex:1;">';
+        echo '<div style="font-size:18px; font-weight:bold; color:#00cc07; margin-bottom:8px;">🟢 Matrix Edition</div>';
+        echo '<div style="color:' . $colors['text'] . '; margin-bottom:12px;">Dark green theme with Matrix-style glow effects and neon accents</div>';
+        echo '<div style="display:inline-block; background:#242424; border:2px solid #00cc07; padding:8px 12px; border-radius:4px; font-size:11px; font-family:monospace; color:#00cc07; box-shadow:0 0 10px rgba(0, 204, 7, 0.3);">Preview: Matrix Theme</div>';
+        echo '</div>';
+        echo '</label>';
+        echo '</div>';
+        
+        // Purple Theme
+        echo '<div style="border:2px solid ' . ($currentTheme === 'purple' ? '#9b59b6' : $colors['border']) . '; border-radius:6px; padding:20px; margin-bottom:20px; background:' . ($currentTheme === 'purple' ? 'rgba(155, 89, 182, 0.05)' : $colors['bg']) . ';">';
+        echo '<label style="display:flex; align-items:center; cursor:pointer;">';
+        echo '<input type="radio" name="theme" value="purple" ' . ($currentTheme === 'purple' ? 'checked' : '') . ' style="margin-right:12px; width:20px; height:20px;">';
+        echo '<div style="flex:1;">';
+        echo '<div style="font-size:18px; font-weight:bold; color:#9b59b6; margin-bottom:8px;">🟣 Purple Dream</div>';
+        echo '<div style="color:' . $colors['text'] . '; margin-bottom:12px;">Rich purple theme with elegant violet accents and soft glow</div>';
+        echo '<div style="display:inline-block; background:#2a2030; border:2px solid #9b59b6; padding:8px 12px; border-radius:4px; font-size:11px; font-family:monospace; color:#b19cd9; box-shadow:0 0 10px rgba(155, 89, 182, 0.3);">Preview: Purple Theme</div>';
+        echo '</div>';
+        echo '</label>';
+        echo '</div>';
+        
+        // Professional Blue Theme
+        echo '<div style="border:2px solid ' . ($currentTheme === 'professional' ? '#4a90e2' : $colors['border']) . '; border-radius:6px; padding:20px; margin-bottom:20px; background:' . ($currentTheme === 'professional' ? 'rgba(74, 144, 226, 0.05)' : $colors['bg']) . ';">';
+        echo '<label style="display:flex; align-items:center; cursor:pointer;">';
+        echo '<input type="radio" name="theme" value="professional" ' . ($currentTheme === 'professional' ? 'checked' : '') . ' style="margin-right:12px; width:20px; height:20px;">';
+        echo '<div style="flex:1;">';
+        echo '<div style="font-size:18px; font-weight:bold; color:#4a90e2; margin-bottom:8px;">🔵 Professional Blue</div>';
+        echo '<div style="color:' . $colors['text'] . '; margin-bottom:12px;">Clean blue and grey theme with modern professional styling, no glow effects</div>';
+        echo '<div style="display:inline-block; background:#f5f7fa; border:2px solid #4a90e2; padding:8px 12px; border-radius:4px; font-size:11px; font-family:sans-serif; color:#2c3e50; box-shadow:0 2px 4px rgba(0, 0, 0, 0.1);">Preview: Professional Theme</div>';
+        echo '</div>';
+        echo '</label>';
+        echo '</div>';
+        
+        // Pink Bling Theme
+        echo '<div style="border:2px solid ' . ($currentTheme === 'pink' ? '#ff1493' : $colors['border']) . '; border-radius:6px; padding:20px; margin-bottom:20px; background:' . ($currentTheme === 'pink' ? 'rgba(255, 20, 147, 0.05)' : $colors['bg']) . ';">';
+        echo '<label style="display:flex; align-items:center; cursor:pointer;">';
+        echo '<input type="radio" name="theme" value="pink" ' . ($currentTheme === 'pink' ? 'checked' : '') . ' style="margin-right:12px; width:20px; height:20px;">';
+        echo '<div style="flex:1;">';
+        echo '<div style="font-size:18px; font-weight:bold; color:#ff1493; margin-bottom:8px;">💎 Pink Bling</div>';
+        echo '<div style="color:' . $colors['text'] . '; margin-bottom:12px;">Glamorous hot pink theme with maximum sparkle, hearts, and diamonds ✨</div>';
+        echo '<div style="display:inline-block; background:#1a0d14; border:2px solid #ff1493; padding:8px 12px; border-radius:4px; font-size:11px; font-family:monospace; color:#ff69b4; box-shadow:0 0 12px rgba(255, 20, 147, 0.6);">Preview: Pink Bling Theme 💖</div>';
+        echo '</div>';
+        echo '</label>';
+        echo '</div>';
+        
+        // Wiki Default Theme
+        echo '<div style="border:2px solid ' . ($currentTheme === 'wiki' ? '#2b73b7' : $colors['border']) . '; border-radius:6px; padding:20px; margin-bottom:20px; background:' . ($currentTheme === 'wiki' ? 'rgba(43, 115, 183, 0.05)' : $colors['bg']) . ';">';
+        echo '<label style="display:flex; align-items:center; cursor:pointer;">';
+        echo '<input type="radio" name="theme" value="wiki" ' . ($currentTheme === 'wiki' ? 'checked' : '') . ' style="margin-right:12px; width:20px; height:20px;">';
+        echo '<div style="flex:1;">';
+        echo '<div style="font-size:18px; font-weight:bold; color:#2b73b7; margin-bottom:8px;">📄 Wiki Default</div>';
+        echo '<div style="color:' . $colors['text'] . '; margin-bottom:12px;">Automatically matches your DokuWiki template theme using CSS variables - adapts to light and dark themes</div>';
+        echo '<div style="display:inline-block; background:#f5f5f5; border:2px solid #ccc; padding:8px 12px; border-radius:4px; font-size:11px; font-family:sans-serif; color:' . $colors['text'] . '; box-shadow:0 1px 2px rgba(0, 0, 0, 0.1);">Preview: Matches Your Wiki Theme</div>';
+        echo '</div>';
+        echo '</label>';
+        echo '</div>';
+        
+        echo '<button type="submit" style="background:#00cc07; color:#fff; border:none; padding:12px 24px; border-radius:4px; font-size:14px; font-weight:bold; cursor:pointer; box-shadow:0 2px 4px rgba(0,0,0,0.2);">Save Settings</button>';
+        echo '</form>';
+    }
+    
+    /**
+     * Get current sidebar theme
+     */
+    private function getSidebarTheme() {
+        $configFile = DOKU_INC . 'data/meta/calendar_theme.txt';
+        if (file_exists($configFile)) {
+            return trim(file_get_contents($configFile));
+        }
+        return 'matrix'; // Default
+    }
+    
+    /**
+     * Save sidebar theme
+     */
+    private function saveSidebarTheme($theme) {
+        $configFile = DOKU_INC . 'data/meta/calendar_theme.txt';
+        $validThemes = ['matrix', 'purple', 'professional', 'pink', 'wiki'];
+        
+        if (in_array($theme, $validThemes)) {
+            file_put_contents($configFile, $theme);
+            return true;
+        }
+        return false;
+    }
+    
+    /**
+     * Get week start day
+     */
+    private function getWeekStartDay() {
+        $configFile = DOKU_INC . 'data/meta/calendar_week_start.txt';
+        if (file_exists($configFile)) {
+            $start = trim(file_get_contents($configFile));
+            if (in_array($start, ['monday', 'sunday'])) {
+                return $start;
+            }
+        }
+        return 'sunday'; // Default to Sunday (US/Canada standard)
+    }
+    
+    /**
+     * Save week start day
+     */
+    private function saveWeekStartDay($weekStart) {
+        $configFile = DOKU_INC . 'data/meta/calendar_week_start.txt';
+        $validStarts = ['monday', 'sunday'];
+        
+        if (in_array($weekStart, $validStarts)) {
+            file_put_contents($configFile, $weekStart);
+            return true;
+        }
+        return false;
+    }
+    
+    /**
+     * Get colors from DokuWiki template's style.ini file
+     */
+    private function getTemplateColors() {
+        global $conf;
+        
+        // Get current template name
+        $template = $conf['template'];
+        
+        // Try multiple possible locations for style.ini
+        $possiblePaths = [
+            DOKU_INC . 'conf/tpl/' . $template . '/style.ini',
+            DOKU_INC . 'lib/tpl/' . $template . '/style.ini',
+        ];
+        
+        $styleIni = null;
+        foreach ($possiblePaths as $path) {
+            if (file_exists($path)) {
+                $styleIni = parse_ini_file($path, true);
+                break;
+            }
+        }
+        
+        if (!$styleIni || !isset($styleIni['replacements'])) {
+            // Return defaults
+            return [
+                'bg' => '#fff',
+                'bg_alt' => '#e8e8e8',
+                'text' => '#333',
+                'border' => '#ccc',
+                'link' => '#2b73b7',
+            ];
+        }
+        
+        $r = $styleIni['replacements'];
+        
+        return [
+            'bg' => isset($r['__background__']) ? $r['__background__'] : '#fff',
+            'bg_alt' => isset($r['__background_alt__']) ? $r['__background_alt__'] : '#e8e8e8',
+            'text' => isset($r['__text__']) ? $r['__text__'] : '#333',
+            'border' => isset($r['__border__']) ? $r['__border__'] : '#ccc',
+            'link' => isset($r['__link__']) ? $r['__link__'] : '#2b73b7',
+        ];
     }
 }

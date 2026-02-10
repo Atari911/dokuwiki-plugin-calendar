@@ -1,17 +1,23 @@
 #!/usr/bin/env php
 <?php
 /**
- * DokuWiki Calendar → Outlook Sync
+ * DokuWiki Calendar → Outlook Sync (Delta Mode)
  * 
- * Syncs calendar events from DokuWiki to Office 365/Outlook via Microsoft Graph API
+ * Syncs calendar events from DokuWiki to Office 365/Outlook via Microsoft Graph API.
+ * Uses hash-based change tracking to only sync new, modified, or deleted events.
+ * Unchanged events are skipped entirely (zero API calls).
  * 
  * Usage:
- *   php sync_outlook.php                       # Full sync
- *   php sync_outlook.php --dry-run             # Show changes without applying
+ *   php sync_outlook.php                       # Delta sync (only changes)
+ *   php sync_outlook.php --dry-run             # Show what would change
  *   php sync_outlook.php --namespace=work      # Sync only specific namespace
+ *   php sync_outlook.php --force               # Force re-sync ALL events
  *   php sync_outlook.php --clean-duplicates    # Remove duplicate events
  *   php sync_outlook.php --reset               # Reset sync state, rebuild from scratch
- *   php sync_outlook.php --force               # Force re-sync all events
+ * 
+ * First run after upgrade: existing sync_state.json will be auto-migrated
+ * to v2 format with hash tracking. All events will re-sync once to populate hashes.
+ * Subsequent runs will only touch changed events.
  * 
  * Setup:
  *   1. Edit sync_config.php with your Azure credentials
@@ -482,20 +488,64 @@ function convertToOutlookEvent($dwEvent, $config) {
 }
 
 // =============================================================================
-// SYNC STATE MANAGEMENT
+// SYNC STATE MANAGEMENT (with hash-based change tracking)
 // =============================================================================
+
+/**
+ * Compute a hash of all sync-relevant event fields.
+ * If any of these fields change, the event will be re-synced to Outlook.
+ */
+function computeEventHash($dwEvent) {
+    $fields = [
+        'title'       => isset($dwEvent['title']) ? trim($dwEvent['title']) : '',
+        'description' => isset($dwEvent['description']) ? trim($dwEvent['description']) : '',
+        'time'        => isset($dwEvent['time']) ? $dwEvent['time'] : '',
+        'endTime'     => isset($dwEvent['endTime']) ? $dwEvent['endTime'] : '',
+        'endDate'     => isset($dwEvent['endDate']) ? $dwEvent['endDate'] : '',
+        'color'       => isset($dwEvent['color']) ? $dwEvent['color'] : '',
+        'namespace'   => isset($dwEvent['namespace']) ? $dwEvent['namespace'] : '',
+        'isTask'      => !empty($dwEvent['isTask']) ? '1' : '0',
+        'completed'   => !empty($dwEvent['completed']) ? '1' : '0',
+        'dateKey'     => isset($dwEvent['_dateKey']) ? $dwEvent['_dateKey'] : '',
+    ];
+    return md5(json_encode($fields));
+}
 
 function loadSyncState($stateFile) {
     if (!file_exists($stateFile)) {
-        return ['mapping' => [], 'last_sync' => 0];
+        return ['mapping' => [], 'last_sync' => 0, 'version' => 2];
     }
     
     $data = json_decode(file_get_contents($stateFile), true);
-    return $data ?: ['mapping' => [], 'last_sync' => 0];
+    if (!$data) {
+        return ['mapping' => [], 'last_sync' => 0, 'version' => 2];
+    }
+    
+    // Migrate v1 state (mapping was dwId => outlookId string)
+    // to v2 state (mapping is dwId => {outlookId, hash})
+    if (!isset($data['version']) || $data['version'] < 2) {
+        logMessage("Migrating sync state from v1 to v2 (adding hash tracking)...");
+        $newMapping = [];
+        foreach ($data['mapping'] as $dwId => $value) {
+            if (is_string($value)) {
+                // v1 format: dwId => outlookId
+                $newMapping[$dwId] = ['outlookId' => $value, 'hash' => ''];
+            } else {
+                // Already v2
+                $newMapping[$dwId] = $value;
+            }
+        }
+        $data['mapping'] = $newMapping;
+        $data['version'] = 2;
+        logMessage("Migration complete - " . count($newMapping) . " entries migrated (will re-sync all on first run)");
+    }
+    
+    return $data;
 }
 
 function saveSyncState($stateFile, $state) {
     $state['last_sync'] = time();
+    $state['version'] = 2;
     file_put_contents($stateFile, json_encode($state, JSON_PRETTY_PRINT));
 }
 
@@ -512,7 +562,7 @@ try {
     
     // Load sync state
     $state = loadSyncState($stateFile);
-    $mapping = $state['mapping']; // dwId => outlookId
+    $mapping = $state['mapping']; // dwId => {outlookId, hash}
     
     // Reset mode - clear the mapping
     if ($reset) {
@@ -545,7 +595,8 @@ try {
                     // Update mapping with the remaining event
                     $remaining = $client->findEventByDokuWikiId($config['user_email'], $dwId);
                     if (count($remaining) == 1) {
-                        $mapping[$dwId] = $remaining[0]['id'];
+                        $hash = computeEventHash($dwEvent);
+                        $mapping[$dwId] = ['outlookId' => $remaining[0]['id'], 'hash' => $hash];
                     }
                 }
             }
@@ -563,18 +614,57 @@ try {
         exit(0);
     }
     
-    // Track which Outlook events we've seen (to detect deletions)
-    $seenOutlookIds = [];
+    // =========================================================================
+    // DELTA DETECTION - classify events as new, modified, unchanged, or deleted
+    // =========================================================================
     
-    // Sync each DokuWiki event
+    $newEvents = [];       // In DokuWiki but not in mapping
+    $modifiedEvents = [];  // In both but hash changed
+    $unchangedEvents = []; // In both and hash matches
+    $deletedIds = [];      // In mapping but not in DokuWiki
+    
+    // Classify current DokuWiki events
     foreach ($dwEvents as $dwId => $dwEvent) {
+        $currentHash = computeEventHash($dwEvent);
+        
+        if (!isset($mapping[$dwId])) {
+            $newEvents[$dwId] = $dwEvent;
+        } elseif ($forceSync || $mapping[$dwId]['hash'] !== $currentHash) {
+            $modifiedEvents[$dwId] = $dwEvent;
+        } else {
+            $unchangedEvents[$dwId] = $dwEvent;
+        }
+    }
+    
+    // Find deleted events (in mapping but no longer in DokuWiki)
+    foreach ($mapping as $dwId => $entry) {
+        if (!isset($dwEvents[$dwId])) {
+            $deletedIds[] = $dwId;
+        }
+    }
+    
+    logMessage("=== Delta Analysis ===");
+    logMessage("  New:       " . count($newEvents));
+    logMessage("  Modified:  " . count($modifiedEvents));
+    logMessage("  Unchanged: " . count($unchangedEvents) . " (skipping)");
+    logMessage("  Deleted:   " . count($deletedIds));
+    $totalApiCalls = count($newEvents) + count($modifiedEvents) + count($deletedIds);
+    logMessage("  API calls: ~$totalApiCalls (vs " . count($dwEvents) . " full sync)");
+    
+    if ($totalApiCalls === 0) {
+        logMessage("Nothing to sync - calendar is up to date!");
+    }
+    
+    // =========================================================================
+    // SYNC NEW EVENTS
+    // =========================================================================
+    
+    foreach ($newEvents as $dwId => $dwEvent) {
         // Check for abort flag
-        $abortFile = __DIR__ . '/.sync_abort';
-        if (file_exists($abortFile)) {
+        if (file_exists(__DIR__ . '/.sync_abort')) {
             logMessage("=== SYNC ABORTED BY USER ===", 'WARN');
-            logMessage("Partial sync completed. Some events may not be synced.", 'WARN');
-            @unlink($abortFile); // Clean up abort flag
-            break; // Exit the loop
+            @unlink(__DIR__ . '/.sync_abort');
+            break;
         }
         
         // Skip completed tasks if configured
@@ -586,213 +676,151 @@ try {
         }
         
         $outlookEvent = convertToOutlookEvent($dwEvent, $config);
+        $eventNamespace = isset($dwEvent['namespace']) ? $dwEvent['namespace'] : '';
+        $hash = computeEventHash($dwEvent);
         
         try {
-            // Check if we have this event mapped
-            $outlookId = isset($mapping[$dwId]) ? $mapping[$dwId] : null;
+            // Check if event already exists in Outlook (unmapped from previous sync)
+            $existingEvents = $client->findEventByDokuWikiId($config['user_email'], $dwId);
             
-            // If not mapped, search Outlook for it (might exist from previous sync)
-            if (!$outlookId) {
-                $existingEvents = $client->findEventByDokuWikiId($config['user_email'], $dwId);
-                
-                if (count($existingEvents) > 1) {
-                    // Found duplicates! Clean them up
-                    logMessage("WARN: Found " . count($existingEvents) . " duplicates for: {$dwEvent['title']}", 'WARN');
-                    
-                    if (!$dryRun) {
-                        $deleted = $client->deleteAllDuplicates($config['user_email'], $dwId);
-                        logMessage("Deleted $deleted duplicate(s)", 'INFO');
-                        
-                        // Re-search to get the remaining one
-                        $existingEvents = $client->findEventByDokuWikiId($config['user_email'], $dwId);
-                    }
-                }
-                
-                if (count($existingEvents) == 1) {
-                    // Found existing event
-                    $outlookId = $existingEvents[0]['id'];
-                    $mapping[$dwId] = $outlookId;
-                    logMessage("Mapped existing event: {$dwEvent['title']} (ID: $outlookId)", 'DEBUG');
-                } elseif (count($existingEvents) > 1 && !$dryRun) {
-                    // Still duplicates after cleanup? Just pick the first one
-                    $outlookId = $existingEvents[0]['id'];
-                    $mapping[$dwId] = $outlookId;
-                    logMessage("WARN: Multiple versions remain, using first: {$dwEvent['title']}", 'WARN');
-                }
-            }
-            
-            if ($outlookId) {
-                // Event exists in mapping - try to update it
-                $seenOutlookIds[] = $outlookId;
+            if (count($existingEvents) >= 1) {
+                // Already exists - update and map it
+                $outlookId = $existingEvents[0]['id'];
                 
                 if (!$dryRun) {
-                    try {
-                        $client->updateEvent($config['user_email'], $outlookId, $outlookEvent);
-                        $stats['updated']++;
-                        $eventNamespace = isset($dwEvent['namespace']) ? $dwEvent['namespace'] : '';
-                        logMessage("Updated: {$dwEvent['title']} [$eventNamespace]");
-                    } catch (Exception $e) {
-                        // Check if it's a 404 (event was deleted from Outlook)
-                        if (strpos($e->getMessage(), 'HTTP 404') !== false || 
-                            strpos($e->getMessage(), 'ErrorItemNotFound') !== false) {
-                            
-                            logMessage("Event deleted from Outlook, recreating: {$dwEvent['title']}", 'WARN');
-                            
-                            // Remove from mapping and recreate
-                            unset($mapping[$dwId]);
-                            $result = $client->createEvent($config['user_email'], $outlookEvent);
-                            $mapping[$dwId] = $result['id'];
-                            $seenOutlookIds[] = $result['id'];
-                            $stats['recreated']++;
-                            $eventNamespace = isset($dwEvent['namespace']) ? $dwEvent['namespace'] : '';
-                            logMessage("Recreated: {$dwEvent['title']} [$eventNamespace] (new ID: {$result['id']})", 'INFO');
-                        } else {
-                            // Different error - rethrow
-                            throw $e;
-                        }
+                    $client->updateEvent($config['user_email'], $outlookId, $outlookEvent);
+                    $mapping[$dwId] = ['outlookId' => $outlookId, 'hash' => $hash];
+                    
+                    // Clean any duplicates
+                    if (count($existingEvents) > 1) {
+                        $client->deleteAllDuplicates($config['user_email'], $dwId);
+                        logMessage("  Cleaned " . (count($existingEvents) - 1) . " duplicate(s)");
                     }
-                } else {
-                    $stats['updated']++;
-                    $eventNamespace = isset($dwEvent['namespace']) ? $dwEvent['namespace'] : '';
-                    logMessage("Would update: {$dwEvent['title']} [$eventNamespace]");
                 }
-                
+                $stats['updated']++;
+                logMessage("Mapped & updated: {$dwEvent['title']} [$eventNamespace]");
             } else {
-                // New event - create in Outlook
+                // Truly new - create in Outlook
                 if (!$dryRun) {
                     $result = $client->createEvent($config['user_email'], $outlookEvent);
-                    $mapping[$dwId] = $result['id'];
-                    $seenOutlookIds[] = $result['id'];
-                    $eventNamespace = isset($dwEvent['namespace']) ? $dwEvent['namespace'] : '';
-                    logMessage("Created: {$dwEvent['title']} [$eventNamespace] (ID: {$result['id']})", 'DEBUG');
+                    $mapping[$dwId] = ['outlookId' => $result['id'], 'hash' => $hash];
+                    logMessage("Created: {$dwEvent['title']} [$eventNamespace]");
                 } else {
-                    $eventNamespace = isset($dwEvent['namespace']) ? $dwEvent['namespace'] : '';
                     logMessage("Would create: {$dwEvent['title']} [$eventNamespace]");
                 }
                 $stats['created']++;
             }
-            
-            // Save state periodically (every 50 events)
-            if (!$dryRun && (count($seenOutlookIds) % 50 == 0)) {
-                $state['mapping'] = $mapping;
-                saveSyncState($stateFile, $state);
-                logMessage("State saved (checkpoint)", 'DEBUG');
-            }
-            
         } catch (Exception $e) {
             $stats['errors']++;
-            logMessage("ERROR syncing {$dwEvent['title']}: " . $e->getMessage(), 'ERROR');
+            logMessage("ERROR creating {$dwEvent['title']}: " . $e->getMessage(), 'ERROR');
         }
     }
     
-    // Delete events that were removed from DokuWiki
-    if ($config['delete_outlook_events']) {
-        logMessage("=== Checking for deleted events ===", 'DEBUG');
-        logMessage("Total in mapping: " . count($mapping), 'DEBUG');
-        logMessage("Total seen (should exist): " . count($seenOutlookIds), 'DEBUG');
+    // =========================================================================
+    // SYNC MODIFIED EVENTS
+    // =========================================================================
+    
+    foreach ($modifiedEvents as $dwId => $dwEvent) {
+        if (file_exists(__DIR__ . '/.sync_abort')) {
+            logMessage("=== SYNC ABORTED BY USER ===", 'WARN');
+            @unlink(__DIR__ . '/.sync_abort');
+            break;
+        }
         
-        $deletedCount = 0;
-        foreach ($mapping as $dwId => $outlookId) {
-            if (!in_array($outlookId, $seenOutlookIds)) {
-                // Event was deleted in DokuWiki
-                logMessage("Event $dwId not in DokuWiki anymore (Outlook ID: $outlookId)", 'DEBUG');
+        if (!$config['sync_completed_tasks'] && 
+            !empty($dwEvent['isTask']) && 
+            !empty($dwEvent['completed'])) {
+            $stats['skipped']++;
+            continue;
+        }
+        
+        $outlookEvent = convertToOutlookEvent($dwEvent, $config);
+        $eventNamespace = isset($dwEvent['namespace']) ? $dwEvent['namespace'] : '';
+        $hash = computeEventHash($dwEvent);
+        $outlookId = $mapping[$dwId]['outlookId'];
+        
+        try {
+            if (!$dryRun) {
                 try {
-                    if (!$dryRun) {
-                        $client->deleteEvent($config['user_email'], $outlookId);
-                        unset($mapping[$dwId]);
-                        logMessage("Deleted from Outlook: $dwId", 'INFO');
-                    } else {
-                        logMessage("Would delete: $dwId", 'INFO');
-                    }
-                    $stats['deleted']++;
-                    $deletedCount++;
+                    $client->updateEvent($config['user_email'], $outlookId, $outlookEvent);
+                    $mapping[$dwId] = ['outlookId' => $outlookId, 'hash' => $hash];
+                    $stats['updated']++;
+                    logMessage("Updated: {$dwEvent['title']} [$eventNamespace]");
                 } catch (Exception $e) {
-                    // If it's already gone (404), just remove from mapping
+                    // 404 = event was deleted from Outlook, recreate it
                     if (strpos($e->getMessage(), 'HTTP 404') !== false || 
                         strpos($e->getMessage(), 'ErrorItemNotFound') !== false) {
-                        logMessage("Event $dwId already gone from Outlook, removing from mapping", 'DEBUG');
-                        unset($mapping[$dwId]);
-                        $stats['deleted']++;
-                        $deletedCount++;
+                        
+                        logMessage("Event deleted from Outlook, recreating: {$dwEvent['title']}", 'WARN');
+                        $result = $client->createEvent($config['user_email'], $outlookEvent);
+                        $mapping[$dwId] = ['outlookId' => $result['id'], 'hash' => $hash];
+                        $stats['recreated']++;
+                        logMessage("Recreated: {$dwEvent['title']} [$eventNamespace]");
                     } else {
-                        logMessage("ERROR deleting $dwId: " . $e->getMessage(), 'ERROR');
+                        throw $e;
                     }
+                }
+            } else {
+                $stats['updated']++;
+                logMessage("Would update: {$dwEvent['title']} [$eventNamespace]");
+            }
+        } catch (Exception $e) {
+            $stats['errors']++;
+            logMessage("ERROR updating {$dwEvent['title']}: " . $e->getMessage(), 'ERROR');
+        }
+    }
+    
+    // =========================================================================
+    // DELETE REMOVED EVENTS
+    // =========================================================================
+    
+    if ($config['delete_outlook_events'] && !empty($deletedIds)) {
+        logMessage("=== Deleting " . count($deletedIds) . " removed events ===");
+        
+        foreach ($deletedIds as $dwId) {
+            $outlookId = $mapping[$dwId]['outlookId'];
+            
+            try {
+                if (!$dryRun) {
+                    $client->deleteEvent($config['user_email'], $outlookId);
+                    logMessage("Deleted: $dwId");
+                } else {
+                    logMessage("Would delete: $dwId");
+                }
+                unset($mapping[$dwId]);
+                $stats['deleted']++;
+            } catch (Exception $e) {
+                if (strpos($e->getMessage(), 'HTTP 404') !== false || 
+                    strpos($e->getMessage(), 'ErrorItemNotFound') !== false) {
+                    logMessage("Already gone from Outlook: $dwId", 'DEBUG');
+                    unset($mapping[$dwId]);
+                    $stats['deleted']++;
+                } else {
+                    logMessage("ERROR deleting $dwId: " . $e->getMessage(), 'ERROR');
+                    $stats['errors']++;
                 }
             }
         }
-        logMessage("Deleted $deletedCount events from Outlook", 'DEBUG');
     }
     
-    // Save state
+    // Save state after every sync (checkpoint)
     if (!$dryRun) {
         $state['mapping'] = $mapping;
         saveSyncState($stateFile, $state);
     }
     
+    // Count unchanged as skipped for stats
+    $stats['skipped'] += count($unchangedEvents);
+    
     // Summary
     logMessage("=== Sync Complete ===");
-    logMessage("Scanned: {$stats['scanned']} events");
-    logMessage("Created: {$stats['created']}");
-    logMessage("Updated: {$stats['updated']}");
-    logMessage("Recreated: {$stats['recreated']} (deleted from Outlook)");
-    logMessage("Deleted: {$stats['deleted']}");
-    logMessage("Skipped: {$stats['skipped']}");
-    logMessage("Errors: {$stats['errors']}");
-    
-    // =============================================================================
-    // FINAL STEP: Check for and remove any duplicates in Outlook
-    // =============================================================================
-    
-    if (!$dryRun) {
-        logMessage("");
-        logMessage("=== Final Duplicate Check ===");
-        
-        $duplicatesFound = 0;
-        $duplicatesRemoved = 0;
-        
-        // Check each event we synced for duplicates
-        foreach ($dwEvents as $dwId => $dwEvent) {
-            try {
-                // Search Outlook for this DokuWiki ID
-                $outlookEvents = $client->findEventByDokuWikiId($config['user_email'], $dwId);
-                
-                if (count($outlookEvents) > 1) {
-                    $duplicatesFound += count($outlookEvents) - 1;
-                    logMessage("DUPLICATE: Found " . count($outlookEvents) . " copies of: {$dwEvent['title']} [$dwId]", 'WARN');
-                    
-                    // Keep the first one, delete the rest
-                    $kept = array_shift($outlookEvents); // Remove first from array
-                    $mapping[$dwId] = $kept['id']; // Update mapping to first one
-                    
-                    foreach ($outlookEvents as $duplicate) {
-                        try {
-                            $client->deleteEvent($config['user_email'], $duplicate['id']);
-                            $duplicatesRemoved++;
-                            logMessage("  Removed duplicate: " . $duplicate['id'], 'DEBUG');
-                        } catch (Exception $e) {
-                            logMessage("  ERROR removing duplicate: " . $e->getMessage(), 'ERROR');
-                        }
-                    }
-                }
-            } catch (Exception $e) {
-                // Continue checking other events even if one fails
-                logMessage("ERROR checking duplicates for {$dwEvent['title']}: " . $e->getMessage(), 'ERROR');
-            }
-        }
-        
-        if ($duplicatesFound > 0) {
-            logMessage("");
-            logMessage("Duplicates found: $duplicatesFound");
-            logMessage("Duplicates removed: $duplicatesRemoved");
-            
-            // Save updated mapping
-            $state['mapping'] = $mapping;
-            saveSyncState($stateFile, $state);
-            logMessage("Mapping updated after duplicate cleanup");
-        } else {
-            logMessage("No duplicates found - Outlook is clean!");
-        }
-    }
+    logMessage("New:       {$stats['created']}");
+    logMessage("Updated:   {$stats['updated']}");
+    logMessage("Recreated: {$stats['recreated']}");
+    logMessage("Deleted:   {$stats['deleted']}");
+    logMessage("Unchanged: " . count($unchangedEvents));
+    logMessage("Skipped:   {$stats['skipped']}");
+    logMessage("Errors:    {$stats['errors']}");
     
     logMessage("");
     if ($dryRun) {

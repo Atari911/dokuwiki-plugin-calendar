@@ -33,6 +33,31 @@ if (typeof DOKU_BASE === 'undefined') {
 // Shorthand for convenience  
 var DOKU_BASE = window.DOKU_BASE || '/';
 
+// Helper: propagate CSS variables from a calendar container to a target element
+// This is needed for dialogs/popups that use position:fixed (they inherit CSS vars
+// from DOM parents per spec, but some DokuWiki templates break this inheritance)
+function propagateThemeVars(calId, targetEl) {
+    if (!targetEl) return;
+    // Find the calendar container (could be cal_, panel_, sidebar-widget-, etc.)
+    const container = document.getElementById(calId) 
+        || document.getElementById('sidebar-widget-' + calId)
+        || document.querySelector('[id$="' + calId + '"]');
+    if (!container) return;
+    const cs = getComputedStyle(container);
+    const vars = [
+        '--background-site', '--background-alt', '--background-header',
+        '--text-primary', '--text-bright', '--text-dim',
+        '--border-color', '--border-main',
+        '--cell-bg', '--cell-today-bg', '--grid-bg',
+        '--shadow-color', '--header-border', '--header-shadow',
+        '--btn-text'
+    ];
+    vars.forEach(v => {
+        const val = cs.getPropertyValue(v).trim();
+        if (val) targetEl.style.setProperty(v, val);
+    });
+}
+
 // Filter calendar by namespace
 window.filterCalendarByNamespace = function(calId, namespace) {
     // Get current year and month from calendar
@@ -163,6 +188,16 @@ window.rebuildCalendar = function(calId, year, month, events, namespace) {
     const monthNames = ['January', 'February', 'March', 'April', 'May', 'June',
                        'July', 'August', 'September', 'October', 'November', 'December'];
     
+    // Get theme data from container
+    const theme = container.dataset.theme || 'matrix';
+    let themeStyles = {};
+    try {
+        themeStyles = JSON.parse(container.dataset.themeStyles || '{}');
+    } catch (e) {
+        console.error('Failed to parse theme styles:', e);
+        themeStyles = {};
+    }
+    
     // Preserve original namespace if not yet set
     if (!container.dataset.originalNamespace) {
         container.setAttribute('data-original-namespace', namespace || '');
@@ -198,15 +233,12 @@ window.rebuildCalendar = function(calId, year, month, events, namespace) {
         if (!filterIndicator) {
             // Create filter indicator if it doesn't exist
             const headerDiv = container.querySelector('.calendar-compact-header');
-            if (!headerDiv) {
-                console.error('Header div not found!');
-            } else {
+            if (headerDiv) {
                 filterIndicator = document.createElement('div');
                 filterIndicator.className = 'calendar-namespace-filter';
                 filterIndicator.id = 'namespace-filter-' + calId;
                 headerDiv.parentNode.insertBefore(filterIndicator, headerDiv.nextSibling);
             }
-        } else {
         }
         
         if (filterIndicator) {
@@ -266,7 +298,6 @@ window.rebuildCalendar = function(calId, year, month, events, namespace) {
         
         // Only process events that could possibly overlap with this month/year
         const dateYear = parseInt(dateKey.split('-')[0]);
-        const dateMonth = parseInt(dateKey.split('-')[1]);
         
         // Skip events from completely different years (unless they're very long multi-day events)
         if (Math.abs(dateYear - year) > 1) {
@@ -329,7 +360,7 @@ window.rebuildCalendar = function(calId, year, month, events, namespace) {
         html += '<tr>';
         for (let col = 0; col < 7; col++) {
             if ((row === 0 && col < dayOfWeek) || currentDay > daysInMonth) {
-                html += '<td class="cal-empty"></td>';
+                html += `<td class="cal-empty"></td>`;
             } else {
                 const dateKey = `${year}-${String(month).padStart(2, '0')}-${String(currentDay).padStart(2, '0')}`;
                 
@@ -344,21 +375,19 @@ window.rebuildCalendar = function(calId, year, month, events, namespace) {
                 if (isToday) classes += ' cal-today';
                 if (hasEvents) classes += ' cal-has-events';
                 
+                const dayNumClass = isToday ? 'day-num day-num-today' : 'day-num';
+                
                 html += `<td class="${classes}" data-date="${dateKey}" onclick="showDayPopup('${calId}', '${dateKey}', '${namespace}')">`;
-                html += `<span class="day-num">${currentDay}</span>`;
+                html += `<span class="${dayNumClass}">${currentDay}</span>`;
                 
                 if (hasEvents) {
                     // Sort events by time (no time first, then by time)
                     const sortedEvents = [...eventRanges[dateKey]].sort((a, b) => {
                         const timeA = a.time || '';
                         const timeB = b.time || '';
-                        
-                        // Events without time go first
                         if (!timeA && timeB) return -1;
                         if (timeA && !timeB) return 1;
                         if (!timeA && !timeB) return 0;
-                        
-                        // Sort by time
                         return timeA.localeCompare(timeB);
                     });
                     
@@ -367,15 +396,13 @@ window.rebuildCalendar = function(calId, year, month, events, namespace) {
                     for (const evt of sortedEvents) {
                         const eventId = evt.id || '';
                         const eventColor = evt.color || '#3498db';
-                        const eventTime = evt.time || '';
                         const eventTitle = evt.title || 'Event';
+                        const eventTime = evt.time || '';
                         const originalDate = evt._original_date || dateKey;
                         const isFirstDay = evt._is_first_day !== undefined ? evt._is_first_day : true;
                         const isLastDay = evt._is_last_day !== undefined ? evt._is_last_day : true;
                         
                         let barClass = !eventTime ? 'event-bar-no-time' : 'event-bar-timed';
-                        
-                        // Add classes for multi-day spanning
                         if (!isFirstDay) barClass += ' event-bar-continues';
                         if (!isLastDay) barClass += ' event-bar-continuing';
                         
@@ -429,6 +456,17 @@ window.rebuildCalendar = function(calId, year, month, events, namespace) {
 window.renderEventListFromData = function(events, calId, namespace, year, month) {
     if (!events || Object.keys(events).length === 0) {
         return '<p class="no-events-msg">No events this month</p>';
+    }
+    
+    // Get theme data from container
+    const container = document.getElementById(calId);
+    let themeStyles = {};
+    if (container && container.dataset.themeStyles) {
+        try {
+            themeStyles = JSON.parse(container.dataset.themeStyles);
+        } catch (e) {
+            console.error('Failed to parse theme styles in renderEventListFromData:', e);
+        }
     }
     
     // Check for time conflicts
@@ -606,6 +644,11 @@ window.showDayPopup = function(calId, date, namespace) {
         document.body.appendChild(popup);
     }
     
+    // Get theme styles
+    const container = document.getElementById(calId);
+    const themeStyles = container ? JSON.parse(container.dataset.themeStyles || '{}') : {};
+    const theme = container ? container.dataset.theme : 'matrix';
+    
     let html = '<div class="day-popup-overlay" onclick="closeDayPopup(\'' + calId + '\')"></div>';
     html += '<div class="day-popup-content">';
     html += '<div class="day-popup-header">';
@@ -686,7 +729,7 @@ window.showDayPopup = function(calId, date, namespace) {
                     conflictList.push(conflictText);
                 });
                 
-                html += '<span class="event-conflict-badge" data-conflicts="' + escapeHtml(JSON.stringify(conflictList)) + '" onmouseenter="showConflictTooltip(this)" onmouseleave="hideConflictTooltip()">⚠️ ' + event.conflictsWith.length + '</span>';
+                html += '<span class="event-conflict-badge" data-conflicts="' + btoa(unescape(encodeURIComponent(JSON.stringify(conflictList)))) + '" onmouseenter="showConflictTooltip(this)" onmouseleave="hideConflictTooltip()">⚠️ ' + event.conflictsWith.length + '</span>';
             }
             
             html += '</div>';
@@ -716,6 +759,11 @@ window.showDayPopup = function(calId, date, namespace) {
     
     popup.innerHTML = html;
     popup.style.display = 'flex';
+    
+    // Propagate CSS vars from calendar container to popup (popup is outside container in DOM)
+    if (container) {
+        propagateThemeVars(calId, popup.querySelector('.day-popup-content'));
+    }
 };
 
 // Close day popup
@@ -781,6 +829,17 @@ window.showDayEvents = function(calId, date, namespace) {
 
 // Render a single event item
 window.renderEventItem = function(event, date, calId, namespace) {
+    // Get theme data from container
+    const container = document.getElementById(calId);
+    let themeStyles = {};
+    if (container && container.dataset.themeStyles) {
+        try {
+            themeStyles = JSON.parse(container.dataset.themeStyles);
+        } catch (e) {
+            console.error('Failed to parse theme styles:', e);
+        }
+    }
+    
     // Check if this event is in the past or today (with 15-minute grace period)
     const today = new Date();
     today.setHours(0, 0, 0, 0);
@@ -812,7 +871,6 @@ window.renderEventItem = function(event, date, calId, namespace) {
     const isToday = eventDate.getTime() === today.getTime();
     
     // Format date display with day of week
-    // Use originalStartDate if this is a multi-month event continuation
     const displayDateKey = event.originalStartDate || date;
     const dateObj = new Date(displayDateKey + 'T00:00:00');
     const displayDate = dateObj.toLocaleDateString('en-US', { 
@@ -846,6 +904,7 @@ window.renderEventItem = function(event, date, calId, namespace) {
     const pastDueClass = isPastDue ? ' event-pastdue' : '';
     const color = event.color || '#3498db';
     
+    // Only inline style needed: border-left-color for event color indicator
     let html = '<div class="event-compact-item' + completedClass + pastClass + pastDueClass + '" data-event-id="' + event.id + '" data-date="' + date + '" style="border-left-color: ' + color + ';" onclick="' + (isPast && !isPastDue ? 'togglePastEventExpand(this)' : '') + '">';
     
     html += '<div class="event-info">';
@@ -866,17 +925,16 @@ window.renderEventItem = function(event, date, calId, namespace) {
         } else if (isToday) {
             html += ' <span class="event-today-badge">TODAY</span>';
         }
-        // Add namespace badge (stored namespace or _namespace for multi-namespace)
+        // Add namespace badge
         let eventNamespace = event.namespace || '';
         if (!eventNamespace && event._namespace !== undefined) {
-            eventNamespace = event._namespace; // Fallback to _namespace for multi-namespace loading
+            eventNamespace = event._namespace;
         }
         if (eventNamespace) {
-            html += ' <span class="event-namespace-badge" onclick="filterCalendarByNamespace(\'' + calId + '\', \'' + escapeHtml(eventNamespace) + '\')" style="cursor:pointer;" title="Click to filter by this namespace">' + escapeHtml(eventNamespace) + '</span>';
+            html += ' <span class="event-namespace-badge" onclick="filterCalendarByNamespace(\'' + calId + '\', \'' + escapeHtml(eventNamespace) + '\')" title="Click to filter by this namespace">' + escapeHtml(eventNamespace) + '</span>';
         }
         // Add conflict warning if event has time conflicts
         if (event.hasConflict && event.conflictsWith && event.conflictsWith.length > 0) {
-            // Build conflict list for data attribute
             let conflictList = [];
             event.conflictsWith.forEach(conflict => {
                 let conflictText = conflict.title;
@@ -886,7 +944,7 @@ window.renderEventItem = function(event, date, calId, namespace) {
                 conflictList.push(conflictText);
             });
             
-            html += ' <span class="event-conflict-badge" data-conflicts="' + escapeHtml(JSON.stringify(conflictList)) + '" onmouseenter="showConflictTooltip(this)" onmouseleave="hideConflictTooltip()">⚠️ ' + event.conflictsWith.length + '</span>';
+            html += ' <span class="event-conflict-badge" data-conflicts="' + btoa(unescape(encodeURIComponent(JSON.stringify(conflictList)))) + '" onmouseenter="showConflictTooltip(this)" onmouseleave="hideConflictTooltip()">⚠️ ' + event.conflictsWith.length + '</span>';
         }
         html += '</span>';
         html += '</div>';
@@ -907,7 +965,20 @@ window.renderEventItem = function(event, date, calId, namespace) {
             eventNamespace = event._namespace;
         }
         if (eventNamespace) {
-            html += ' <span class="event-namespace-badge" onclick="filterCalendarByNamespace(\'' + calId + '\', \'' + escapeHtml(eventNamespace) + '\')" style="cursor:pointer;" title="Click to filter by this namespace">' + escapeHtml(eventNamespace) + '</span>';
+            html += ' <span class="event-namespace-badge" onclick="filterCalendarByNamespace(\'' + calId + '\', \'' + escapeHtml(eventNamespace) + '\')" title="Click to filter by this namespace">' + escapeHtml(eventNamespace) + '</span>';
+        }
+        // Add conflict warning for past events too
+        if (event.hasConflict && event.conflictsWith && event.conflictsWith.length > 0) {
+            let conflictList = [];
+            event.conflictsWith.forEach(conflict => {
+                let conflictText = conflict.title;
+                if (conflict.time) {
+                    conflictText += ' (' + formatTimeRange(conflict.time, conflict.endTime) + ')';
+                }
+                conflictList.push(conflictText);
+            });
+            
+            html += ' <span class="event-conflict-badge" data-conflicts="' + btoa(unescape(encodeURIComponent(JSON.stringify(conflictList)))) + '" onmouseenter="showConflictTooltip(this)" onmouseleave="hideConflictTooltip()">⚠️ ' + event.conflictsWith.length + '</span>';
         }
         html += '</span>';
         html += '</div>';
@@ -1163,6 +1234,9 @@ window.openAddEvent = function(calId, namespace, date) {
     // Show dialog
     dialog.style.display = 'flex';
     
+    // Propagate CSS vars to dialog (position:fixed can break inheritance in some templates)
+    propagateThemeVars(calId, dialog);
+    
     // Focus title field
     setTimeout(() => {
         const titleField = document.getElementById('event-title-' + calId);
@@ -1233,14 +1307,29 @@ window.editEvent = function(calId, eventId, date, namespace) {
             const namespaceHidden = document.getElementById('event-namespace-' + calId);
             const namespaceSearch = document.getElementById('event-namespace-search-' + calId);
             if (namespaceHidden && event.namespace !== undefined) {
-                namespaceHidden.value = event.namespace;
+                // Set the hidden input (this is what gets submitted)
+                namespaceHidden.value = event.namespace || '';
+                // Set the search input to display the namespace
                 if (namespaceSearch) {
                     namespaceSearch.value = event.namespace || '(default)';
                 }
+                console.log('Set namespace for editing:', event.namespace, 'Hidden value:', namespaceHidden.value);
+            } else {
+                // No namespace on event, set to default
+                if (namespaceHidden) {
+                    namespaceHidden.value = '';
+                }
+                if (namespaceSearch) {
+                    namespaceSearch.value = '(default)';
+                }
+                console.log('No namespace on event, using default');
             }
             
             title.textContent = 'Edit Event';
             dialog.style.display = 'flex';
+            
+            // Propagate CSS vars to dialog
+            propagateThemeVars(calId, dialog);
         }
     })
     .catch(err => console.error('Error editing event:', err));
@@ -1428,19 +1517,70 @@ window.escapeHtml = function(text) {
 
 // Highlight event when clicking on bar in calendar
 window.highlightEvent = function(calId, eventId, date) {
+    console.log('Highlighting event:', calId, eventId, date);
+    
     // Find the event item in the event list
     const eventList = document.querySelector('#' + calId + ' .event-list-compact');
-    if (!eventList) return;
+    if (!eventList) {
+        console.log('Event list not found');
+        return;
+    }
     
     const eventItem = eventList.querySelector('[data-event-id="' + eventId + '"][data-date="' + date + '"]');
-    if (!eventItem) return;
+    if (!eventItem) {
+        console.log('Event item not found');
+        return;
+    }
     
-    // Remove previous highlights
+    console.log('Found event item:', eventItem);
+    
+    // Get theme
+    const container = document.getElementById(calId);
+    const theme = container ? container.dataset.theme : 'matrix';
+    const themeStyles = container ? JSON.parse(container.dataset.themeStyles || '{}') : {};
+    
+    console.log('Theme:', theme);
+    
+    // Theme-specific highlight colors
+    let highlightBg, highlightShadow;
+    if (theme === 'matrix') {
+        highlightBg = '#1a3d1a';  // Darker green
+        highlightShadow = '0 0 20px rgba(0, 204, 7, 0.8), 0 0 40px rgba(0, 204, 7, 0.4)';
+    } else if (theme === 'purple') {
+        highlightBg = '#3d2b4d';  // Darker purple
+        highlightShadow = '0 0 20px rgba(155, 89, 182, 0.8), 0 0 40px rgba(155, 89, 182, 0.4)';
+    } else if (theme === 'professional') {
+        highlightBg = '#e3f2fd';  // Light blue
+        highlightShadow = '0 0 20px rgba(74, 144, 226, 0.4)';
+    } else if (theme === 'pink') {
+        highlightBg = '#3d2030';  // Darker pink
+        highlightShadow = '0 0 20px rgba(255, 20, 147, 0.8), 0 0 40px rgba(255, 20, 147, 0.4)';
+    } else if (theme === 'wiki') {
+        highlightBg = '#dce9f5';  // Light blue highlight
+        highlightShadow = '0 0 20px rgba(43, 115, 183, 0.4)';
+    }
+    
+    console.log('Highlight colors:', highlightBg, highlightShadow);
+    
+    // Store original styles
+    const originalBg = eventItem.style.background;
+    const originalShadow = eventItem.style.boxShadow;
+    
+    // Remove previous highlights (restore their original styles)
     const previousHighlights = eventList.querySelectorAll('.event-highlighted');
-    previousHighlights.forEach(el => el.classList.remove('event-highlighted'));
+    previousHighlights.forEach(el => {
+        el.classList.remove('event-highlighted');
+    });
     
-    // Add highlight
+    // Add highlight class and apply theme-aware glow
     eventItem.classList.add('event-highlighted');
+    
+    // Set CSS properties directly
+    eventItem.style.setProperty('background', highlightBg, 'important');
+    eventItem.style.setProperty('box-shadow', highlightShadow, 'important');
+    eventItem.style.setProperty('transition', 'all 0.3s ease-in-out', 'important');
+    
+    console.log('Applied highlight styles');
     
     // Scroll to event
     eventItem.scrollIntoView({ 
@@ -1449,9 +1589,13 @@ window.highlightEvent = function(calId, eventId, date) {
         inline: 'nearest'
     });
     
-    // Remove highlight after 3 seconds
+    // Remove highlight after 3 seconds and restore original styles
     setTimeout(() => {
+        console.log('Removing highlight');
         eventItem.classList.remove('event-highlighted');
+        eventItem.style.setProperty('background', originalBg);
+        eventItem.style.setProperty('box-shadow', originalShadow);
+        eventItem.style.setProperty('transition', '');
     }, 3000);
 };
 
@@ -1465,17 +1609,39 @@ window.toggleRecurringOptions = function(calId) {
     }
 };
 
-// Close dialog on escape key
-document.addEventListener('keydown', function(e) {
-    if (e.key === 'Escape') {
-        const dialogs = document.querySelectorAll('.event-dialog-compact');
-        dialogs.forEach(dialog => {
-            if (dialog.style.display === 'flex') {
-                dialog.style.display = 'none';
-            }
-        });
-    }
-});
+// ============================================================
+// Document-level event delegation (guarded - only attach once)
+// These use event delegation so they work for AJAX-rebuilt content.
+// ============================================================
+if (!window._calendarDelegationInit) {
+    window._calendarDelegationInit = true;
+
+    // ESC closes dialogs, popups, tooltips
+    document.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape') {
+            document.querySelectorAll('.event-dialog-compact').forEach(function(d) {
+                if (d.style.display === 'flex') d.style.display = 'none';
+            });
+            document.querySelectorAll('.day-popup').forEach(function(p) {
+                p.style.display = 'none';
+            });
+            hideConflictTooltip();
+        }
+    });
+
+    // Conflict tooltip delegation (capture phase for mouseenter/leave)
+    document.addEventListener('mouseenter', function(e) {
+        if (e.target && e.target.classList && e.target.classList.contains('event-conflict-badge')) {
+            showConflictTooltip(e.target);
+        }
+    }, true);
+
+    document.addEventListener('mouseleave', function(e) {
+        if (e.target && e.target.classList && e.target.classList.contains('event-conflict-badge')) {
+            hideConflictTooltip();
+        }
+    }, true);
+} // end delegation guard
 
 // Event panel navigation
 window.navEventPanel = function(calId, year, month, namespace) {
@@ -1689,8 +1855,10 @@ window.togglePastEventExpand = function(element) {
     }
 };
 
-// Filter calendar by namespace when clicking namespace badge
-document.addEventListener('click', function(e) {
+// Filter calendar by namespace when clicking namespace badge (guarded)
+if (!window._calendarClickDelegationInit) {
+    window._calendarClickDelegationInit = true;
+    document.addEventListener('click', function(e) {
     if (e.target.classList.contains('event-namespace-badge')) {
         const namespace = e.target.textContent;
         const eventItem = e.target.closest('.event-compact-item');
@@ -1733,7 +1901,8 @@ document.addEventListener('click', function(e) {
             updateFilteredNamespaceDisplay(calId, namespace);
         }
     }
-});
+    });
+} // end click delegation guard
 
 // Update the displayed filtered namespace in event list header
 window.updateFilteredNamespaceDisplay = function(calId, namespace) {
@@ -1767,6 +1936,13 @@ window.clearNamespaceFilter = function(calId) {
         return;
     }
     
+    // Immediately hide/remove the filter badge
+    const filterBadge = container.querySelector('.calendar-namespace-filter');
+    if (filterBadge) {
+        filterBadge.style.display = 'none';
+        filterBadge.remove();
+    }
+    
     // Get current year and month
     const year = parseInt(container.dataset.year) || new Date().getFullYear();
     const month = parseInt(container.dataset.month) || (new Date().getMonth() + 1);
@@ -1774,8 +1950,18 @@ window.clearNamespaceFilter = function(calId) {
     // Get original namespace (what the calendar was initialized with)
     const originalNamespace = container.dataset.originalNamespace || '';
     
+    // Also check for sidebar widget
+    const sidebarContainer = document.getElementById('sidebar-widget-' + calId);
+    if (sidebarContainer) {
+        // For sidebar widget, just reload the page without namespace filter
+        // Remove the namespace from the URL and reload
+        const url = new URL(window.location.href);
+        url.searchParams.delete('namespace');
+        window.location.href = url.toString();
+        return;
+    }
     
-    // Reload calendar with original namespace
+    // For regular calendar, reload calendar with original namespace
     navCalendar(calId, year, month, originalNamespace);
 };
 
@@ -2199,33 +2385,66 @@ window.formatTimeRange = function(startTime, endTime) {
     return formatTime(startTime) + ' - ' + formatTime(endTime);
 };
 
+// Track last known mouse position for tooltip positioning fallback
+var _lastMouseX = 0, _lastMouseY = 0;
+document.addEventListener('mousemove', function(e) {
+    _lastMouseX = e.clientX;
+    _lastMouseY = e.clientY;
+});
+
 // Show custom conflict tooltip
 window.showConflictTooltip = function(badgeElement) {
     // Remove any existing tooltip
     hideConflictTooltip();
     
-    // Get conflict data
-    const conflictsJson = badgeElement.getAttribute('data-conflicts');
-    if (!conflictsJson) return;
+    // Get conflict data (base64-encoded JSON to avoid attribute quote issues)
+    const conflictsRaw = badgeElement.getAttribute('data-conflicts');
+    if (!conflictsRaw) return;
     
     let conflicts;
     try {
-        conflicts = JSON.parse(conflictsJson);
+        conflicts = JSON.parse(decodeURIComponent(escape(atob(conflictsRaw))));
     } catch (e) {
-        console.error('Failed to parse conflicts:', e);
-        return;
+        // Fallback: try parsing as plain JSON (for PHP-rendered badges)
+        try {
+            conflicts = JSON.parse(conflictsRaw);
+        } catch (e2) {
+            console.error('Failed to parse conflicts:', e2);
+            return;
+        }
     }
+    
+    // Get theme from the calendar container via CSS variables
+    // Try closest ancestor first, then fall back to any calendar on the page
+    let containerEl = badgeElement.closest('[id^="cal_"], [id^="panel_"], [id^="sidebar-widget-"], .calendar-compact-container, .event-panel-standalone');
+    if (!containerEl) {
+        // Badge might be inside a day popup (appended to body) - find any calendar container
+        containerEl = document.querySelector('.calendar-compact-container, .event-panel-standalone, [id^="sidebar-widget-"]');
+    }
+    const cs = containerEl ? getComputedStyle(containerEl) : null;
+    
+    const bg = cs ? cs.getPropertyValue('--background-site').trim() || '#242424' : '#242424';
+    const border = cs ? cs.getPropertyValue('--border-main').trim() || '#00cc07' : '#00cc07';
+    const textPrimary = cs ? cs.getPropertyValue('--text-primary').trim() || '#00cc07' : '#00cc07';
+    const textDim = cs ? cs.getPropertyValue('--text-dim').trim() || '#00aa00' : '#00aa00';
+    const shadow = cs ? cs.getPropertyValue('--shadow-color').trim() || 'rgba(0, 204, 7, 0.3)' : 'rgba(0, 204, 7, 0.3)';
     
     // Create tooltip
     const tooltip = document.createElement('div');
     tooltip.id = 'conflict-tooltip';
     tooltip.className = 'conflict-tooltip';
     
-    // Build content
-    let html = '<div class="conflict-tooltip-header">⚠️ Time Conflicts</div>';
+    // Apply theme styles
+    tooltip.style.background = bg;
+    tooltip.style.borderColor = border;
+    tooltip.style.color = textPrimary;
+    tooltip.style.boxShadow = '0 4px 12px ' + shadow;
+    
+    // Build content with themed colors
+    let html = '<div class="conflict-tooltip-header" style="color: ' + textPrimary + '; border-bottom: 1px solid ' + border + ';">⚠️ Time Conflicts</div>';
     html += '<div class="conflict-tooltip-body">';
     conflicts.forEach(conflict => {
-        html += '<div class="conflict-item">• ' + escapeHtml(conflict) + '</div>';
+        html += '<div class="conflict-item" style="color: ' + textDim + ';">• ' + escapeHtml(conflict) + '</div>';
     });
     html += '</div>';
     
@@ -2349,5 +2568,272 @@ window.clearEventSearch = function(calId) {
         searchInput.focus();
     }
 };
+
+// ============================================
+// PINK THEME - GLOWING PARTICLE EFFECTS
+// ============================================
+
+// Create glowing pink particle effects for pink theme
+(function() {
+    let pinkThemeActive = false;
+    let trailTimer = null;
+    let pixelTimer = null;
+    
+    // Check if pink theme is active
+    function checkPinkTheme() {
+        const pinkCalendars = document.querySelectorAll('.calendar-theme-pink');
+        pinkThemeActive = pinkCalendars.length > 0;
+        return pinkThemeActive;
+    }
+    
+    // Create trail particle
+    function createTrailParticle(clientX, clientY) {
+        if (!pinkThemeActive) return;
+        
+        const trail = document.createElement('div');
+        trail.className = 'pink-cursor-trail';
+        trail.style.left = clientX + 'px';
+        trail.style.top = clientY + 'px';
+        trail.style.animation = 'cursor-trail-fade 0.5s ease-out forwards';
+        
+        document.body.appendChild(trail);
+        
+        setTimeout(function() {
+            trail.remove();
+        }, 500);
+    }
+    
+    // Create pixel sparkles
+    function createPixelSparkles(clientX, clientY) {
+        if (!pinkThemeActive || pixelTimer) return;
+        
+        const pixelCount = 3 + Math.floor(Math.random() * 4); // 3-6 pixels
+        
+        for (let i = 0; i < pixelCount; i++) {
+            const pixel = document.createElement('div');
+            pixel.className = 'pink-pixel-sparkle';
+            
+            // Random offset from cursor
+            const offsetX = (Math.random() - 0.5) * 30;
+            const offsetY = (Math.random() - 0.5) * 30;
+            
+            pixel.style.left = (clientX + offsetX) + 'px';
+            pixel.style.top = (clientY + offsetY) + 'px';
+            
+            // Random color - bright neon pinks and whites
+            const colors = ['#fff', '#ff1493', '#ff69b4', '#ffb6c1', '#ff85c1'];
+            const color = colors[Math.floor(Math.random() * colors.length)];
+            pixel.style.background = color;
+            pixel.style.boxShadow = '0 0 2px ' + color + ', 0 0 4px ' + color + ', 0 0 6px #fff';
+            
+            // Random animation
+            if (Math.random() > 0.5) {
+                pixel.style.animation = 'pixel-twinkle 0.6s ease-out forwards';
+            } else {
+                pixel.style.animation = 'pixel-float-away 0.8s ease-out forwards';
+            }
+            
+            document.body.appendChild(pixel);
+            
+            setTimeout(function() {
+                pixel.remove();
+            }, 800);
+        }
+        
+        pixelTimer = setTimeout(function() {
+            pixelTimer = null;
+        }, 40);
+    }
+    
+    // Create explosion
+    function createExplosion(clientX, clientY) {
+        if (!pinkThemeActive) return;
+        
+        const particleCount = 25;
+        const colors = ['#ff1493', '#ff69b4', '#ff85c1', '#ffc0cb', '#fff'];
+        
+        // Add hearts to explosion (8-12 hearts)
+        const heartCount = 8 + Math.floor(Math.random() * 5);
+        for (let i = 0; i < heartCount; i++) {
+            const heart = document.createElement('div');
+            heart.textContent = '💖';
+            heart.style.position = 'fixed';
+            heart.style.left = clientX + 'px';
+            heart.style.top = clientY + 'px';
+            heart.style.pointerEvents = 'none';
+            heart.style.zIndex = '9999999';
+            heart.style.fontSize = (12 + Math.random() * 16) + 'px';
+            
+            // Random direction
+            const angle = Math.random() * Math.PI * 2;
+            const velocity = 60 + Math.random() * 80;
+            const tx = Math.cos(angle) * velocity;
+            const ty = Math.sin(angle) * velocity;
+            
+            heart.style.setProperty('--tx', tx + 'px');
+            heart.style.setProperty('--ty', ty + 'px');
+            
+            const duration = 0.8 + Math.random() * 0.4;
+            heart.style.animation = 'particle-explode ' + duration + 's ease-out forwards';
+            
+            document.body.appendChild(heart);
+            
+            setTimeout(function() {
+                heart.remove();
+            }, duration * 1000);
+        }
+        
+        // Main explosion particles
+        for (let i = 0; i < particleCount; i++) {
+            const particle = document.createElement('div');
+            particle.className = 'pink-particle';
+            
+            const color = colors[Math.floor(Math.random() * colors.length)];
+            particle.style.background = 'radial-gradient(circle, ' + color + ', transparent)';
+            particle.style.boxShadow = '0 0 10px ' + color + ', 0 0 20px ' + color;
+            
+            particle.style.left = clientX + 'px';
+            particle.style.top = clientY + 'px';
+            
+            const angle = (Math.PI * 2 * i) / particleCount;
+            const velocity = 50 + Math.random() * 100;
+            const tx = Math.cos(angle) * velocity;
+            const ty = Math.sin(angle) * velocity;
+            
+            particle.style.setProperty('--tx', tx + 'px');
+            particle.style.setProperty('--ty', ty + 'px');
+            
+            const size = 4 + Math.random() * 6;
+            particle.style.width = size + 'px';
+            particle.style.height = size + 'px';
+            
+            const duration = 0.6 + Math.random() * 0.4;
+            particle.style.animation = 'particle-explode ' + duration + 's ease-out forwards';
+            
+            document.body.appendChild(particle);
+            
+            setTimeout(function() {
+                particle.remove();
+            }, duration * 1000);
+        }
+        
+        // Pixel sparkles
+        const pixelSparkleCount = 40;
+        
+        for (let i = 0; i < pixelSparkleCount; i++) {
+            const pixel = document.createElement('div');
+            pixel.className = 'pink-pixel-sparkle';
+            
+            const pixelColors = ['#fff', '#fff', '#ff1493', '#ff69b4', '#ffb6c1', '#ff85c1'];
+            const pixelColor = pixelColors[Math.floor(Math.random() * pixelColors.length)];
+            pixel.style.background = pixelColor;
+            pixel.style.boxShadow = '0 0 3px ' + pixelColor + ', 0 0 6px ' + pixelColor + ', 0 0 9px #fff';
+            
+            const angle = Math.random() * Math.PI * 2;
+            const distance = 30 + Math.random() * 80;
+            const offsetX = Math.cos(angle) * distance;
+            const offsetY = Math.sin(angle) * distance;
+            
+            pixel.style.left = clientX + 'px';
+            pixel.style.top = clientY + 'px';
+            pixel.style.setProperty('--tx', offsetX + 'px');
+            pixel.style.setProperty('--ty', offsetY + 'px');
+            
+            const pixelSize = 1 + Math.random() * 2;
+            pixel.style.width = pixelSize + 'px';
+            pixel.style.height = pixelSize + 'px';
+            
+            const duration = 0.4 + Math.random() * 0.4;
+            if (Math.random() > 0.5) {
+                pixel.style.animation = 'pixel-twinkle ' + duration + 's ease-out forwards';
+            } else {
+                pixel.style.animation = 'particle-explode ' + duration + 's ease-out forwards';
+            }
+            
+            document.body.appendChild(pixel);
+            
+            setTimeout(function() {
+                pixel.remove();
+            }, duration * 1000);
+        }
+        
+        // Flash
+        const flash = document.createElement('div');
+        flash.style.position = 'fixed';
+        flash.style.left = clientX + 'px';
+        flash.style.top = clientY + 'px';
+        flash.style.width = '40px';
+        flash.style.height = '40px';
+        flash.style.borderRadius = '50%';
+        flash.style.background = 'radial-gradient(circle, rgba(255, 255, 255, 0.9), rgba(255, 20, 147, 0.6), transparent)';
+        flash.style.boxShadow = '0 0 40px #fff, 0 0 60px #ff1493, 0 0 80px #ff69b4';
+        flash.style.pointerEvents = 'none';
+        flash.style.zIndex = '9999999';  // Above everything including dialogs
+        flash.style.transform = 'translate(-50%, -50%)';
+        flash.style.animation = 'cursor-trail-fade 0.3s ease-out forwards';
+        
+        document.body.appendChild(flash);
+        
+        setTimeout(function() {
+            flash.remove();
+        }, 300);
+    }
+    
+    function initPinkParticles() {
+        if (!checkPinkTheme()) return;
+        
+        // Use capture phase to catch events before stopPropagation
+        document.addEventListener('mousemove', function(e) {
+            if (!pinkThemeActive) return;
+            
+            createTrailParticle(e.clientX, e.clientY);
+            createPixelSparkles(e.clientX, e.clientY);
+        }, true); // Capture phase!
+        
+        // Throttle main trail
+        document.addEventListener('mousemove', function(e) {
+            if (!pinkThemeActive || trailTimer) return;
+            
+            trailTimer = setTimeout(function() {
+                trailTimer = null;
+            }, 30);
+        }, true); // Capture phase!
+        
+        // Click explosion - use capture phase
+        document.addEventListener('click', function(e) {
+            if (!pinkThemeActive) return;
+            
+            createExplosion(e.clientX, e.clientY);
+        }, true); // Capture phase!
+    }
+    
+    // Initialize on load
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', initPinkParticles);
+    } else {
+        initPinkParticles();
+    }
+    
+    // Re-check theme if calendar is dynamically added
+    if (typeof MutationObserver !== 'undefined') {
+        const observer = new MutationObserver(function(mutations) {
+            mutations.forEach(function(mutation) {
+                if (mutation.addedNodes.length > 0) {
+                    mutation.addedNodes.forEach(function(node) {
+                        if (node.nodeType === 1 && node.classList && node.classList.contains('calendar-theme-pink')) {
+                            checkPinkTheme();
+                            initPinkParticles();
+                        }
+                    });
+                }
+            });
+        });
+        
+        observer.observe(document.body, {
+            childList: true,
+            subtree: true
+        });
+    }
+})();
 
 // End of calendar plugin JavaScript

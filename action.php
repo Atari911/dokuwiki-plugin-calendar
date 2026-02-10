@@ -100,8 +100,48 @@ class action_plugin_calendar extends DokuWiki_Action_Plugin {
         // Generate event ID if new
         $generatedId = $eventId ?: uniqid();
         
+        // If editing a recurring event, load existing data to preserve unchanged fields
+        $existingEventData = null;
+        if ($eventId && $isRecurring) {
+            $searchDate = ($oldDate && $oldDate !== $date) ? $oldDate : $date;
+            $existingEventData = $this->getExistingEventData($eventId, $searchDate, $oldNamespace ?: $namespace);
+            if ($existingEventData) {
+                error_log("Calendar saveEvent recurring: Loaded existing data - namespace='" . ($existingEventData['namespace'] ?? 'NOT SET') . "'");
+            }
+        }
+        
         // If recurring, generate multiple events
         if ($isRecurring) {
+            // Merge with existing data if editing (preserve values that weren't changed)
+            if ($existingEventData) {
+                $title = $title ?: $existingEventData['title'];
+                $time = $time ?: (isset($existingEventData['time']) ? $existingEventData['time'] : '');
+                $endTime = $endTime ?: (isset($existingEventData['endTime']) ? $existingEventData['endTime'] : '');
+                $description = $description ?: (isset($existingEventData['description']) ? $existingEventData['description'] : '');
+                // Only use existing color if new color is default
+                if ($color === '#3498db' && isset($existingEventData['color'])) {
+                    $color = $existingEventData['color'];
+                }
+                
+                // Preserve namespace in these cases:
+                // 1. Namespace field is empty (user didn't select anything)
+                // 2. Namespace contains wildcards (like "personal;work" or "work*")
+                // 3. Namespace is the same as what was passed (no change intended)
+                $receivedNamespace = $namespace;
+                if (empty($namespace) || strpos($namespace, '*') !== false || strpos($namespace, ';') !== false) {
+                    if (isset($existingEventData['namespace'])) {
+                        $namespace = $existingEventData['namespace'];
+                        error_log("Calendar saveEvent recurring: Preserving namespace '$namespace' (received='$receivedNamespace')");
+                    } else {
+                        error_log("Calendar saveEvent recurring: No existing namespace to preserve (received='$receivedNamespace')");
+                    }
+                } else {
+                    error_log("Calendar saveEvent recurring: Using new namespace '$namespace' (received='$receivedNamespace')");
+                }
+            } else {
+                error_log("Calendar saveEvent recurring: No existing data found, using namespace='$namespace'");
+            }
+            
             $this->createRecurringEvents($namespace, $date, $endDate, $title, $time, $description, 
                                         $color, $isTask, $recurrenceType, $recurrenceEnd, $generatedId);
             echo json_encode(['success' => true]);
@@ -305,8 +345,11 @@ class action_plugin_calendar extends DokuWiki_Action_Plugin {
         
         $eventFile = $dataDir . sprintf('%04d-%02d.json', $year, $month);
         
-        // First, get the event to check if it spans multiple months
+        // First, get the event to check if it spans multiple months or is recurring
         $eventToDelete = null;
+        $isRecurring = false;
+        $recurringId = null;
+        
         if (file_exists($eventFile)) {
             $events = json_decode(file_get_contents($eventFile), true);
             
@@ -314,6 +357,8 @@ class action_plugin_calendar extends DokuWiki_Action_Plugin {
                 foreach ($events[$date] as $event) {
                     if ($event['id'] === $eventId) {
                         $eventToDelete = $event;
+                        $isRecurring = isset($event['recurring']) && $event['recurring'];
+                        $recurringId = isset($event['recurringId']) ? $event['recurringId'] : null;
                         break;
                     }
                 }
@@ -328,6 +373,11 @@ class action_plugin_calendar extends DokuWiki_Action_Plugin {
                 
                 file_put_contents($eventFile, json_encode($events, JSON_PRETTY_PRINT));
             }
+        }
+        
+        // If this is a recurring event, delete ALL occurrences with the same recurringId
+        if ($isRecurring && $recurringId) {
+            $this->deleteAllRecurringInstances($recurringId, $namespace, $dataDir);
         }
         
         // If event spans multiple months, delete it from the first day of each subsequent month
@@ -803,5 +853,78 @@ class action_plugin_calendar extends DokuWiki_Action_Plugin {
                 $this->scanForNamespaces($path . '/', $namespace, $namespaces);
             }
         }
+    }
+    
+    /**
+     * Delete all instances of a recurring event across all months
+     */
+    private function deleteAllRecurringInstances($recurringId, $namespace, $dataDir) {
+        // Scan all JSON files in the calendar directory
+        $calendarFiles = glob($dataDir . '*.json');
+        
+        foreach ($calendarFiles as $file) {
+            $modified = false;
+            $events = json_decode(file_get_contents($file), true);
+            
+            if (!$events) continue;
+            
+            // Check each date in the file
+            foreach ($events as $date => &$dayEvents) {
+                // Filter out events with matching recurringId
+                $originalCount = count($dayEvents);
+                $dayEvents = array_values(array_filter($dayEvents, function($event) use ($recurringId) {
+                    $eventRecurringId = isset($event['recurringId']) ? $event['recurringId'] : null;
+                    return $eventRecurringId !== $recurringId;
+                }));
+                
+                if (count($dayEvents) !== $originalCount) {
+                    $modified = true;
+                }
+                
+                // Remove empty dates
+                if (empty($dayEvents)) {
+                    unset($events[$date]);
+                }
+            }
+            
+            // Save if modified
+            if ($modified) {
+                file_put_contents($file, json_encode($events, JSON_PRETTY_PRINT));
+            }
+        }
+    }
+    
+    /**
+     * Get existing event data for preserving unchanged fields during edit
+     */
+    private function getExistingEventData($eventId, $date, $namespace) {
+        list($year, $month, $day) = explode('-', $date);
+        
+        $dataDir = DOKU_INC . 'data/meta/';
+        if ($namespace) {
+            $dataDir .= str_replace(':', '/', $namespace) . '/';
+        }
+        $dataDir .= 'calendar/';
+        
+        $eventFile = $dataDir . sprintf('%04d-%02d.json', $year, $month);
+        
+        if (!file_exists($eventFile)) {
+            return null;
+        }
+        
+        $events = json_decode(file_get_contents($eventFile), true);
+        
+        if (!isset($events[$date])) {
+            return null;
+        }
+        
+        // Find the event by ID
+        foreach ($events[$date] as $event) {
+            if ($event['id'] === $eventId) {
+                return $event;
+            }
+        }
+        
+        return null;
     }
 }

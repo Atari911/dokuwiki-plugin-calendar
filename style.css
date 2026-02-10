@@ -1,4 +1,32 @@
-/* Compact Calendar Plugin - Sleek Design */
+/* Calendar Plugin - Matrix Edition v5.5.0
+ *
+ * CSS VARIABLE REFERENCE
+ * ======================
+ * All theming is driven by CSS custom properties injected per-calendar instance.
+ * The wiki theme maps these from the DokuWiki template's style.ini file.
+ *
+ * Variable               | Description                | Wiki Template Mapping (style.ini)
+ * ------------------------|----------------------------|------------------------------------
+ * --background-site       | Main container bg          | __background_site__
+ * --background-alt        | Hover/alt bg               | __background_alt__
+ * --background-header     | Header backgrounds         | __background_alt__
+ * --text-primary          | Main text color            | __text__
+ * --text-bright           | Accent text                | __link__
+ * --text-dim              | Secondary/muted text       | __text_neu__
+ * --border-color          | Grid lines, subtle borders | __border__
+ * --border-main           | Accent border, buttons     | __link__
+ * --cell-bg               | Cell/input backgrounds     | __background__
+ * --cell-today-bg         | Today cell highlight       | __background_neu__
+ * --grid-bg               | Calendar grid bg           | __background_site__
+ * --shadow-color          | Box shadow color           | rgba(0,0,0,0.1)
+ * --header-border         | Header bottom border       | __border__
+ * --header-shadow         | Header box-shadow          | 0 2px 4px rgba(0,0,0,0.1)
+ * --btn-text              | Button text color          | computed (contrast against --border-main)
+ *
+ * To customize for a specific DokuWiki template, edit the template's
+ * conf/style.ini [replacements] section. The calendar will automatically
+ * pick up the template colors.
+ */
 
 /* Main container: Responsive with flexible sizing */
 .calendar-compact-container {
@@ -8,10 +36,10 @@
     min-width: 320px;
     height: 600px;
     max-height: 90vh;
-    background: #ffffff;
-    border: 1px solid #d0d0d0;
+    background-color: var(--background-site, #ffffff);
+    border: 2px solid var(--border-main, #d0d0d0);
     border-radius: 4px;
-    box-shadow: 0 2px 4px rgba(0,0,0,0.06);
+    box-shadow: 0 0 10px var(--shadow-color, rgba(0,0,0,0.06));
     overflow: hidden;
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
     font-size: 12px;
@@ -30,7 +58,7 @@
         width: 100% !important;
         min-width: 100% !important;
         border-right: none !important;
-        border-bottom: 1px solid #e0e0e0;
+        border-bottom: 1px solid var(--border-main, #e0e0e0);
         height: auto;
         min-height: 300px;
     }
@@ -72,10 +100,10 @@
 .calendar-compact-left {
     flex: 1;
     min-width: 400px;
-    border-right: 1px solid #e0e0e0;
+    border-right: 1px solid var(--border-main, #e0e0e0);
     display: flex;
     flex-direction: column;
-    background: #fafafa;
+    background: var(--background-site);
     overflow: hidden;
 }
 
@@ -86,7 +114,7 @@
     max-width: 400px;
     display: flex;
     flex-direction: column;
-    background: #ffffff;
+    background: var(--background-site);
     overflow: hidden;
 }
 
@@ -96,8 +124,10 @@
     align-items: center;
     gap: 12px;
     padding: 8px 12px;
-    background: #ffffff;
-    border-bottom: 1px solid #e0e0e0;
+    background: var(--background-header);
+    color: var(--text-primary);
+    border-bottom: 1px solid var(--header-border, var(--border-main));
+    box-shadow: var(--header-shadow, none);
 }
 
 /* Namespace filter indicator at top of calendar */
@@ -106,21 +136,21 @@
     align-items: center;
     gap: 6px;
     padding: 6px 10px;
-    background: #e8f5e9;
-    border: 1px solid #81c784;
+    background: var(--cell-bg, #e8f5e9);
+    border: 1px solid var(--border-color, #81c784);
     border-radius: 4px;
     margin: 8px 12px 0 12px;
     font-size: 11px;
 }
 
 .namespace-filter-label {
-    color: #2e7d32;
+    color: var(--text-primary, #2e7d32);
     font-weight: 600;
 }
 
 .namespace-filter-name {
-    background: #00cc07;
-    color: white;
+    background: var(--border-main, #00cc07);
+    color: var(--btn-text, white);
     padding: 2px 6px;
     border-radius: 3px;
     font-weight: 500;
@@ -131,7 +161,7 @@
 .namespace-filter-clear {
     background: none;
     border: none;
-    color: #00cc07;
+    color: var(--border-main, #00cc07);
     cursor: pointer;
     font-size: 16px;
     padding: 0;
@@ -146,7 +176,7 @@
 }
 
 .namespace-filter-clear:hover {
-    background: rgba(0, 204, 7, 0.1);
+    background: var(--shadow-color, rgba(0, 204, 7, 0.1));
 }
 
 .namespace-filter-badge {
@@ -161,9 +191,7 @@
     transform: translateY(-50%);
     background: none;
     border: none;
-    color: #999;
-    cursor: pointer;
-    font-size: 12px;
+    color: var(--text-dim, #999);
     padding: 0;
     width: 16px;
     height: 16px;
@@ -184,7 +212,7 @@
     margin: 0;
     font-size: 14px;
     font-weight: 600;
-    color: #2c3e50;
+    color: var(--text-primary, #2c3e50);
     flex: 1;
     text-align: center;
 }
@@ -198,8 +226,8 @@
 }
 
 .calendar-month-picker:hover {
-    background: #f0f0f0;
-    color: #008800;
+    background: var(--background-alt, #f0f0f0);
+    color: var(--text-bright, #008800);
 }
 
 .month-picker-overlay {
@@ -216,10 +244,11 @@
 }
 
 .month-picker-dialog {
-    background: white;
+    background: var(--background-site, white);
+    border: 2px solid var(--border-main, #d0d0d0);
     border-radius: 8px;
     padding: 20px;
-    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+    box-shadow: 0 0 20px var(--shadow-color, rgba(0, 0, 0, 0.3));
     min-width: 300px;
 }
 
@@ -227,7 +256,7 @@
     margin: 0 0 16px 0;
     font-size: 16px;
     font-weight: 600;
-    color: #2c3e50;
+    color: var(--text-primary, #2c3e50);
 }
 
 .month-picker-selects {
@@ -239,17 +268,18 @@
 .month-picker-select {
     flex: 1;
     padding: 8px 12px;
-    border: 1px solid #d0d0d0;
+    border: 1px solid var(--border-main, #d0d0d0);
     border-radius: 4px;
     font-size: 14px;
-    background: white;
+    background: var(--cell-bg, white);
+    color: var(--text-primary, #333);
     cursor: pointer;
 }
 
 .month-picker-select:focus {
     outline: none;
-    border-color: #008800;
-    box-shadow: 0 0 0 2px rgba(0, 136, 0, 0.1);
+    border-color: var(--border-main, #008800);
+    box-shadow: 0 0 0 2px var(--shadow-color, rgba(0, 136, 0, 0.1));
 }
 
 .month-picker-actions {
@@ -259,14 +289,14 @@
 }
 
 .cal-nav-btn {
-    background: #f5f5f5;
-    border: 1px solid #d0d0d0;
+    background: var(--border-main);
+    border: 1px solid var(--border-color);
+    color: var(--btn-text, var(--background-site));
     width: 28px;
     height: 28px;
     border-radius: 4px;
     cursor: pointer;
     font-size: 16px;
-    color: #555;
     transition: all 0.15s;
     padding: 0;
     display: flex;
@@ -275,14 +305,13 @@
 }
 
 .cal-nav-btn:hover {
-    background: #e8e8e8;
-    border-color: #aaa;
+    opacity: 0.9;
 }
 
 .cal-today-btn {
-    background: #008800;
-    border: 1px solid #388e3c;
-    color: white;
+    background: var(--border-main);
+    border: 1px solid var(--border-color);
+    color: var(--btn-text, var(--background-site));
     font-size: 11px;
     font-weight: 600;
     padding: 4px 10px;
@@ -292,8 +321,7 @@
 }
 
 .cal-today-btn:hover {
-    background: #388e3c;
-    border-color: #2e7d32;
+    opacity: 0.9;
 }
 
 /* Calendar grid - Excel-like sizing - RESPONSIVE */
@@ -302,16 +330,17 @@
     border-collapse: collapse;
     table-layout: fixed;
     flex: 1;
+    background: var(--grid-bg, var(--background-site));
 }
 
 .calendar-compact-grid thead th {
     height: 22px;
-    background: #f8f8f8;
-    border-bottom: 1px solid #d0d0d0;
-    border-right: 1px solid #e8e8e8;
+    background: var(--background-header);
+    color: var(--text-primary);
+    border-bottom: 1px solid var(--border-color, #d0d0d0);
+    border-right: 1px solid var(--border-color, #e8e8e8);
     font-size: 10px;
     font-weight: 600;
-    color: #666;
     text-align: center;
     padding: 0;
 }
@@ -323,10 +352,11 @@
 .calendar-compact-grid tbody td {
     height: 58px;
     min-height: 40px;
-    border: 1px solid #e8e8e8;
+    border: 1px solid var(--border-color, #e8e8e8);
     border-top: none;
     border-left: none;
-    background: #ffffff;
+    background-color: var(--cell-bg, var(--background-site));
+    color: var(--text-primary);
     cursor: pointer;
     padding: 3px;
     position: relative;
@@ -349,49 +379,53 @@
 }
 
 .calendar-compact-grid tbody td:first-child {
-    border-left: 1px solid #e8e8e8;
+    border-left: 1px solid var(--border-color, #e8e8e8);
 }
 
 .calendar-compact-grid tbody td:hover {
-    background: #f0f7ff;
+    background-color: var(--background-alt);
 }
 
 .cal-empty {
-    background: #fafafa !important;
+    background: var(--background-site) !important;
     cursor: default !important;
 }
 
 .cal-empty:hover {
-    background: #fafafa !important;
+    background: var(--background-site) !important;
 }
 
 .cal-today {
-    background: #e8f5e9 !important;
+    background: var(--cell-today-bg) !important;
+    border: 2px solid var(--border-main) !important;
 }
 
 .cal-today:hover {
-    background: #c8e6c9 !important;
+    background: var(--cell-today-bg) !important;
 }
 
 .cal-has-events {
-    background: #fffbf0;
 }
 
 .cal-has-events:hover {
-    background: #fff4d9;
 }
 
 .day-num {
     display: inline-block;
     font-size: 11px;
     font-weight: 500;
-    color: #333;
+    color: var(--text-primary);
     padding: 1px 3px;
 }
 
+.day-num-today {
+    background: var(--border-main);
+    color: var(--btn-text, var(--background-site));
+    border-radius: 2px;
+    font-weight: 600;
+}
+
 .cal-today .day-num {
-    background: #008800;
-    color: white;
     border-radius: 2px;
     font-weight: 600;
 }
@@ -470,8 +504,8 @@
     align-items: center;
     justify-content: space-between;
     padding: 8px 10px;
-    border-bottom: 1px solid #e0e0e0;
-    background: #fafafa;
+    border-bottom: 1px solid var(--header-border, var(--border-main, #e0e0e0));
+    background: var(--background-header);
 }
 
 .event-list-header-content {
@@ -485,12 +519,12 @@
     margin: 0;
     font-size: 12px;
     font-weight: 600;
-    color: #2c3e50;
+    color: var(--text-primary);
 }
 
 .namespace-badge {
-    background: #e8f5e9;
-    color: #388e3c;
+    background: var(--border-main, #e8f5e9);
+    color: var(--btn-text, var(--background-site));
     padding: 2px 6px;
     border-radius: 10px;
     font-size: 9px;
@@ -510,21 +544,22 @@
 .event-search-input-inline {
     width: 100%;
     padding: 4px 24px 4px 8px;
-    border: 1px solid #d0d0d0;
+    border: 1px solid var(--border-color, #d0d0d0);
     border-radius: 3px;
     font-size: 11px;
     outline: none;
     transition: border-color 0.2s, box-shadow 0.2s;
-    background: white;
+    background: var(--cell-bg);
+    color: var(--text-primary);
 }
 
 .event-search-input-inline:focus {
-    border-color: #00cc07;
-    box-shadow: 0 0 0 2px rgba(0, 204, 7, 0.1);
+    border-color: var(--border-main, #00cc07);
+    box-shadow: 0 0 0 2px var(--shadow-color, rgba(0, 204, 7, 0.1));
 }
 
 .event-search-input-inline::placeholder {
-    color: #999;
+    color: var(--text-dim);
     font-size: 10px;
 }
 
@@ -535,7 +570,7 @@
     transform: translateY(-50%);
     background: none;
     border: none;
-    color: #999;
+    color: var(--text-dim);
     cursor: pointer;
     padding: 2px 4px;
     font-size: 12px;
@@ -544,20 +579,20 @@
 }
 
 .event-search-clear-inline:hover {
-    color: #333;
+    color: var(--text-primary);
 }
 
 .no-search-results {
     text-align: center;
-    color: #999;
+    color: var(--text-dim);
     font-size: 12px;
     padding: 20px;
     font-style: italic;
 }
 
 .add-event-compact {
-    background: #008800;
-    color: white;
+    background: var(--border-main);
+    color: var(--btn-text, var(--background-site));
     border: none;
     padding: 4px 8px;
     border-radius: 3px;
@@ -568,7 +603,7 @@
 }
 
 .add-event-compact:hover {
-    background: #45a049;
+    opacity: 0.9;
 }
 
 /* Event list scrollable area - COMPACT */
@@ -576,6 +611,7 @@
     flex: 1;
     overflow-y: auto;
     padding: 6px;
+    background: var(--background-site);
 }
 
 .event-list-compact::-webkit-scrollbar {
@@ -583,16 +619,16 @@
 }
 
 .event-list-compact::-webkit-scrollbar-track {
-    background: #f5f5f5;
+    background: var(--background-site, #f5f5f5);
 }
 
 .event-list-compact::-webkit-scrollbar-thumb {
-    background: #ccc;
+    background: var(--border-color, #ccc);
     border-radius: 3px;
 }
 
 .event-list-compact::-webkit-scrollbar-thumb:hover {
-    background: #aaa;
+    background: var(--text-dim, #aaa);
 }
 
 /* Event items in list - SUPER COMPACT with checkbox on right */
@@ -600,8 +636,9 @@
     display: flex;
     align-items: flex-start;
     margin-bottom: 4px;
-    background: #ffffff;
-    border: 1px solid #e0e0e0;
+    background-color: var(--cell-bg, var(--background-site));
+    color: var(--text-primary);
+    border: 1px solid var(--border-color, #e0e0e0);
     border-left: 3px solid #3498db;
     border-radius: 3px;
     padding: 5px 6px;
@@ -611,8 +648,8 @@
 }
 
 .event-compact-item:hover {
-    box-shadow: 0 1px 3px rgba(0,0,0,0.08);
-    background: #f8f9fa;
+    box-shadow: 0 1px 3px var(--shadow-color, rgba(0,0,0,0.08));
+    background-color: var(--background-alt);
 }
 
 .event-highlighted {
@@ -640,17 +677,17 @@
 
 .event-completed {
     opacity: 0.55;
-    background: #f5f5f5;
+    background: var(--background-alt, #f5f5f5);
 }
 
 .event-completed .event-title-compact {
     text-decoration: line-through;
-    color: #999;
+    color: var(--text-dim, #999);
 }
 
 .event-past {
     opacity: 0.35;
-    background: #fafafa;
+    background: var(--background-site, #fafafa);
     font-size: 10px;
     padding: 3px 6px;
     margin-bottom: 2px;
@@ -660,35 +697,35 @@
 
 .event-past:hover {
     opacity: 0.6;
-    background: #f5f5f5;
+    background: var(--background-alt, #f5f5f5);
 }
 
 .event-past-expanded {
     opacity: 0.8 !important;
-    background: #f9f9f9 !important;
+    background: var(--cell-bg, #f9f9f9) !important;
     padding: 5px 6px !important;
     font-size: 12px !important;
 }
 
 .event-past-expanded .event-title-compact {
     font-size: 12px !important;
-    color: #666 !important;
+    color: var(--text-dim, #666) !important;
 }
 
 .event-past-expanded .event-date-time {
     font-size: 11px !important;
-    color: #888 !important;
+    color: var(--text-dim, #888) !important;
 }
 
 .event-past .event-title-compact {
     font-size: 10px;
-    color: #aaa;
+    color: var(--text-dim, #aaa);
     font-weight: 400;
 }
 
 .event-past .event-date-time {
     font-size: 9px;
-    color: #bbb;
+    color: var(--text-dim, #bbb);
 }
 
 .event-past .event-action-btn {
@@ -701,8 +738,8 @@
 }
 
 .event-today-badge {
-    background: #9b59b6;
-    color: white;
+    background: var(--border-main, #9b59b6);
+    color: var(--btn-text, white);
     padding: 1px 4px;
     border-radius: 3px;
     font-size: 9px;
@@ -715,8 +752,8 @@
 }
 
 .event-pastdue-badge {
-    background: #e74c3c;
-    color: white;
+    background: #ff9800;
+    color: #fff;
     padding: 1px 4px;
     border-radius: 3px;
     font-size: 9px;
@@ -735,8 +772,8 @@
 }
 
 .event-namespace-badge {
-    background: #008800;
-    color: white;
+    background: var(--border-main, #008800);
+    color: var(--btn-text, white);
     padding: 1px 4px;
     border-radius: 3px;
     font-size: 9px;
@@ -749,7 +786,7 @@
 }
 
 .event-namespace-badge:hover {
-    background: #006600;
+    opacity: 0.85;
 }
 
 .event-conflict-badge {
@@ -780,41 +817,107 @@
     animation: none;
 }
 
-/* Custom conflict tooltip */
+/* Custom conflict tooltip - SMALLER FOR MAIN CALENDAR */
 .conflict-tooltip {
     position: fixed;
     z-index: 10000;
     background: white;
-    border: 2px solid #ff9800;
-    border-radius: 6px;
-    box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+    border: 1px solid #ff9800;
+    border-radius: 3px;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.2);
     padding: 0;
-    min-width: 200px;
-    max-width: 350px;
+    min-width: 120px;
+    max-width: 200px;
     opacity: 0;
     transition: opacity 0.2s;
     pointer-events: none;
 }
 
+/* Custom tooltip that appears above and to the left - FIXED POSITION */
+[data-tooltip] {
+    position: relative;
+    cursor: help;
+}
+
+[data-tooltip]:before {
+    content: attr(data-tooltip);
+    position: fixed;
+    padding: 3px 6px;
+    background: rgba(0, 0, 0, 0.95);
+    color: #fff;
+    font-size: 9px;
+    line-height: 1.3;
+    white-space: pre-line;
+    border-radius: 3px;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.2s;
+    min-width: 120px;
+    max-width: 200px;
+    z-index: 10000;
+    text-align: left;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+}
+
+[data-tooltip]:hover:before {
+    opacity: 1;
+}
+
+/* Pink theme tooltips - with hearts! */
+.sidebar-pink [data-tooltip]:before {
+    background: linear-gradient(135deg, #ff1493 0%, #ff69b4 100%);
+    color: #fff;
+    border: 2px solid #ff85c1;
+    box-shadow: 0 0 15px rgba(255, 20, 147, 0.6), 0 4px 12px rgba(0, 0, 0, 0.4);
+    font-weight: 600;
+}
+
+.sidebar-pink [data-tooltip]:after {
+    content: '💖';
+    position: fixed;
+    font-size: 12px;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.2s;
+    z-index: 10001;
+    filter: drop-shadow(0 0 3px rgba(255, 20, 147, 0.8));
+}
+
+.sidebar-pink [data-tooltip]:hover:after {
+    opacity: 1;
+}
+
+/* Position data-tooltip with JavaScript for no cutoff */
+.data-tooltip-positioned:before {
+    /* Position set by JavaScript */
+}
+
+/* Allow sidebar to overflow for tooltips */
+.sidebar-widget,
+.sidebar-matrix {
+    overflow: visible !important;
+}
+
 .conflict-tooltip-header {
     background: #ff9800;
     color: white;
-    padding: 8px 12px;
+    padding: 4px 8px;
     font-weight: 600;
-    font-size: 12px;
-    border-radius: 4px 4px 0 0;
+    font-size: 10px;
+    border-radius: 2px 2px 0 0;
 }
 
 .conflict-tooltip-body {
-    padding: 10px 12px;
-    font-size: 11px;
-    line-height: 1.6;
+    padding: 6px 8px;
+    font-size: 9px;
+    line-height: 1.4;
 }
 
 .conflict-item {
-    padding: 4px 0;
-    color: #333;
-    border-bottom: 1px solid #f0f0f0;
+    padding: 2px 0;
+    color: var(--text-primary, #333);
+    border-bottom: 1px solid var(--border-color, #f0f0f0);
+    font-size: 9px;
 }
 
 .conflict-item:last-child {
@@ -837,7 +940,7 @@
 .event-title-compact {
     font-size: 12px;
     font-weight: 600;
-    color: #2c3e50;
+    color: var(--text-primary, #2c3e50);
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -846,7 +949,7 @@
 
 .event-meta-compact {
     font-size: 10px;
-    color: #666;
+    color: var(--text-dim, #666);
     margin-top: 1px;
     text-align: left;
 }
@@ -857,7 +960,7 @@
 
 .event-desc-compact {
     font-size: 10px;
-    color: #666;
+    color: var(--text-dim, #666);
     line-height: 1.4;
     margin-top: 2px;
     text-align: left;
@@ -874,20 +977,20 @@
 }
 
 .event-desc-compact a {
-    color: #008800;
+    color: var(--border-main, #008800);
     text-decoration: none;
-    border-bottom: 1px dotted #008800;
+    border-bottom: 1px dotted var(--border-main, #008800);
 }
 
 .event-desc-compact a:hover {
-    color: #388e3c;
+    opacity: 0.8;
     border-bottom-style: solid;
 }
 
 .event-desc-compact strong,
 .event-desc-compact b {
     font-weight: 600;
-    color: #333;
+    color: var(--text-primary, #333);
 }
 
 .event-desc-compact em,
@@ -896,7 +999,7 @@
 }
 
 .event-desc-compact code {
-    background: #f5f5f5;
+    background: var(--background-alt, #f5f5f5);
     padding: 1px 3px;
     border-radius: 2px;
     font-family: monospace;
@@ -940,7 +1043,7 @@
 
 .no-events-msg {
     text-align: center;
-    color: #999;
+    color: var(--text-dim, #999);
     font-size: 12px;
     font-style: italic;
     padding: 40px 20px;
@@ -970,12 +1073,13 @@
 
 .dialog-content-sleek {
     position: relative;
-    background: #ffffff;
+    background: var(--background-site, #ffffff);
+    border: 2px solid var(--border-main, #d0d0d0);
+    box-shadow: 0 0 20px var(--shadow-color, rgba(0,0,0,0.2));
     width: 100%;
     max-width: 450px;
     max-height: calc(100vh - 40px);
     border-radius: 8px;
-    box-shadow: 0 8px 32px rgba(0,0,0,0.2);
     z-index: 10000;
     animation: slideUp 0.3s ease;
     overflow: hidden;
@@ -1028,8 +1132,9 @@
     align-items: center;
     justify-content: space-between;
     padding: 10px 14px;
-    background: #2c3e50;
-    color: white;
+    background: var(--background-header, #2c3e50);
+    color: var(--text-primary, white);
+    border-bottom: 1px solid var(--border-main, transparent);
     cursor: move;
     flex-shrink: 0;
 }
@@ -1042,12 +1147,13 @@
     margin: 0;
     font-size: 15px;
     font-weight: 600;
+    color: var(--text-primary, white);
 }
 
 .dialog-close-btn {
     background: rgba(255,255,255,0.2);
     border: none;
-    color: white;
+    color: var(--text-primary, white);
     font-size: 22px;
     width: 28px;
     height: 28px;
@@ -1073,6 +1179,7 @@
     overflow-x: hidden;
     flex: 1;
     max-height: calc(100vh - 160px);
+    background: var(--background-site, #fff);
 }
 
 /* Ensure form is scrollable on small screens */
@@ -1110,7 +1217,7 @@
     font-size: 10px !important;
     margin-bottom: 2px !important;
     font-weight: 500;
-    color: #555;
+    color: var(--text-primary, #555);
 }
 
 .form-field-checkbox-compact {
@@ -1140,10 +1247,10 @@
 }
 
 .form-field-checkbox {
-    background: #f1f8f4;
+    background: var(--background-site, #f1f8f4);
     padding: 8px;
     border-radius: 4px;
-    border: 1px solid #008800;
+    border: 1px solid var(--border-color, #008800);
 }
 
 .checkbox-label {
@@ -1153,20 +1260,23 @@
     cursor: pointer;
     font-size: 11px;
     font-weight: 500;
-    color: #388e3c;
+    color: var(--text-primary, #388e3c);
 }
 
 .checkbox-label input[type="checkbox"] {
     width: 15px;
     height: 15px;
     cursor: pointer;
+    accent-color: var(--border-main);
 }
 
 .recurring-options {
-    background: #f1f8f4;
-    padding: 12px;
+    background: var(--background-site, #f1f8f4);
+    padding: 8px;
     border-radius: 4px;
-    border: 1px solid #81c784;
+    border: 1px solid var(--border-color, #81c784);
+    border-left: 2px solid var(--border-main, #008800);
+    margin-left: 4px;
     margin-top: 8px;
 }
 
@@ -1188,7 +1298,7 @@
     display: block;
     font-size: 11px;
     font-weight: 600;
-    color: #2c3e50;
+    color: var(--text-primary, #2c3e50);
     margin-bottom: 5px;
     text-transform: uppercase;
     letter-spacing: 0.3px;
@@ -1203,25 +1313,26 @@
 .input-sleek {
     width: 100%;
     padding: 8px 10px;
-    border: 2px solid #e0e0e0;
+    border: 2px solid var(--border-color, #e0e0e0);
     border-radius: 4px;
     font-size: 13px;
     font-family: inherit;
     transition: all 0.2s;
-    background: #fafafa;
+    background: var(--cell-bg, #fafafa);
+    color: var(--text-primary, #333);
     box-sizing: border-box;
 }
 
 .input-sleek:focus {
     outline: none;
-    border-color: #008800;
-    background: white;
-    box-shadow: 0 0 0 3px rgba(33, 150, 243, 0.1);
+    border-color: var(--border-main, #008800);
+    background: var(--cell-bg, white);
+    box-shadow: 0 0 0 3px var(--shadow-color, rgba(33, 150, 243, 0.1));
 }
 
 .input-date {
     font-weight: 500;
-    color: #2c3e50;
+    color: var(--text-primary, #2c3e50);
     cursor: pointer;
 }
 
@@ -1256,7 +1367,7 @@
 .color-picker-input {
     width: 45px;
     height: 38px;
-    border: 2px solid #e0e0e0;
+    border: 2px solid var(--border-color, #e0e0e0);
     border-radius: 6px;
     cursor: pointer;
     padding: 2px;
@@ -1264,26 +1375,26 @@
 }
 
 .color-picker-input:hover {
-    border-color: #4CAF50;
+    border-color: var(--border-main, #4CAF50);
 }
 
 .input-color-sleek {
     width: 50px;
     height: 38px;
-    border: 2px solid #e0e0e0;
+    border: 2px solid var(--border-color, #e0e0e0);
     border-radius: 6px;
     cursor: pointer;
     transition: all 0.2s;
 }
 
 .input-color-sleek:hover {
-    border-color: #008800;
+    border-color: var(--border-main, #008800);
     transform: scale(1.05);
 }
 
 .color-label {
     font-size: 11px;
-    color: #666;
+    color: var(--text-dim, #666);
 }
 
 .form-row-group {
@@ -1297,7 +1408,7 @@
     display: block;
     font-size: 13px;
     font-weight: 600;
-    color: #2c3e50;
+    color: var(--text-primary, #2c3e50);
     margin-bottom: 8px;
     text-transform: uppercase;
     letter-spacing: 0.5px;
@@ -1306,25 +1417,26 @@
 .input-sleek {
     width: 100%;
     padding: 12px 16px;
-    border: 2px solid #e0e0e0;
+    border: 2px solid var(--border-color, #e0e0e0);
     border-radius: 8px;
     font-size: 15px;
     font-family: inherit;
     transition: all 0.2s;
-    background: #fafafa;
+    background: var(--cell-bg, #fafafa);
+    color: var(--text-primary, #333);
     box-sizing: border-box;
 }
 
 .input-sleek:focus {
     outline: none;
-    border-color: #667eea;
-    background: white;
-    box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+    border-color: var(--border-main, #667eea);
+    background: var(--cell-bg, white);
+    box-shadow: 0 0 0 3px var(--shadow-color, rgba(102, 126, 234, 0.1));
 }
 
 .input-date {
     font-weight: 500;
-    color: #2c3e50;
+    color: var(--text-primary, #2c3e50);
     cursor: pointer;
 }
 
@@ -1349,27 +1461,27 @@
 .input-color-sleek {
     width: 60px;
     height: 44px;
-    border: 2px solid #e0e0e0;
+    border: 2px solid var(--border-color, #e0e0e0);
     border-radius: 8px;
     cursor: pointer;
     transition: all 0.2s;
 }
 
 .input-color-sleek:hover {
-    border-color: #667eea;
+    border-color: var(--border-main, #667eea);
     transform: scale(1.05);
 }
 
 .color-label {
     font-size: 13px;
-    color: #666;
+    color: var(--text-dim, #666);
 }
 
 .form-field-checkbox {
-    background: #f1f8f4;
+    background: var(--background-site, #f1f8f4);
     padding: 12px;
     border-radius: 6px;
-    border: 1px solid #008800;
+    border: 1px solid var(--border-color, #008800);
 }
 
 .checkbox-label {
@@ -1379,7 +1491,7 @@
     cursor: pointer;
     font-size: 13px;
     font-weight: 500;
-    color: #388e3c;
+    color: var(--text-primary, #388e3c);
 }
 
 .checkbox-label input[type="checkbox"] {
@@ -1405,8 +1517,8 @@
     display: flex;
     gap: 8px;
     padding: 12px 14px;
-    background: #f8f9fa;
-    border-top: 1px solid #e0e0e0;
+    background: var(--background-site, #f8f9fa);
+    border-top: 1px solid var(--border-color, #e0e0e0);
     justify-content: flex-end;
     flex-shrink: 0;
 }
@@ -1437,23 +1549,25 @@
 }
 
 .btn-cancel-sleek {
-    background: #e0e0e0;
-    color: #555;
+    background: var(--cell-bg, #e0e0e0);
+    color: var(--text-primary, #555);
+    border: 1px solid var(--border-color, #d0d0d0);
 }
 
 .btn-cancel-sleek:hover {
-    background: #d0d0d0;
+    opacity: 0.85;
 }
 
 .btn-save-sleek {
-    background: #008800;
-    color: white;
-    box-shadow: 0 2px 4px rgba(33, 150, 243, 0.3);
+    background: var(--border-main, #008800);
+    color: var(--btn-text, white);
+    border: 1px solid var(--border-main, #008800);
+    box-shadow: 0 2px 4px var(--shadow-color, rgba(33, 150, 243, 0.3));
 }
 
 .btn-save-sleek:hover {
-    background: #388e3c;
-    box-shadow: 0 4px 8px rgba(33, 150, 243, 0.4);
+    opacity: 0.9;
+    box-shadow: 0 4px 8px var(--shadow-color, rgba(33, 150, 243, 0.4));
 }
 
 .btn-save-sleek:active {
@@ -1486,12 +1600,13 @@
 
 .day-popup-content {
     position: relative;
-    background: white;
+    background: var(--background-site, white);
+    border: 2px solid var(--border-main, #d0d0d0);
+    box-shadow: 0 0 20px var(--shadow-color, rgba(0,0,0,0.3));
     width: 100%;
     max-width: 450px;
     max-height: calc(100vh - 40px);
     border-radius: 8px;
-    box-shadow: 0 4px 20px rgba(0,0,0,0.3);
     z-index: 10001;
     display: flex;
     flex-direction: column;
@@ -1527,8 +1642,8 @@
     align-items: center;
     justify-content: space-between;
     padding: 10px 14px;
-    border-bottom: 2px solid #e0e0e0;
-    background: #fafafa;
+    border-bottom: 1px solid var(--border-main, #e0e0e0);
+    background: var(--background-header, #fafafa);
     border-radius: 8px 8px 0 0;
 }
 
@@ -1536,14 +1651,14 @@
     margin: 0;
     font-size: 15px;
     font-weight: 600;
-    color: #2c3e50;
+    color: var(--text-primary, #2c3e50);
 }
 
 .popup-close {
     background: none;
     border: none;
     font-size: 24px;
-    color: #999;
+    color: var(--text-primary, #999);
     cursor: pointer;
     width: 28px;
     height: 28px;
@@ -1557,8 +1672,7 @@
 }
 
 .popup-close:hover {
-    background: #f0f0f0;
-    color: #333;
+    opacity: 0.7;
 }
 
 .day-popup-body {
@@ -1566,6 +1680,7 @@
     overflow-y: auto;
     padding: 10px 14px;
     max-height: 400px;
+    background: var(--background-site);
 }
 
 .popup-events-list {
@@ -1576,19 +1691,19 @@
 
 .popup-continuation-notice {
     font-size: 10px;
-    color: #666;
-    background: #f0f0f0;
+    color: var(--text-dim, #666);
+    background: var(--background-alt, #f0f0f0);
     padding: 3px 8px;
     border-radius: 3px;
     margin-bottom: 4px;
-    border-left: 3px solid #00cc07;
+    border-left: 3px solid var(--border-main, #00cc07);
     font-weight: 500;
 }
 
 .popup-event-item {
     display: flex;
-    background: #f8f9fa;
-    border: 1px solid #e0e0e0;
+    background: var(--cell-bg, #f8f9fa);
+    border: 1px solid var(--border-color, #e0e0e0);
     border-radius: 4px;
     overflow: hidden;
     transition: box-shadow 0.15s;
@@ -1621,7 +1736,7 @@
 .popup-event-title {
     font-size: 13px;
     font-weight: 600;
-    color: #2c3e50;
+    color: var(--text-primary, #2c3e50);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -1630,7 +1745,7 @@
 
 .popup-event-time {
     font-size: 11px;
-    color: #008800;
+    color: var(--text-dim, #008800);
     font-weight: 500;
     white-space: nowrap;
     flex-shrink: 0;
@@ -1638,7 +1753,7 @@
 
 .popup-event-multiday {
     font-size: 11px;
-    color: #666;
+    color: var(--text-dim, #666);
     font-weight: 500;
     white-space: nowrap;
     flex-shrink: 0;
@@ -1646,8 +1761,8 @@
 
 .popup-event-namespace {
     font-size: 10px;
-    color: #fff;
-    background: #008800;
+    color: var(--btn-text, #fff);
+    background: var(--border-main, #008800);
     padding: 2px 6px;
     border-radius: 3px;
     font-weight: 500;
@@ -1657,7 +1772,7 @@
 
 .popup-event-desc {
     font-size: 11px;
-    color: #666;
+    color: var(--text-dim, #666);
     line-height: 1.4;
     margin-top: 4px;
     padding-left: 0;
@@ -1687,35 +1802,35 @@
 }
 
 .event-edit-btn:hover {
-    background: #e8f5e9;
+    background: var(--background-alt, #e8f5e9);
 }
 
 .event-delete-btn:hover {
-    background: #ffebee;
+    background: var(--background-alt, #ffebee);
 }
 
 .day-popup-footer {
     padding: 10px 14px;
-    border-top: 1px solid #e0e0e0;
-    background: #fafafa;
+    border-top: 1px solid var(--border-color, #e0e0e0);
+    background: var(--background-site, #fafafa);
     border-radius: 0 0 8px 8px;
 }
 
 .btn-add-event {
     width: 100%;
-    background: #008800;
-    color: white;
-    border: none;
+    background: var(--border-main, #008800);
+    color: var(--btn-text, white);
+    border: 1px solid var(--border-main, #008800);
     padding: 10px 16px;
     border-radius: 6px;
     font-size: 14px;
     font-weight: 500;
     cursor: pointer;
-    transition: background 0.15s;
+    transition: opacity 0.15s;
 }
 
 .btn-add-event:hover {
-    background: #45a049;
+    opacity: 0.9;
 }
 
 .dialog-overlay {
@@ -1729,10 +1844,10 @@
 
 .dialog-content-compact {
     position: relative;
-    background: white;
+    background: var(--background-site, white);
     width: 400px;
     border-radius: 6px;
-    box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+    box-shadow: 0 4px 12px var(--shadow-color, rgba(0,0,0,0.2));
     padding: 20px;
     z-index: 10000;
 }
@@ -1741,7 +1856,7 @@
     margin: 0 0 16px 0;
     font-size: 16px;
     font-weight: 600;
-    color: #2c3e50;
+    color: var(--text-primary, #2c3e50);
 }
 
 .form-row {
@@ -1749,15 +1864,15 @@
 }
 
 .form-row-date {
-    background: #f1f8f4;
+    background: var(--background-site, #f1f8f4);
     padding: 10px;
     border-radius: 6px;
-    border: 2px solid #008800;
+    border: 2px solid var(--border-main, #008800);
     margin-bottom: 18px;
 }
 
 .form-row-date label {
-    color: #388e3c;
+    color: var(--text-primary, #388e3c);
     font-size: 13px;
 }
 
@@ -1765,7 +1880,7 @@
     display: block;
     font-size: 12px;
     font-weight: 600;
-    color: #555;
+    color: var(--text-primary, #555);
     margin-bottom: 4px;
 }
 
@@ -1776,11 +1891,13 @@
 .form-row textarea {
     width: 100%;
     padding: 8px;
-    border: 1px solid #d0d0d0;
+    border: 1px solid var(--border-color, #d0d0d0);
     border-radius: 4px;
     font-size: 13px;
     box-sizing: border-box;
     font-family: inherit;
+    background: var(--cell-bg, #fff);
+    color: var(--text-primary, #333);
 }
 
 .form-row input[type="color"] {
@@ -1811,22 +1928,22 @@
 }
 
 .btn-save {
-    background: #008800;
-    color: white;
+    background: var(--border-main, #008800);
+    color: var(--btn-text, white);
 }
 
 .btn-save:hover {
-    background: #45a049;
+    opacity: 0.9;
 }
 
 .btn-cancel {
-    background: #f5f5f5;
-    color: #555;
-    border: 1px solid #d0d0d0;
+    background: var(--cell-bg, #f5f5f5);
+    color: var(--text-primary, #555);
+    border: 1px solid var(--border-color, #d0d0d0);
 }
 
 .btn-cancel:hover {
-    background: #e8e8e8;
+    opacity: 0.85;
 }
 
 /* Standalone event list */
@@ -1883,6 +2000,24 @@
     box-shadow: 0 0 8px rgba(0, 204, 7, 0.2);
     gap: 3px;
     overflow: visible;
+}
+
+/* Purple theme overrides */
+.sidebar-purple .eventlist-today-header {
+    border-color: #9b59b6;
+    box-shadow: 0 0 8px rgba(155, 89, 182, 0.2);
+}
+
+/* Professional theme overrides */
+.sidebar-professional .eventlist-today-header {
+    border-color: #4a90e2;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+/* Pink theme overrides */
+.sidebar-pink .eventlist-today-header {
+    border-color: #ff1493;
+    box-shadow: 0 0 10px rgba(255, 20, 147, 0.4);
 }
 
 .eventlist-bottom-info {
@@ -1986,6 +2121,30 @@
 .eventlist-cpu-fill-orange {
     background: #ff8c00;
     box-shadow: 0 0 4px rgba(255, 140, 0, 0.6);
+}
+
+/* Pink theme system bars - different shades of pink */
+.sidebar-pink .eventlist-cpu-fill {
+    background: #ff1493;  /* Hot pink for 5-min load */
+    box-shadow: 0 0 5px rgba(255, 20, 147, 0.7);
+}
+
+.sidebar-pink .eventlist-cpu-fill-purple {
+    background: #ff69b4;  /* Pink for realtime CPU */
+    box-shadow: 0 0 5px rgba(255, 105, 180, 0.7);
+}
+
+.sidebar-pink .eventlist-cpu-fill-orange {
+    background: #ff85c1;  /* Light pink for memory */
+    box-shadow: 0 0 5px rgba(255, 133, 193, 0.7);
+}
+
+.sidebar-pink .eventlist-cpu-realtime {
+    background: rgba(255, 20, 147, 0.1);
+}
+
+.sidebar-pink .eventlist-mem-realtime {
+    background: rgba(255, 133, 193, 0.1);
 }
 
 .eventlist-cpu-realtime {
@@ -2731,17 +2890,18 @@
 /* Past Events Collapsible Section */
 .past-events-section {
     margin-bottom: 10px;
-    border-bottom: 1px solid #e0e0e0;
+    border-bottom: 1px solid var(--border-color, #e0e0e0);
+    border-top: 1px solid var(--border-color, #e0e0e0);
 }
 
 .past-events-toggle {
     padding: 6px 10px;
-    background: #f5f5f5;
+    background: var(--cell-bg);
+    color: var(--text-dim);
     cursor: pointer;
     user-select: none;
     font-size: 11px;
     font-weight: 600;
-    color: #666;
     display: flex;
     align-items: center;
     border-radius: 3px;
@@ -2749,7 +2909,7 @@
 }
 
 .past-events-toggle:hover {
-    background: #ebebeb;
+    background: var(--background-alt);
 }
 
 .past-events-arrow {
@@ -2758,10 +2918,11 @@
     transition: transform 0.2s;
     display: inline-block;
     width: 10px;
+    color: var(--text-dim);
 }
 
 .past-events-label {
-    color: #888;
+    color: var(--text-dim);
 }
 
 .past-events-content {
@@ -2784,11 +2945,11 @@
     right: 0;
     max-height: 200px;
     overflow-y: auto;
-    background: white;
-    border: 1px solid #ddd;
+    background: var(--cell-bg, white);
+    border: 1px solid var(--border-color, #ddd);
     border-top: none;
     border-radius: 0 0 4px 4px;
-    box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+    box-shadow: 0 4px 8px var(--shadow-color, rgba(0,0,0,0.1));
     z-index: 1000;
     margin-top: -1px;
 }
@@ -2797,17 +2958,18 @@
     padding: 8px 12px;
     cursor: pointer;
     font-size: 12px;
-    border-bottom: 1px solid #f0f0f0;
+    color: var(--text-primary, #333);
+    border-bottom: 1px solid var(--border-color, #f0f0f0);
     transition: background-color 0.15s;
 }
 
 .namespace-option:hover {
-    background-color: #f5f5f5;
+    background-color: var(--background-alt, #f5f5f5);
 }
 
 .namespace-option.selected {
-    background-color: #e3f2fd;
-    color: #1976d2;
+    background-color: var(--cell-today-bg, #e3f2fd);
+    color: var(--text-bright, #1976d2);
 }
 
 .namespace-option:last-child {
@@ -2887,4 +3049,220 @@
 .sidebar-matrix ::-webkit-scrollbar-thumb:hover {
     background: #00ff00;
     box-shadow: 0 0 8px rgba(0, 255, 0, 0.8);
+}
+
+/* ====================================
+   PINK BLING THEME - SPECIAL EFFECTS
+   ==================================== */
+
+/* Shimmer animation for today's cell - TONED DOWN */
+@keyframes pink-shimmer {
+    0% {
+        box-shadow: 0 0 3px rgba(255, 20, 147, 0.2),
+                    0 0 5px rgba(255, 20, 147, 0.1);
+    }
+    50% {
+        box-shadow: 0 0 8px rgba(255, 20, 147, 0.4),
+                    0 0 12px rgba(255, 20, 147, 0.2);
+    }
+    100% {
+        box-shadow: 0 0 3px rgba(255, 20, 147, 0.2),
+                    0 0 5px rgba(255, 20, 147, 0.1);
+    }
+}
+
+/* Sparkle animation for today's day number - SUBTLE */
+@keyframes pink-sparkle {
+    0%, 100% {
+        text-shadow: 0 0 3px rgba(255, 20, 147, 0.6);
+        transform: scale(1);
+    }
+    50% {
+        text-shadow: 0 0 6px rgba(255, 20, 147, 0.8),
+                     0 0 10px rgba(255, 105, 180, 0.5);
+        transform: scale(1.02);
+    }
+}
+
+/* Glow pulse for event bars - SUBTLE */
+@keyframes pink-glow-pulse {
+    0%, 100% {
+        box-shadow: 0 0 2px currentColor;
+    }
+    50% {
+        box-shadow: 0 0 4px currentColor,
+                    0 0 6px rgba(255, 105, 180, 0.3);
+    }
+}
+
+/* Gradient shimmer for headers */
+@keyframes pink-gradient-shimmer {
+    0% {
+        background-position: 0% 50%;
+    }
+    50% {
+        background-position: 100% 50%;
+    }
+    100% {
+        background-position: 0% 50%;
+    }
+}
+
+/* Pink particle explosion on click */
+@keyframes particle-explode {
+    0% {
+        opacity: 1;
+        transform: translate(0, 0) scale(1);
+    }
+    100% {
+        opacity: 0;
+        transform: translate(var(--tx), var(--ty)) scale(0);
+    }
+}
+
+/* Cursor trail glow */
+@keyframes cursor-trail-fade {
+    0% {
+        opacity: 1;
+        transform: scale(1);
+    }
+    100% {
+        opacity: 0;
+        transform: scale(0.5);
+    }
+}
+
+/* Pink particle styles */
+.pink-particle {
+    position: fixed;  /* Changed to fixed so it works anywhere on screen */
+    width: 6px;
+    height: 6px;
+    background: radial-gradient(circle, #ff1493, #ff69b4);
+    border-radius: 50%;
+    pointer-events: none;
+    z-index: 9999999;  /* Above everything including dialogs */
+    box-shadow: 0 0 8px #ff1493,
+                0 0 15px #ff69b4;
+}
+
+/* Cursor trail glow */
+.pink-cursor-trail {
+    position: fixed;  /* Changed to fixed so it works anywhere on screen */
+    width: 8px;
+    height: 8px;
+    background: radial-gradient(circle, rgba(255, 20, 147, 0.8), rgba(255, 105, 180, 0.4));
+    border-radius: 50%;
+    pointer-events: none;
+    z-index: 9999998;  /* Just below particles */
+    box-shadow: 0 0 10px rgba(255, 20, 147, 0.6),
+                0 0 20px rgba(255, 105, 180, 0.3);
+}
+
+/* Tiny neon pixel sparkles */
+.pink-pixel-sparkle {
+    position: fixed;
+    width: 2px;
+    height: 2px;
+    background: #fff;
+    border-radius: 50%;
+    pointer-events: none;
+    z-index: 9999997;  /* Just below trail */
+    box-shadow: 0 0 2px #ff1493,
+                0 0 4px #ff69b4,
+                0 0 6px #fff;
+}
+
+/* Pixel sparkle twinkle animation */
+@keyframes pixel-twinkle {
+    0%, 100% {
+        opacity: 0;
+        transform: scale(0);
+    }
+    50% {
+        opacity: 1;
+        transform: scale(1.5);
+    }
+}
+
+/* Pixel sparkle float away */
+@keyframes pixel-float-away {
+    0% {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+    }
+    100% {
+        opacity: 0;
+        transform: translateY(-30px) scale(0);
+    }
+}
+
+/* Pink theme specific styles - TONED DOWN */
+.calendar-theme-pink .cal-today {
+    animation: pink-shimmer 2s ease-in-out infinite;
+    border: 2px solid #ff1493 !important;
+    position: relative;
+    overflow: visible;
+}
+
+.calendar-theme-pink .cal-today .day-num {
+    animation: pink-sparkle 1.5s ease-in-out infinite;
+}
+
+.calendar-theme-pink .event-bar {
+    animation: pink-glow-pulse 2s ease-in-out infinite;
+}
+
+.calendar-theme-pink .calendar-compact-header {
+    background: linear-gradient(90deg, #2d1a24, #3d2030, #2d1a24, #1a0d14);
+    background-size: 300% 300%;
+    animation: pink-gradient-shimmer 3s ease infinite;
+}
+
+.calendar-theme-pink .event-list-header {
+    background: linear-gradient(90deg, #2d1a24, #3d2030, #2d1a24);
+    background-size: 300% 300%;
+    animation: pink-gradient-shimmer 3s ease infinite;
+}
+
+/* Subtle hover glow - TONED DOWN */
+.calendar-theme-pink .cal-today:hover {
+    box-shadow: 0 0 10px rgba(255, 20, 147, 0.5),
+                0 0 15px rgba(255, 20, 147, 0.3) !important;
+}
+
+/* Pink theme event items get subtle glow */
+.calendar-theme-pink .event-compact-item {
+    box-shadow: 0 0 2px rgba(255, 20, 147, 0.1);
+    transition: all 0.3s ease;
+}
+
+.calendar-theme-pink .event-compact-item:hover {
+    box-shadow: 0 0 5px rgba(255, 20, 147, 0.3);
+    transform: translateX(2px);
+}
+
+/* Calendar borders get subtle glow */
+.calendar-theme-pink.calendar-compact-container {
+    box-shadow: 0 0 8px rgba(255, 20, 147, 0.2),
+                0 2px 4px rgba(0,0,0,0.06);
+    position: relative;
+}
+
+/* Today badge extra sparkle */
+.calendar-theme-pink .event-today-badge {
+    animation: pink-sparkle 1.5s ease-in-out infinite;
+}
+
+/* Past due badge pulsing effect - SUBTLE */
+@keyframes pink-pulse-urgent {
+    0%, 100% {
+        box-shadow: 0 0 3px rgba(255, 140, 0, 0.4);
+    }
+    50% {
+        box-shadow: 0 0 8px rgba(255, 140, 0, 0.6);
+    }
+}
+
+.calendar-theme-pink .event-pastdue-badge {
+    animation: pink-pulse-urgent 1s ease-in-out infinite;
 }
