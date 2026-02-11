@@ -70,6 +70,9 @@ class syntax_plugin_calendar extends DokuWiki_Syntax_Plugin {
     public function render($mode, Doku_Renderer $renderer, $data) {
         if ($mode !== 'xhtml') return false;
         
+        // Disable caching - theme can change via admin without page edit
+        $renderer->nocache();
+        
         if ($data['type'] === 'eventlist') {
             $html = $this->renderStandaloneEventList($data);
         } elseif ($data['type'] === 'eventpanel') {
@@ -142,6 +145,13 @@ class syntax_plugin_calendar extends DokuWiki_Syntax_Plugin {
             --header-shadow: ' . $themeStyles['header_shadow'] . ';
             --grid-bg: ' . $themeStyles['grid_bg'] . ';
             --btn-text: ' . $btnTextColor . ';
+            --pastdue-color: ' . $themeStyles['pastdue_color'] . ';
+            --pastdue-bg: ' . $themeStyles['pastdue_bg'] . ';
+            --pastdue-bg-strong: ' . $themeStyles['pastdue_bg_strong'] . ';
+            --pastdue-bg-light: ' . $themeStyles['pastdue_bg_light'] . ';
+            --tomorrow-bg: ' . $themeStyles['tomorrow_bg'] . ';
+            --tomorrow-bg-strong: ' . $themeStyles['tomorrow_bg_strong'] . ';
+            --tomorrow-bg-light: ' . $themeStyles['tomorrow_bg_light'] . ';
         }
         #event-search-' . $calId . '::placeholder { color: ' . $themeStyles['text_dim'] . '; opacity: 1; }
         #event-search-' . $calId . '::-webkit-input-placeholder { color: ' . $themeStyles['text_dim'] . '; opacity: 1; }
@@ -491,7 +501,7 @@ class syntax_plugin_calendar extends DokuWiki_Syntax_Plugin {
                 
                 // For all themes: use CSS variables, only keep border-left-color as inline
                 $pastClickHandler = ($isPast && !$isPastDue) ? ' onclick="togglePastEventExpand(this)"' : '';
-                $eventHtml = '<div class="event-compact-item' . $completedClass . $pastClass . $pastDueClass . '" data-event-id="' . $eventId . '" data-date="' . $dateKey . '" style="border-left-color: ' . $color . ';"' . $pastClickHandler . $firstFutureAttr . '>';
+                $eventHtml = '<div class="event-compact-item' . $completedClass . $pastClass . $pastDueClass . '" data-event-id="' . $eventId . '" data-date="' . $dateKey . '" style="border-left-color: ' . $color . ' !important;"' . $pastClickHandler . $firstFutureAttr . '>';
                 $eventHtml .= '<div class="event-info">';
                 
                 $eventHtml .= '<div class="event-title-row">';
@@ -508,9 +518,9 @@ class syntax_plugin_calendar extends DokuWiki_Syntax_Plugin {
                     }
                     // Add TODAY badge for today's events OR PAST DUE for uncompleted past tasks
                     if ($isPastDue) {
-                        $eventHtml .= ' <span class="event-pastdue-badge">PAST DUE</span>';
+                        $eventHtml .= ' <span class="event-pastdue-badge" style="background:' . $themeStyles['pastdue_color'] . ' !important; color:white !important; -webkit-text-fill-color:white !important;">' . 'PAST DUE</span>';
                     } elseif ($isToday) {
-                        $eventHtml .= ' <span class="event-today-badge">TODAY</span>';
+                        $eventHtml .= ' <span class="event-today-badge" style="background:' . $themeStyles['border'] . ' !important; color:' . $themeStyles['bg'] . ' !important; -webkit-text-fill-color:' . $themeStyles['bg'] . ' !important;">' . 'TODAY</span>';
                     }
                     // Add namespace badge - ALWAYS show if event has a namespace
                     $eventNamespace = isset($event['namespace']) ? $event['namespace'] : '';
@@ -519,7 +529,7 @@ class syntax_plugin_calendar extends DokuWiki_Syntax_Plugin {
                     }
                     // Show badge if namespace exists and is not empty
                     if ($eventNamespace && $eventNamespace !== '') {
-                        $eventHtml .= ' <span class="event-namespace-badge" onclick="filterCalendarByNamespace(\'' . $calId . '\', \'' . htmlspecialchars($eventNamespace) . '\')" style="cursor:pointer;" title="Click to filter by this namespace">' . htmlspecialchars($eventNamespace) . '</span>';
+                        $eventHtml .= ' <span class="event-namespace-badge" onclick="filterCalendarByNamespace(\'' . $calId . '\', \'' . htmlspecialchars($eventNamespace) . '\')" style="cursor:pointer; background:' . $themeStyles['text_bright'] . ' !important; color:' . $themeStyles['bg'] . ' !important; -webkit-text-fill-color:' . $themeStyles['bg'] . ' !important;" title="Click to filter by this namespace">' . htmlspecialchars($eventNamespace) . '</span>';
                     }
                     
                     // Add conflict warning if event has time conflicts
@@ -565,7 +575,7 @@ class syntax_plugin_calendar extends DokuWiki_Syntax_Plugin {
                         $eventNamespace = $event['_namespace'];
                     }
                     if ($eventNamespace && $eventNamespace !== '') {
-                        $eventHtml .= ' <span class="event-namespace-badge" onclick="filterCalendarByNamespace(\'' . $calId . '\', \'' . htmlspecialchars($eventNamespace) . '\')" style="cursor:pointer;" title="Click to filter by this namespace">' . htmlspecialchars($eventNamespace) . '</span>';
+                        $eventHtml .= ' <span class="event-namespace-badge" onclick="filterCalendarByNamespace(\'' . $calId . '\', \'' . htmlspecialchars($eventNamespace) . '\')" style="cursor:pointer; background:' . $themeStyles['text_bright'] . ' !important; color:' . $themeStyles['bg'] . ' !important; -webkit-text-fill-color:' . $themeStyles['bg'] . ' !important;" title="Click to filter by this namespace">' . htmlspecialchars($eventNamespace) . '</span>';
                     }
                     
                     // Add conflict warning if event has time conflicts
@@ -818,6 +828,13 @@ class syntax_plugin_calendar extends DokuWiki_Syntax_Plugin {
             --header-shadow: ' . $themeStyles['header_shadow'] . ';
             --grid-bg: ' . $themeStyles['grid_bg'] . ';
             --btn-text: ' . $btnTextColor . ';
+            --pastdue-color: ' . $themeStyles['pastdue_color'] . ';
+            --pastdue-bg: ' . $themeStyles['pastdue_bg'] . ';
+            --pastdue-bg-strong: ' . $themeStyles['pastdue_bg_strong'] . ';
+            --pastdue-bg-light: ' . $themeStyles['pastdue_bg_light'] . ';
+            --tomorrow-bg: ' . $themeStyles['tomorrow_bg'] . ';
+            --tomorrow-bg-strong: ' . $themeStyles['tomorrow_bg_strong'] . ';
+            --tomorrow-bg-light: ' . $themeStyles['tomorrow_bg_light'] . ';
         }
         #event-search-' . $calId . '::placeholder { color: ' . $themeStyles['text_dim'] . '; opacity: 1; }
         </style>';
@@ -845,18 +862,18 @@ class syntax_plugin_calendar extends DokuWiki_Syntax_Plugin {
         if ($namespace) {
             if ($isMultiNamespace) {
                 if (strpos($namespace, '*') !== false) {
-                    $html .= '<span class="panel-ns-badge" title="' . htmlspecialchars($namespace) . '">' . htmlspecialchars($namespace) . '</span>';
+                    $html .= '<span class="panel-ns-badge" style="background:var(--cell-today-bg) !important; color:var(--text-bright) !important; -webkit-text-fill-color:var(--text-bright) !important;" title="' . htmlspecialchars($namespace) . '">' . htmlspecialchars($namespace) . '</span>';
                 } else {
                     $namespaceList = array_map('trim', explode(';', $namespace));
                     $nsCount = count($namespaceList);
-                    $html .= '<span class="panel-ns-badge" title="' . htmlspecialchars(implode(', ', $namespaceList)) . '">' . $nsCount . ' NS</span>';
+                    $html .= '<span class="panel-ns-badge" style="background:var(--cell-today-bg) !important; color:var(--text-bright) !important; -webkit-text-fill-color:var(--text-bright) !important;" title="' . htmlspecialchars(implode(', ', $namespaceList)) . '">' . $nsCount . ' NS</span>';
                 }
             } else {
                 $isFiltering = ($namespace !== '*' && strpos($namespace, '*') === false && strpos($namespace, ';') === false);
                 if ($isFiltering) {
-                    $html .= '<span class="panel-ns-badge filter-on" title="Filtering by ' . htmlspecialchars($namespace) . ' - click to clear" onclick="clearNamespaceFilterPanel(\'' . $calId . '\')">' . htmlspecialchars($namespace) . ' ✕</span>';
+                    $html .= '<span class="panel-ns-badge filter-on" style="background:var(--text-bright) !important; color:var(--background-site) !important; -webkit-text-fill-color:var(--background-site) !important;" title="Filtering by ' . htmlspecialchars($namespace) . ' - click to clear" onclick="clearNamespaceFilterPanel(\'' . $calId . '\')">' . htmlspecialchars($namespace) . ' ✕</span>';
                 } else {
-                    $html .= '<span class="panel-ns-badge" title="' . htmlspecialchars($namespace) . '">' . htmlspecialchars($namespace) . '</span>';
+                    $html .= '<span class="panel-ns-badge" style="background:var(--cell-today-bg) !important; color:var(--text-bright) !important; -webkit-text-fill-color:var(--text-bright) !important;" title="' . htmlspecialchars($namespace) . '">' . htmlspecialchars($namespace) . '</span>';
                 }
             }
         }
@@ -1070,7 +1087,51 @@ class syntax_plugin_calendar extends DokuWiki_Syntax_Plugin {
         
         // Simple 2-line display widget
         $calId = 'eventlist_' . uniqid();
-        $html = '<div class="eventlist-simple" id="' . $calId . '">';
+        $theme = !empty($data['theme']) ? $data['theme'] : $this->getSidebarTheme();
+        $themeStyles = $this->getSidebarThemeStyles($theme);
+        $isDark = in_array($theme, ['matrix', 'purple', 'pink']);
+        $btnTextColor = ($theme === 'professional') ? '#fff' : $themeStyles['bg'];
+        
+        // Theme class for CSS targeting
+        $themeClass = 'eventlist-theme-' . $theme;
+        
+        // Container styling - dark themes get border + glow, light themes get subtle border
+        $containerStyle = 'background:' . $themeStyles['bg'] . ' !important;';
+        if ($isDark) {
+            $containerStyle .= ' border:2px solid ' . $themeStyles['border'] . ';';
+            $containerStyle .= ' border-radius:4px;';
+            $containerStyle .= ' box-shadow:0 0 10px ' . $themeStyles['shadow'] . ';';
+        } else {
+            $containerStyle .= ' border:1px solid ' . $themeStyles['grid_border'] . ';';
+            $containerStyle .= ' border-radius:4px;';
+        }
+        
+        $html = '<div class="eventlist-simple ' . $themeClass . '" id="' . $calId . '" style="' . $containerStyle . '">';
+        
+        // Inject CSS variables for this eventlist instance
+        $html .= '<style>
+        #' . $calId . ' {
+            --background-site: ' . $themeStyles['bg'] . ';
+            --background-alt: ' . $themeStyles['cell_bg'] . ';
+            --text-primary: ' . $themeStyles['text_primary'] . ';
+            --text-dim: ' . $themeStyles['text_dim'] . ';
+            --text-bright: ' . $themeStyles['text_bright'] . ';
+            --border-color: ' . $themeStyles['grid_border'] . ';
+            --border-main: ' . $themeStyles['border'] . ';
+            --cell-bg: ' . $themeStyles['cell_bg'] . ';
+            --cell-today-bg: ' . $themeStyles['cell_today_bg'] . ';
+            --shadow-color: ' . $themeStyles['shadow'] . ';
+            --grid-bg: ' . $themeStyles['grid_bg'] . ';
+            --btn-text: ' . $btnTextColor . ';
+            --pastdue-color: ' . $themeStyles['pastdue_color'] . ';
+            --pastdue-bg: ' . $themeStyles['pastdue_bg'] . ';
+            --pastdue-bg-strong: ' . $themeStyles['pastdue_bg_strong'] . ';
+            --pastdue-bg-light: ' . $themeStyles['pastdue_bg_light'] . ';
+            --tomorrow-bg: ' . $themeStyles['tomorrow_bg'] . ';
+            --tomorrow-bg-strong: ' . $themeStyles['tomorrow_bg_strong'] . ';
+            --tomorrow-bg-light: ' . $themeStyles['tomorrow_bg_light'] . ';
+        }
+        </style>';
         
         // Load calendar JavaScript manually (not through DokuWiki concatenation)
         $html .= '<script src="' . DOKU_BASE . 'lib/plugins/calendar/calendar-main.js"></script>';
@@ -1095,20 +1156,20 @@ class syntax_plugin_calendar extends DokuWiki_Syntax_Plugin {
             $html .= '<div class="eventlist-stats-container">';
             
             // 5-minute load average (green, updates every 2 seconds)
-            $html .= '<div class="eventlist-cpu-bar" onmouseover="showTooltip_' . $calId . '(\'green\')" onmouseout="hideTooltip_' . $calId . '(\'green\')">';
-            $html .= '<div class="eventlist-cpu-fill" id="cpu-5min-' . $calId . '" style="width: 0%;"></div>';
+            $html .= '<div class="eventlist-cpu-bar" style="background:' . $themeStyles['cell_today_bg'] . ' !important;" onmouseover="showTooltip_' . $calId . '(\'green\')" onmouseout="hideTooltip_' . $calId . '(\'green\')">';
+            $html .= '<div class="eventlist-cpu-fill" id="cpu-5min-' . $calId . '" style="width: 0%; background:' . $themeStyles['text_bright'] . ' !important;"></div>';
             $html .= '<div class="system-tooltip" id="tooltip-green-' . $calId . '" style="display:none;"></div>';
             $html .= '</div>';
             
             // Real-time CPU (purple, updates with 5-sec average)
-            $html .= '<div class="eventlist-cpu-bar eventlist-cpu-realtime" onmouseover="showTooltip_' . $calId . '(\'purple\')" onmouseout="hideTooltip_' . $calId . '(\'purple\')">';
-            $html .= '<div class="eventlist-cpu-fill eventlist-cpu-fill-purple" id="cpu-realtime-' . $calId . '" style="width: 0%;"></div>';
+            $html .= '<div class="eventlist-cpu-bar eventlist-cpu-realtime" style="background:' . $themeStyles['cell_today_bg'] . ' !important;" onmouseover="showTooltip_' . $calId . '(\'purple\')" onmouseout="hideTooltip_' . $calId . '(\'purple\')">';
+            $html .= '<div class="eventlist-cpu-fill eventlist-cpu-fill-purple" id="cpu-realtime-' . $calId . '" style="width: 0%; background:' . $themeStyles['border'] . ' !important;"></div>';
             $html .= '<div class="system-tooltip" id="tooltip-purple-' . $calId . '" style="display:none;"></div>';
             $html .= '</div>';
             
             // Real-time Memory (orange, updates)
-            $html .= '<div class="eventlist-cpu-bar eventlist-mem-realtime" onmouseover="showTooltip_' . $calId . '(\'orange\')" onmouseout="hideTooltip_' . $calId . '(\'orange\')">';
-            $html .= '<div class="eventlist-cpu-fill eventlist-cpu-fill-orange" id="mem-realtime-' . $calId . '" style="width: 0%;"></div>';
+            $html .= '<div class="eventlist-cpu-bar eventlist-mem-realtime" style="background:' . $themeStyles['cell_today_bg'] . ' !important;" onmouseover="showTooltip_' . $calId . '(\'orange\')" onmouseout="hideTooltip_' . $calId . '(\'orange\')">';
+            $html .= '<div class="eventlist-cpu-fill eventlist-cpu-fill-orange" id="mem-realtime-' . $calId . '" style="width: 0%; background:' . $themeStyles['text_primary'] . ' !important;"></div>';
             $html .= '<div class="system-tooltip" id="tooltip-orange-' . $calId . '" style="display:none;"></div>';
             $html .= '</div>';
             
@@ -1247,7 +1308,6 @@ class syntax_plugin_calendar extends DokuWiki_Syntax_Plugin {
             return;
         }
         
-        console.log("Showing tooltip for:", color, "latestStats:", latestStats);
         
         let content = "";
         
@@ -1258,23 +1318,25 @@ class syntax_plugin_calendar extends DokuWiki_Syntax_Plugin {
             content += "<div>5 min: " + (latestStats.load["5min"] || "N/A") + "</div>";
             content += "<div>15 min: " + (latestStats.load["15min"] || "N/A") + "</div>";
             if (latestStats.uptime) {
-                content += "<div style=\"margin-top:3px; padding-top:2px; border-top:1px solid rgba(0,204,7,0.3);\">Uptime: " + latestStats.uptime + "</div>";
+                content += "<div style=\"margin-top:3px; padding-top:2px; border-top:1px solid ' . $themeStyles['text_bright'] . ';\">Uptime: " + latestStats.uptime + "</div>";
             }
-            tooltip.style.borderColor = "#00cc07";
-            tooltip.style.color = "#00cc07";
+            tooltip.style.setProperty("border-color", "' . $themeStyles['text_bright'] . '", "important");
+            tooltip.style.setProperty("color", "' . $themeStyles['text_bright'] . '", "important");
+            tooltip.style.setProperty("-webkit-text-fill-color", "' . $themeStyles['text_bright'] . '", "important");
         } else if (color === "purple") {
             // Purple bar: Load averages (short-term) and top processes
             content = "<div class=\"tooltip-title\">CPU Load (Short-term)</div>";
             content += "<div>1 min: " + (latestStats.load["1min"] || "N/A") + "</div>";
             content += "<div>5 min: " + (latestStats.load["5min"] || "N/A") + "</div>";
             if (latestStats.top_processes && latestStats.top_processes.length > 0) {
-                content += "<div style=\"margin-top:3px; padding-top:2px; border-top:1px solid rgba(155,89,182,0.3);\" class=\"tooltip-title\">Top Processes</div>";
+                content += "<div style=\"margin-top:3px; padding-top:2px; border-top:1px solid ' . $themeStyles['border'] . ';\" class=\"tooltip-title\">Top Processes</div>";
                 latestStats.top_processes.slice(0, 5).forEach(proc => {
                     content += "<div>" + proc.cpu + " " + proc.command + "</div>";
                 });
             }
-            tooltip.style.borderColor = "#9b59b6";
-            tooltip.style.color = "#9b59b6";
+            tooltip.style.setProperty("border-color", "' . $themeStyles['border'] . '", "important");
+            tooltip.style.setProperty("color", "' . $themeStyles['border'] . '", "important");
+            tooltip.style.setProperty("-webkit-text-fill-color", "' . $themeStyles['border'] . '", "important");
         } else if (color === "orange") {
             // Orange bar: Memory details and top processes
             content = "<div class=\"tooltip-title\">Memory Usage</div>";
@@ -1289,18 +1351,19 @@ class syntax_plugin_calendar extends DokuWiki_Syntax_Plugin {
                 content += "<div>Loading...</div>";
             }
             if (latestStats.top_processes && latestStats.top_processes.length > 0) {
-                content += "<div style=\"margin-top:3px; padding-top:2px; border-top:1px solid rgba(255,140,0,0.3);\" class=\"tooltip-title\">Top Processes</div>";
+                content += "<div style=\"margin-top:3px; padding-top:2px; border-top:1px solid ' . $themeStyles['text_primary'] . ';\" class=\"tooltip-title\">Top Processes</div>";
                 latestStats.top_processes.slice(0, 5).forEach(proc => {
                     content += "<div>" + proc.cpu + " " + proc.command + "</div>";
                 });
             }
-            tooltip.style.borderColor = "#ff9800";
-            tooltip.style.color = "#ff9800";
+            tooltip.style.setProperty("border-color", "' . $themeStyles['text_primary'] . '", "important");
+            tooltip.style.setProperty("color", "' . $themeStyles['text_primary'] . '", "important");
+            tooltip.style.setProperty("-webkit-text-fill-color", "' . $themeStyles['text_primary'] . '", "important");
         }
         
-        console.log("Tooltip content:", content);
         tooltip.innerHTML = content;
-        tooltip.style.display = "block";
+        tooltip.style.setProperty("display", "block");
+        tooltip.style.setProperty("background", "' . $themeStyles['bg'] . '", "important");
         
         // Position tooltip using fixed positioning above the bar
         const bar = tooltip.parentElement;
@@ -1329,7 +1392,6 @@ class syntax_plugin_calendar extends DokuWiki_Syntax_Plugin {
         fetch("' . DOKU_BASE . 'lib/plugins/calendar/get_system_stats.php")
             .then(response => response.json())
             .then(data => {
-                console.log("System stats received:", data);
                 
                 // Store data for tooltips
                 latestStats = {
@@ -1339,7 +1401,6 @@ class syntax_plugin_calendar extends DokuWiki_Syntax_Plugin {
                     top_processes: data.top_processes || []
                 };
                 
-                console.log("latestStats updated to:", latestStats);
                 
                 // Update green bar (5-minute average) - updates live now!
                 const greenBar = document.getElementById("cpu-5min-' . $calId . '");
@@ -1473,9 +1534,9 @@ class syntax_plugin_calendar extends DokuWiki_Syntax_Plugin {
                     
                     // Badge: PAST DUE, TODAY, or nothing
                     if ($isPastDue) {
-                        $html .= ' <span class="eventlist-simple-pastdue-badge">PAST DUE</span>';
+                        $html .= ' <span class="eventlist-simple-pastdue-badge" style="background:' . $themeStyles['pastdue_color'] . ' !important; color:white !important; -webkit-text-fill-color:white !important;">PAST DUE</span>';
                     } elseif ($isToday) {
-                        $html .= ' <span class="eventlist-simple-today-badge">TODAY</span>';
+                        $html .= ' <span class="eventlist-simple-today-badge" style="background:' . $themeStyles['border'] . ' !important; color:' . $themeStyles['bg'] . ' !important; -webkit-text-fill-color:' . $themeStyles['bg'] . ' !important;">TODAY</span>';
                     }
                     
                     // Namespace badge (show individual event's namespace)
@@ -2183,6 +2244,13 @@ class syntax_plugin_calendar extends DokuWiki_Syntax_Plugin {
             --header-shadow: ' . $themeStyles['header_shadow'] . ';
             --grid-bg: ' . $themeStyles['grid_bg'] . ';
             --btn-text: ' . $btnTextColor . ';
+            --pastdue-color: ' . $themeStyles['pastdue_color'] . ';
+            --pastdue-bg: ' . $themeStyles['pastdue_bg'] . ';
+            --pastdue-bg-strong: ' . $themeStyles['pastdue_bg_strong'] . ';
+            --pastdue-bg-light: ' . $themeStyles['pastdue_bg_light'] . ';
+            --tomorrow-bg: ' . $themeStyles['tomorrow_bg'] . ';
+            --tomorrow-bg-strong: ' . $themeStyles['tomorrow_bg_strong'] . ';
+            --tomorrow-bg-light: ' . $themeStyles['tomorrow_bg_light'] . ';
         }
         </style>';
         
@@ -2316,22 +2384,24 @@ class syntax_plugin_calendar extends DokuWiki_Syntax_Plugin {
             content += "<div>5 min: " + (latestStats.load["5min"] || "N/A") + "</div>";
             content += "<div>15 min: " + (latestStats.load["15min"] || "N/A") + "</div>";
             if (latestStats.uptime) {
-                content += "<div style=\\"margin-top:3px; padding-top:2px; border-top:1px solid rgba(0,204,7,0.3);\\">Uptime: " + latestStats.uptime + "</div>";
+                content += "<div style=\\"margin-top:3px; padding-top:2px; border-top:1px solid ' . $themeStyles['text_bright'] . ';\\">Uptime: " + latestStats.uptime + "</div>";
             }
-            tooltip.style.borderColor = "#00cc07";
-            tooltip.style.color = "#00cc07";
+            tooltip.style.setProperty("border-color", "' . $themeStyles['text_bright'] . '", "important");
+            tooltip.style.setProperty("color", "' . $themeStyles['text_bright'] . '", "important");
+            tooltip.style.setProperty("-webkit-text-fill-color", "' . $themeStyles['text_bright'] . '", "important");
         } else if (color === "purple") {
             content = "<div class=\\"tooltip-title\\">CPU Load (Short-term)</div>";
             content += "<div>1 min: " + (latestStats.load["1min"] || "N/A") + "</div>";
             content += "<div>5 min: " + (latestStats.load["5min"] || "N/A") + "</div>";
             if (latestStats.top_processes && latestStats.top_processes.length > 0) {
-                content += "<div style=\\"margin-top:3px; padding-top:2px; border-top:1px solid rgba(155,89,182,0.3);\\" class=\\"tooltip-title\\">Top Processes</div>";
+                content += "<div style=\\"margin-top:3px; padding-top:2px; border-top:1px solid ' . $themeStyles['border'] . ';\\" class=\\"tooltip-title\\">Top Processes</div>";
                 latestStats.top_processes.slice(0, 5).forEach(proc => {
                     content += "<div>" + proc.cpu + " " + proc.command + "</div>";
                 });
             }
-            tooltip.style.borderColor = "#9b59b6";
-            tooltip.style.color = "#9b59b6";
+            tooltip.style.setProperty("border-color", "' . $themeStyles['border'] . '", "important");
+            tooltip.style.setProperty("color", "' . $themeStyles['border'] . '", "important");
+            tooltip.style.setProperty("-webkit-text-fill-color", "' . $themeStyles['border'] . '", "important");
         } else if (color === "orange") {
             content = "<div class=\\"tooltip-title\\">Memory Usage</div>";
             if (latestStats.memory_details && latestStats.memory_details.total) {
@@ -2345,17 +2415,19 @@ class syntax_plugin_calendar extends DokuWiki_Syntax_Plugin {
                 content += "<div>Loading...</div>";
             }
             if (latestStats.top_processes && latestStats.top_processes.length > 0) {
-                content += "<div style=\\"margin-top:3px; padding-top:2px; border-top:1px solid rgba(255,140,0,0.3);\\" class=\\"tooltip-title\\">Top Processes</div>";
+                content += "<div style=\\"margin-top:3px; padding-top:2px; border-top:1px solid ' . $themeStyles['text_primary'] . ';\\" class=\\"tooltip-title\\">Top Processes</div>";
                 latestStats.top_processes.slice(0, 5).forEach(proc => {
                     content += "<div>" + proc.cpu + " " + proc.command + "</div>";
                 });
             }
-            tooltip.style.borderColor = "#ff9800";
-            tooltip.style.color = "#ff9800";
+            tooltip.style.setProperty("border-color", "' . $themeStyles['text_primary'] . '", "important");
+            tooltip.style.setProperty("color", "' . $themeStyles['text_primary'] . '", "important");
+            tooltip.style.setProperty("-webkit-text-fill-color", "' . $themeStyles['text_primary'] . '", "important");
         }
         
         tooltip.innerHTML = content;
-        tooltip.style.display = "block";
+        tooltip.style.setProperty("display", "block");
+        tooltip.style.setProperty("background", "' . $themeStyles['bg'] . '", "important");
         
         const bar = tooltip.parentElement;
         const barRect = bar.getBoundingClientRect();
@@ -2521,20 +2593,20 @@ class syntax_plugin_calendar extends DokuWiki_Syntax_Plugin {
         $html .= '<div class="eventlist-stats-container">';
         
         // 5-minute load average (green, updates every 2 seconds)
-        $html .= '<div class="eventlist-cpu-bar" onmouseover="showTooltip_' . $jsCalId . '(\'green\')" onmouseout="hideTooltip_' . $jsCalId . '(\'green\')">';
-        $html .= '<div class="eventlist-cpu-fill" id="cpu-5min-' . $calId . '" style="width: 0%;"></div>';
+        $html .= '<div class="eventlist-cpu-bar" style="background:' . $themeStyles['cell_today_bg'] . ' !important;" onmouseover="showTooltip_' . $jsCalId . '(\'green\')" onmouseout="hideTooltip_' . $jsCalId . '(\'green\')">';
+        $html .= '<div class="eventlist-cpu-fill" id="cpu-5min-' . $calId . '" style="width: 0%; background:' . $themeStyles['text_bright'] . ' !important;"></div>';
         $html .= '<div class="system-tooltip" id="tooltip-green-' . $calId . '" style="display:none;"></div>';
         $html .= '</div>';
         
         // Real-time CPU (purple, updates with 5-sec average)
-        $html .= '<div class="eventlist-cpu-bar eventlist-cpu-realtime" onmouseover="showTooltip_' . $jsCalId . '(\'purple\')" onmouseout="hideTooltip_' . $jsCalId . '(\'purple\')">';
-        $html .= '<div class="eventlist-cpu-fill eventlist-cpu-fill-purple" id="cpu-realtime-' . $calId . '" style="width: 0%;"></div>';
+        $html .= '<div class="eventlist-cpu-bar eventlist-cpu-realtime" style="background:' . $themeStyles['cell_today_bg'] . ' !important;" onmouseover="showTooltip_' . $jsCalId . '(\'purple\')" onmouseout="hideTooltip_' . $jsCalId . '(\'purple\')">';
+        $html .= '<div class="eventlist-cpu-fill eventlist-cpu-fill-purple" id="cpu-realtime-' . $calId . '" style="width: 0%; background:' . $themeStyles['border'] . ' !important;"></div>';
         $html .= '<div class="system-tooltip" id="tooltip-purple-' . $calId . '" style="display:none;"></div>';
         $html .= '</div>';
         
         // Real-time Memory (orange, updates)
-        $html .= '<div class="eventlist-cpu-bar eventlist-mem-realtime" onmouseover="showTooltip_' . $jsCalId . '(\'orange\')" onmouseout="hideTooltip_' . $jsCalId . '(\'orange\')">';
-        $html .= '<div class="eventlist-cpu-fill eventlist-cpu-fill-orange" id="mem-realtime-' . $calId . '" style="width: 0%;"></div>';
+        $html .= '<div class="eventlist-cpu-bar eventlist-mem-realtime" style="background:' . $themeStyles['cell_today_bg'] . ' !important;" onmouseover="showTooltip_' . $jsCalId . '(\'orange\')" onmouseout="hideTooltip_' . $jsCalId . '(\'orange\')">';
+        $html .= '<div class="eventlist-cpu-fill eventlist-cpu-fill-orange" id="mem-realtime-' . $calId . '" style="width: 0%; background:' . $themeStyles['text_primary'] . ' !important;"></div>';
         $html .= '<div class="system-tooltip" id="tooltip-orange-' . $calId . '" style="display:none;"></div>';
         $html .= '</div>';
         
@@ -2545,24 +2617,14 @@ class syntax_plugin_calendar extends DokuWiki_Syntax_Plugin {
         $todayStr = date('Y-m-d');
         
         // Thin "Add Event" bar between header and week grid - theme-aware colors
-        $addBtnBg = $theme === 'matrix' ? '#006400' : 
-                   ($theme === 'purple' ? '#7d3c98' : 
-                   ($theme === 'pink' ? '#b8156f' : 
-                   ($theme === 'wiki' ? $themeStyles['grid_bg'] : '#3498db')));
-        $addBtnHover = $theme === 'matrix' ? '#004d00' : 
-                      ($theme === 'purple' ? '#5b2c6f' : 
-                      ($theme === 'pink' ? '#8b0f54' : 
-                      ($theme === 'wiki' ? $themeStyles['cell_today_bg'] : '#2980b9')));
-        $addBtnTextColor = $theme === 'professional' ? '#ffffff' : 
-                          ($theme === 'wiki' ? $themeStyles['text_primary'] : 
-                          ($theme === 'pink' ? '#000000' : $themeStyles['text_bright']));
-                          ($theme === 'pink' ? '#000000' : $themeStyles['text_bright']);
-        $addBtnShadow = $theme === 'matrix' ? '0 0 8px rgba(0, 100, 0, 0.4)' : 
-                       ($theme === 'purple' ? '0 0 8px rgba(155, 89, 182, 0.4)' : 
-                       ($theme === 'pink' ? '0 0 10px rgba(255, 20, 147, 0.5)' : '0 2px 4px rgba(0,0,0,0.2)'));
-        $addBtnHoverShadow = $theme === 'matrix' ? '0 0 12px rgba(0, 100, 0, 0.6)' : 
-                            ($theme === 'purple' ? '0 0 12px rgba(155, 89, 182, 0.6)' : 
-                            ($theme === 'pink' ? '0 0 14px rgba(255, 20, 147, 0.7)' : '0 3px 6px rgba(0,0,0,0.3)'));
+        $addBtnBg = $themeStyles['cell_today_bg'];
+        $addBtnHover = $themeStyles['grid_bg'];
+        $addBtnTextColor = ($theme === 'professional' || $theme === 'wiki') ? 
+                          $themeStyles['text_bright'] : $themeStyles['text_bright'];
+        $addBtnShadow = ($theme === 'professional' || $theme === 'wiki') ? 
+                       '0 2px 4px rgba(0,0,0,0.2)' : '0 0 8px ' . $themeStyles['shadow'];
+        $addBtnHoverShadow = ($theme === 'professional' || $theme === 'wiki') ? 
+                            '0 3px 6px rgba(0,0,0,0.3)' : '0 0 12px ' . $themeStyles['shadow'];
         
         $html .= '<div style="background:' . $addBtnBg . '; padding:0; margin:0; height:12px; line-height:10px; text-align:center; cursor:pointer; border-top:1px solid rgba(0, 0, 0, 0.1); border-bottom:1px solid rgba(0, 0, 0, 0.1); box-shadow:' . $addBtnShadow . '; transition:all 0.2s;" onclick="openAddEvent(\'' . $calId . '\', \'' . $namespace . '\', \'' . $todayStr . '\');" onmouseover="this.style.background=\'' . $addBtnHover . '\'; this.style.boxShadow=\'' . $addBtnHoverShadow . '\';" onmouseout="this.style.background=\'' . $addBtnBg . '\'; this.style.boxShadow=\'' . $addBtnShadow . '\';">';
         $addBtnTextShadow = ($theme === 'pink') ? '0 0 3px ' . $addBtnTextColor : 'none';
@@ -2572,15 +2634,29 @@ class syntax_plugin_calendar extends DokuWiki_Syntax_Plugin {
         // Week grid (7 cells)
         $html .= $this->renderWeekGrid($weekEvents, $weekStart, $themeStyles, $theme);
         
-        // Section colors - different shades for pink theme, template colors for wiki
-        if ($theme === 'wiki') {
-            $todayColor = '#e67e22';      // Warm orange - stands out on light bg
-            $tomorrowColor = '#27ae60';    // Green - distinct from orange
-            $importantColor = '#8e44ad';   // Purple - distinct from both
+        // Section colors - derived from theme palette
+        // Today: brightest accent, Tomorrow: primary accent, Important: dim/secondary accent
+        if ($theme === 'matrix') {
+            $todayColor = '#00ff00';     // Bright green
+            $tomorrowColor = '#00cc07';  // Standard green
+            $importantColor = '#00aa00'; // Dim green
+        } else if ($theme === 'purple') {
+            $todayColor = '#d4a5ff';     // Bright purple
+            $tomorrowColor = '#9b59b6';  // Standard purple
+            $importantColor = '#8e7ab8'; // Dim purple
+        } else if ($theme === 'pink') {
+            $todayColor = '#ff1493';     // Hot pink
+            $tomorrowColor = '#ff69b4';  // Medium pink
+            $importantColor = '#ff85c1'; // Light pink
+        } else if ($theme === 'professional') {
+            $todayColor = '#4a90e2';     // Blue accent
+            $tomorrowColor = '#5ba3e6';  // Lighter blue
+            $importantColor = '#7fb8ec'; // Lightest blue
         } else {
-            $todayColor = $theme === 'pink' ? '#ff1493' : '#ff9800';      // Hot pink vs orange
-            $tomorrowColor = $theme === 'pink' ? '#ff69b4' : '#4caf50';   // Pink vs green
-            $importantColor = $theme === 'pink' ? '#ff85c1' : '#9b59b6';  // Light pink vs purple
+            // Wiki - section header backgrounds from template colors
+            $todayColor = $themeStyles['text_bright'];      // __link__
+            $tomorrowColor = $themeStyles['header_bg'];     // __background_alt__
+            $importantColor = $themeStyles['header_border'];// __border__
         }
         
         // Today section
@@ -2680,9 +2756,15 @@ class syntax_plugin_calendar extends DokuWiki_Syntax_Plugin {
             // Theme-aware text shadow
             if ($theme === 'pink') {
                 $glowColor = $isToday ? $themeStyles['text_bright'] : $themeStyles['text_primary'];
-                $textShadow = $isToday ? 'text-shadow:0 0 6px ' . $glowColor . ';' : 'text-shadow:0 0 4px ' . $glowColor . ';';
+                $textShadow = $isToday ? 'text-shadow:0 0 3px ' . $glowColor . ';' : 'text-shadow:0 0 2px ' . $glowColor . ';';
+            } else if ($theme === 'matrix') {
+                $glowColor = $isToday ? $themeStyles['text_bright'] : $themeStyles['text_primary'];
+                $textShadow = $isToday ? 'text-shadow:0 0 2px ' . $glowColor . ';' : 'text-shadow:0 0 1px ' . $glowColor . ';';
+            } else if ($theme === 'purple') {
+                $glowColor = $isToday ? $themeStyles['text_bright'] : $themeStyles['text_primary'];
+                $textShadow = $isToday ? 'text-shadow:0 0 2px ' . $glowColor . ';' : 'text-shadow:0 0 1px ' . $glowColor . ';';
             } else {
-                $textShadow = '';  // No glow for other themes
+                $textShadow = '';  // No glow for professional/wiki
             }
             
             // Border color based on theme
@@ -2724,29 +2806,29 @@ class syntax_plugin_calendar extends DokuWiki_Syntax_Plugin {
         $html .= '</div>';
         
         // Add container for selected day events display (with unique ID) - theme-aware
-        $panelBorderColor = $theme === 'matrix' ? '#00cc07' : 
-                           ($theme === 'purple' ? '#9b59b6' : 
-                           ($theme === 'pink' ? '#ff1493' : 
-                           ($theme === 'wiki' ? $themeStyles['border'] : '#3498db')));
-        $panelHeaderBg = $theme === 'matrix' ? '#00cc07' : 
-                        ($theme === 'purple' ? '#9b59b6' : 
-                        ($theme === 'pink' ? '#ff1493' : 
-                        ($theme === 'wiki' ? $themeStyles['border'] : '#3498db')));
-        $panelShadow = $theme === 'matrix' ? '0 0 5px rgba(0, 204, 7, 0.2)' : 
-                      ($theme === 'purple' ? '0 0 5px rgba(155, 89, 182, 0.2)' : 
-                      ($theme === 'pink' ? '0 0 8px rgba(255, 20, 147, 0.4)' : 
-                      '0 1px 3px rgba(0, 0, 0, 0.1)'));
-        $panelContentBg = $theme === 'professional' ? 'rgba(255, 255, 255, 0.95)' : 
+        $panelBorderColor = $themeStyles['border'];
+        $panelHeaderBg = $themeStyles['border'];
+        $panelShadow = ($theme === 'professional' || $theme === 'wiki') ? 
+                      '0 1px 3px rgba(0, 0, 0, 0.1)' : 
+                      '0 0 5px ' . $themeStyles['shadow'];
+        $panelContentBg = ($theme === 'professional') ? 'rgba(255, 255, 255, 0.95)' : 
                          ($theme === 'wiki' ? $themeStyles['cell_bg'] : 'rgba(36, 36, 36, 0.5)');
         $panelHeaderShadow = ($theme === 'professional' || $theme === 'wiki') ? '0 2px 4px rgba(0, 0, 0, 0.15)' : '0 0 8px ' . $panelHeaderBg;
         
-        // Header text color - white for colored headers, dark for light headers
-        $panelHeaderColor = ($theme === 'wiki' || $theme === 'professional') ? '#fff' : '#000';
+        // Header text color - dark bg text for dark themes, white for light theme accent headers
+        $panelHeaderColor = ($theme === 'matrix' || $theme === 'purple' || $theme === 'pink') ? $themeStyles['bg'] : 
+                            (($theme === 'wiki') ? $themeStyles['text_primary'] : '#fff');
         
-        $html .= '<div id="selected-day-events-' . $calId . '" style="display:none; margin:8px 4px; border-left:3px solid ' . $panelBorderColor . '; box-shadow:' . $panelShadow . ';">';
-        $html .= '<div style="background:' . $panelHeaderBg . '; color:' . $panelHeaderColor . '; padding:4px 6px; font-size:9px; font-weight:700; letter-spacing:0.3px; font-family:system-ui, sans-serif; box-shadow:' . $panelHeaderShadow . '; display:flex; justify-content:space-between; align-items:center;">';
-        $html .= '<span id="selected-day-title-' . $calId . '"></span>';
-        $html .= '<span onclick="document.getElementById(\'selected-day-events-' . $calId . '\').style.display=\'none\';" style="cursor:pointer; font-size:12px; padding:0 4px; font-weight:700; color:' . $panelHeaderColor . ';">✕</span>';
+        $html .= '<div id="selected-day-events-' . $calId . '" style="display:none; margin:8px 4px; border-left:3px solid ' . $panelBorderColor . ($theme === 'wiki' ? '' : ' !important') . '; box-shadow:' . $panelShadow . ';">';
+        if ($theme === 'wiki') {
+            $html .= '<div style="background:' . $panelHeaderBg . '; color:' . $panelHeaderColor . '; padding:4px 6px; font-size:9px; font-weight:700; letter-spacing:0.3px; font-family:system-ui, sans-serif; box-shadow:' . $panelHeaderShadow . '; display:flex; justify-content:space-between; align-items:center;">';
+            $html .= '<span id="selected-day-title-' . $calId . '"></span>';
+            $html .= '<span onclick="document.getElementById(\'selected-day-events-' . $calId . '\').style.display=\'none\';" style="cursor:pointer; font-size:12px; padding:0 4px; font-weight:700; color:' . $panelHeaderColor . ';">✕</span>';
+        } else {
+            $html .= '<div style="background:' . $panelHeaderBg . ' !important; color:' . $panelHeaderColor . ' !important; -webkit-text-fill-color:' . $panelHeaderColor . ' !important; padding:4px 6px; font-size:9px; font-weight:700; letter-spacing:0.3px; font-family:system-ui, sans-serif; box-shadow:' . $panelHeaderShadow . '; display:flex; justify-content:space-between; align-items:center;">';
+            $html .= '<span id="selected-day-title-' . $calId . '"></span>';
+            $html .= '<span onclick="document.getElementById(\'selected-day-events-' . $calId . '\').style.display=\'none\';" style="cursor:pointer; font-size:12px; padding:0 4px; font-weight:700; color:' . $panelHeaderColor . ' !important; -webkit-text-fill-color:' . $panelHeaderColor . ' !important;">✕</span>';
+        }
         $html .= '</div>';
         $html .= '<div id="selected-day-content-' . $calId . '" style="padding:4px 0; background:' . $panelContentBg . ';"></div>';
         $html .= '</div>';
@@ -2762,7 +2844,8 @@ class syntax_plugin_calendar extends DokuWiki_Syntax_Plugin {
             'text_primary' => $themeStyles['text_primary'],
             'text_bright' => $themeStyles['text_bright'],
             'text_dim' => $themeStyles['text_dim'],
-            'text_shadow' => ($theme === 'pink') ? 'text-shadow:0 0 2px ' . $themeStyles['text_primary'] : '',
+            'text_shadow' => ($theme === 'pink') ? 'text-shadow:0 0 2px ' . $themeStyles['text_primary'] : 
+                             ((in_array($theme, ['matrix', 'purple'])) ? 'text-shadow:0 0 1px ' . $themeStyles['text_primary'] : ''),
             'event_bg' => $theme === 'professional' ? 'rgba(255, 255, 255, 0.5)' : 
                          ($theme === 'wiki' ? $themeStyles['cell_bg'] : 'rgba(36, 36, 36, 0.3)'),
             'border_color' => $theme === 'professional' ? 'rgba(0, 0, 0, 0.1)' : 
@@ -2934,17 +3017,31 @@ class syntax_plugin_calendar extends DokuWiki_Syntax_Plugin {
         }
         
         // Theme-aware section shadow
-        $sectionShadow = $theme === 'matrix' ? '0 0 5px rgba(0, 204, 7, 0.2)' : 
-                        ($theme === 'purple' ? '0 0 5px rgba(155, 89, 182, 0.2)' : 
-                        ($theme === 'pink' ? '0 0 8px rgba(255, 20, 147, 0.4)' : 
-                        '0 1px 3px rgba(0, 0, 0, 0.1)'));
+        $sectionShadow = ($theme === 'professional' || $theme === 'wiki') ? 
+                        '0 1px 3px rgba(0, 0, 0, 0.1)' : 
+                        '0 0 5px ' . $themeStyles['shadow'];
         
-        $html = '<div style="border-left:3px solid ' . $borderColor . '; margin:8px 4px; box-shadow:' . $sectionShadow . ';">';
+        if ($theme === 'wiki') {
+            // Wiki theme: use a background div for the left bar instead of border-left
+            // Dark Reader maps border colors differently from background colors, causing mismatch
+            $html = '<div style="display:flex; margin:8px 4px; box-shadow:' . $sectionShadow . '; background:' . $themeStyles['bg'] . ';">';
+            $html .= '<div style="width:3px; flex-shrink:0; background:' . $borderColor . ';"></div>';
+            $html .= '<div style="flex:1; min-width:0;">';
+        } else {
+            $html = '<div style="border-left:3px solid ' . $borderColor . ' !important; margin:8px 4px; box-shadow:' . $sectionShadow . ';">';
+        }
         
-        // Section header with accent color background - theme-aware shadow
+        // Section header with accent color background - theme-aware
         $headerShadow = ($theme === 'professional' || $theme === 'wiki') ? '0 2px 4px rgba(0, 0, 0, 0.15)' : '0 0 8px ' . $accentColor;
-        $headerTextColor = ($theme === 'wiki') ? '#fff' : '#000';
-        $html .= '<div style="background:' . $accentColor . '; color:' . $headerTextColor . '; padding:4px 6px; font-size:9px; font-weight:700; letter-spacing:0.3px; font-family:system-ui, sans-serif; box-shadow:' . $headerShadow . ';">';
+        $headerTextColor = ($theme === 'matrix' || $theme === 'purple' || $theme === 'pink') ? $themeStyles['bg'] : 
+                           (($theme === 'wiki') ? $themeStyles['text_primary'] : '#fff');
+        if ($theme === 'wiki') {
+            // Wiki theme: no !important — let Dark Reader adjust these
+            $html .= '<div style="background:' . $accentColor . '; color:' . $headerTextColor . '; padding:4px 6px; font-size:9px; font-weight:700; letter-spacing:0.3px; font-family:system-ui, sans-serif; box-shadow:' . $headerShadow . ';">';
+        } else {
+            // Dark themes + professional: lock colors against Dark Reader
+            $html .= '<div style="background:' . $accentColor . ' !important; color:' . $headerTextColor . ' !important; -webkit-text-fill-color:' . $headerTextColor . ' !important; padding:4px 6px; font-size:9px; font-weight:700; letter-spacing:0.3px; font-family:system-ui, sans-serif; box-shadow:' . $headerShadow . ';">';
+        }
         $html .= htmlspecialchars($title);
         $html .= '</div>';
         
@@ -2957,6 +3054,9 @@ class syntax_plugin_calendar extends DokuWiki_Syntax_Plugin {
         
         $html .= '</div>';
         $html .= '</div>';
+        if ($theme === 'wiki') {
+            $html .= '</div>'; // Close flex wrapper
+        }
         
         return $html;
     }
@@ -2976,7 +3076,8 @@ class syntax_plugin_calendar extends DokuWiki_Syntax_Plugin {
         // Theme-aware colors
         $titleColor = $themeStyles ? $themeStyles['text_primary'] : '#00cc07';
         $timeColor = $themeStyles ? $themeStyles['text_bright'] : '#00dd00';
-        $textShadow = ($theme === 'pink') ? 'text-shadow:0 0 2px ' . $titleColor . ';' : '';
+        $textShadow = ($theme === 'pink') ? 'text-shadow:0 0 2px ' . $titleColor . ';' : 
+                      ((in_array($theme, ['matrix', 'purple'])) ? 'text-shadow:0 0 1px ' . $titleColor . ';' : '');
         
         // Check for conflicts (using 'conflict' field set by detectTimeConflicts)
         $hasConflict = isset($event['conflict']) && $event['conflict'];
@@ -3034,7 +3135,8 @@ class syntax_plugin_calendar extends DokuWiki_Syntax_Plugin {
             $dateObj = new DateTime($date);
             $displayDate = $dateObj->format('D, M j'); // e.g., "Mon, Feb 10"
             $dateColor = $themeStyles ? $themeStyles['text_dim'] : '#00aa00';
-            $dateShadow = ($theme === 'pink') ? 'text-shadow:0 0 2px ' . $dateColor . ';' : '';
+            $dateShadow = ($theme === 'pink') ? 'text-shadow:0 0 2px ' . $dateColor . ';' : 
+                          ((in_array($theme, ['matrix', 'purple'])) ? 'text-shadow:0 0 1px ' . $dateColor . ';' : '');
             $html .= '<div style="font-size:8px; color:' . $dateColor . '; font-weight:500; margin-top:2px; ' . $dateShadow . '">' . htmlspecialchars($displayDate) . '</div>';
         }
         
@@ -3270,15 +3372,15 @@ class syntax_plugin_calendar extends DokuWiki_Syntax_Plugin {
         //   __text_neu__          → --text-dim            → Secondary text, dates, descriptions
         //   __text_alt__          → (not mapped)          → Available for future use
         //   __border__            → --border-color        → Grid lines, input borders
+        //                         → --border-main         → Accent color: buttons, badges, active elements, section headers
         //                         → --header-border
-        //   __link__              → --border-main         → Accent color: buttons, badges, active elements
-        //                         → --text-bright         → Links, accent text
+        //   __link__              → --text-bright         → Links, accent text
         //   __existing__          → (fallback to __link__)→ Available for future use
         //
         // To customize: edit your template's conf/style.ini [replacements]
         return [
             'bg' => $bgSite,
-            'border' => $link,           // Accent color from template links
+            'border' => $border,         // Accent color from template border
             'shadow' => 'rgba(0, 0, 0, 0.1)',
             'header_bg' => $bgAlt,       // Headers use alt background
             'header_border' => $border,
@@ -3323,6 +3425,13 @@ class syntax_plugin_calendar extends DokuWiki_Syntax_Plugin {
                 'cell_bg' => '#242424',
                 'cell_today_bg' => '#2a4d2a',
                 'bar_glow' => '0 0 3px',
+                'pastdue_color' => '#e74c3c',
+                'pastdue_bg' => '#3d1a1a',
+                'pastdue_bg_strong' => '#4d2020',
+                'pastdue_bg_light' => '#2d1515',
+                'tomorrow_bg' => '#3d3d1a',
+                'tomorrow_bg_strong' => '#4d4d20',
+                'tomorrow_bg_light' => '#2d2d15',
             ],
             'purple' => [
                 'bg' => '#2a2030',
@@ -3339,6 +3448,13 @@ class syntax_plugin_calendar extends DokuWiki_Syntax_Plugin {
                 'cell_bg' => '#2a2030',
                 'cell_today_bg' => '#3d2b4d',
                 'bar_glow' => '0 0 3px',
+                'pastdue_color' => '#e74c3c',
+                'pastdue_bg' => '#3d1a2a',
+                'pastdue_bg_strong' => '#4d2035',
+                'pastdue_bg_light' => '#2d1520',
+                'tomorrow_bg' => '#3d3520',
+                'tomorrow_bg_strong' => '#4d4028',
+                'tomorrow_bg_light' => '#2d2a18',
             ],
             'professional' => [
                 'bg' => '#f5f7fa',
@@ -3355,6 +3471,13 @@ class syntax_plugin_calendar extends DokuWiki_Syntax_Plugin {
                 'cell_bg' => '#ffffff',
                 'cell_today_bg' => '#dce8f7',
                 'bar_glow' => '0 1px 2px',
+                'pastdue_color' => '#e74c3c',
+                'pastdue_bg' => '#ffe6e6',
+                'pastdue_bg_strong' => '#ffd9d9',
+                'pastdue_bg_light' => '#fff2f2',
+                'tomorrow_bg' => '#fff9e6',
+                'tomorrow_bg_strong' => '#fff4cc',
+                'tomorrow_bg_light' => '#fffbf0',
             ],
             'pink' => [
                 'bg' => '#1a0d14',
@@ -3371,22 +3494,36 @@ class syntax_plugin_calendar extends DokuWiki_Syntax_Plugin {
                 'cell_bg' => '#1a0d14',
                 'cell_today_bg' => '#3d2030',
                 'bar_glow' => '0 0 5px',
+                'pastdue_color' => '#e74c3c',
+                'pastdue_bg' => '#3d1520',
+                'pastdue_bg_strong' => '#4d1a28',
+                'pastdue_bg_light' => '#2d1018',
+                'tomorrow_bg' => '#3d3020',
+                'tomorrow_bg_strong' => '#4d3a28',
+                'tomorrow_bg_light' => '#2d2518',
             ],
             'wiki' => [
                 'bg' => '#f5f5f5',
-                'border' => '#2b73b7',       // Use link blue as accent (matches template)
+                'border' => '#ccc',          // Template __border__ color
                 'shadow' => 'rgba(0, 0, 0, 0.1)',
                 'header_bg' => '#e8e8e8',
                 'header_border' => '#ccc',
                 'header_shadow' => '0 2px 4px rgba(0, 0, 0, 0.1)',
                 'text_primary' => '#333',
-                'text_bright' => '#2b73b7',
+                'text_bright' => '#2b73b7',  // Template __link__ color
                 'text_dim' => '#666',
                 'grid_bg' => '#f5f5f5',
                 'grid_border' => '#ccc',
                 'cell_bg' => '#fff',
                 'cell_today_bg' => '#eee',
                 'bar_glow' => '0 1px 2px',
+                'pastdue_color' => '#e74c3c',
+                'pastdue_bg' => '#ffe6e6',
+                'pastdue_bg_strong' => '#ffd9d9',
+                'pastdue_bg_light' => '#fff2f2',
+                'tomorrow_bg' => '#fff9e6',
+                'tomorrow_bg_strong' => '#fff4cc',
+                'tomorrow_bg_light' => '#fffbf0',
             ],
         ];
         

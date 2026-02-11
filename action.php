@@ -8,7 +8,46 @@
 
 if (!defined('DOKU_INC')) die();
 
+// Set to true to enable verbose debug logging (should be false in production)
+if (!defined('CALENDAR_DEBUG')) {
+    define('CALENDAR_DEBUG', false);
+}
+
 class action_plugin_calendar extends DokuWiki_Action_Plugin {
+    
+    /**
+     * Log debug message only if CALENDAR_DEBUG is enabled
+     */
+    private function debugLog($message) {
+        if (CALENDAR_DEBUG) {
+            error_log($message);
+        }
+    }
+    
+    /**
+     * Safely read and decode a JSON file with error handling
+     * @param string $filepath Path to JSON file
+     * @return array Decoded array or empty array on error
+     */
+    private function safeJsonRead($filepath) {
+        if (!file_exists($filepath)) {
+            return [];
+        }
+        
+        $contents = @file_get_contents($filepath);
+        if ($contents === false) {
+            $this->debugLog("Failed to read file: $filepath");
+            return [];
+        }
+        
+        $decoded = json_decode($contents, true);
+        if (json_last_error() !== JSON_ERROR_NONE) {
+            $this->debugLog("JSON decode error in $filepath: " . json_last_error_msg());
+            return [];
+        }
+        
+        return is_array($decoded) ? $decoded : [];
+    }
 
     public function register(Doku_Event_Handler $controller) {
         $controller->register_hook('AJAX_CALL_UNKNOWN', 'BEFORE', $this, 'handleAjax');
@@ -21,6 +60,21 @@ class action_plugin_calendar extends DokuWiki_Action_Plugin {
         $event->stopPropagation();
 
         $action = $_REQUEST['action'] ?? '';
+        
+        // Actions that modify data require CSRF token verification
+        $writeActions = ['save_event', 'delete_event', 'toggle_task', 'cleanup_empty_namespaces',
+                         'trim_all_past_recurring', 'rescan_recurring', 'extend_recurring',
+                         'trim_recurring', 'pause_recurring', 'resume_recurring',
+                         'change_start_recurring', 'change_pattern_recurring'];
+        
+        if (in_array($action, $writeActions)) {
+            // Check for valid security token
+            $sectok = $_REQUEST['sectok'] ?? '';
+            if (!checkSecurityToken($sectok)) {
+                echo json_encode(['success' => false, 'error' => 'Invalid security token. Please refresh the page and try again.']);
+                return;
+            }
+        }
 
         switch ($action) {
             case 'save_event':
@@ -38,8 +92,31 @@ class action_plugin_calendar extends DokuWiki_Action_Plugin {
             case 'toggle_task':
                 $this->toggleTaskComplete();
                 break;
+            case 'cleanup_empty_namespaces':
+            case 'trim_all_past_recurring':
+            case 'rescan_recurring':
+            case 'extend_recurring':
+            case 'trim_recurring':
+            case 'pause_recurring':
+            case 'resume_recurring':
+            case 'change_start_recurring':
+            case 'change_pattern_recurring':
+                $this->routeToAdmin($action);
+                break;
             default:
                 echo json_encode(['success' => false, 'error' => 'Unknown action']);
+        }
+    }
+    
+    /**
+     * Route AJAX actions to admin plugin methods
+     */
+    private function routeToAdmin($action) {
+        $admin = plugin_load('admin', 'calendar');
+        if ($admin && method_exists($admin, 'handleAjaxAction')) {
+            $admin->handleAjaxAction($action);
+        } else {
+            echo json_encode(['success' => false, 'error' => 'Admin handler not available']);
         }
     }
 
@@ -67,6 +144,65 @@ class action_plugin_calendar extends DokuWiki_Action_Plugin {
             return;
         }
         
+        // Validate date format (YYYY-MM-DD)
+        if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $date) || !strtotime($date)) {
+            echo json_encode(['success' => false, 'error' => 'Invalid date format']);
+            return;
+        }
+        
+        // Validate oldDate if provided
+        if ($oldDate && (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $oldDate) || !strtotime($oldDate))) {
+            echo json_encode(['success' => false, 'error' => 'Invalid old date format']);
+            return;
+        }
+        
+        // Validate endDate if provided
+        if ($endDate && (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $endDate) || !strtotime($endDate))) {
+            echo json_encode(['success' => false, 'error' => 'Invalid end date format']);
+            return;
+        }
+        
+        // Validate time format (HH:MM) if provided
+        if ($time && !preg_match('/^\d{2}:\d{2}$/', $time)) {
+            echo json_encode(['success' => false, 'error' => 'Invalid time format']);
+            return;
+        }
+        
+        // Validate endTime format if provided
+        if ($endTime && !preg_match('/^\d{2}:\d{2}$/', $endTime)) {
+            echo json_encode(['success' => false, 'error' => 'Invalid end time format']);
+            return;
+        }
+        
+        // Validate color format (hex color)
+        if (!preg_match('/^#[0-9A-Fa-f]{6}$/', $color)) {
+            $color = '#3498db'; // Reset to default if invalid
+        }
+        
+        // Validate namespace (prevent path traversal)
+        if ($namespace && !preg_match('/^[a-zA-Z0-9_:;*-]*$/', $namespace)) {
+            echo json_encode(['success' => false, 'error' => 'Invalid namespace format']);
+            return;
+        }
+        
+        // Validate recurrence type
+        $validRecurrenceTypes = ['daily', 'weekly', 'biweekly', 'monthly', 'yearly'];
+        if ($isRecurring && !in_array($recurrenceType, $validRecurrenceTypes)) {
+            $recurrenceType = 'weekly';
+        }
+        
+        // Validate recurrenceEnd if provided
+        if ($recurrenceEnd && (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $recurrenceEnd) || !strtotime($recurrenceEnd))) {
+            echo json_encode(['success' => false, 'error' => 'Invalid recurrence end date format']);
+            return;
+        }
+        
+        // Sanitize title length
+        $title = substr(trim($title), 0, 500);
+        
+        // Sanitize description length
+        $description = substr($description, 0, 10000);
+        
         // If editing, find the event's stored namespace (for finding/deleting old event)
         $storedNamespace = '';
         $oldNamespace = '';
@@ -78,23 +214,23 @@ class action_plugin_calendar extends DokuWiki_Action_Plugin {
             // Store the old namespace for deletion purposes
             if ($storedNamespace !== null) {
                 $oldNamespace = $storedNamespace;
-                error_log("Calendar saveEvent: Found existing event in namespace '$oldNamespace'");
+                $this->debugLog("Calendar saveEvent: Found existing event in namespace '$oldNamespace'");
             }
         }
         
         // Use the namespace provided by the user (allow namespace changes!)
         // But normalize wildcards and multi-namespace to empty for NEW events
         if (!$eventId) {
-            error_log("Calendar saveEvent: NEW event, received namespace='$namespace'");
+            $this->debugLog("Calendar saveEvent: NEW event, received namespace='$namespace'");
             // Normalize namespace: treat wildcards and multi-namespace as empty (default) for NEW events
             if (!empty($namespace) && (strpos($namespace, '*') !== false || strpos($namespace, ';') !== false)) {
-                error_log("Calendar saveEvent: Namespace contains wildcard/multi, clearing to empty");
+                $this->debugLog("Calendar saveEvent: Namespace contains wildcard/multi, clearing to empty");
                 $namespace = '';
             } else {
-                error_log("Calendar saveEvent: Namespace is clean, keeping as '$namespace'");
+                $this->debugLog("Calendar saveEvent: Namespace is clean, keeping as '$namespace'");
             }
         } else {
-            error_log("Calendar saveEvent: EDITING event $eventId, user selected namespace='$namespace'");
+            $this->debugLog("Calendar saveEvent: EDITING event $eventId, user selected namespace='$namespace'");
         }
         
         // Generate event ID if new
@@ -106,7 +242,7 @@ class action_plugin_calendar extends DokuWiki_Action_Plugin {
             $searchDate = ($oldDate && $oldDate !== $date) ? $oldDate : $date;
             $existingEventData = $this->getExistingEventData($eventId, $searchDate, $oldNamespace ?: $namespace);
             if ($existingEventData) {
-                error_log("Calendar saveEvent recurring: Loaded existing data - namespace='" . ($existingEventData['namespace'] ?? 'NOT SET') . "'");
+                $this->debugLog("Calendar saveEvent recurring: Loaded existing data - namespace='" . ($existingEventData['namespace'] ?? 'NOT SET') . "'");
             }
         }
         
@@ -131,15 +267,15 @@ class action_plugin_calendar extends DokuWiki_Action_Plugin {
                 if (empty($namespace) || strpos($namespace, '*') !== false || strpos($namespace, ';') !== false) {
                     if (isset($existingEventData['namespace'])) {
                         $namespace = $existingEventData['namespace'];
-                        error_log("Calendar saveEvent recurring: Preserving namespace '$namespace' (received='$receivedNamespace')");
+                        $this->debugLog("Calendar saveEvent recurring: Preserving namespace '$namespace' (received='$receivedNamespace')");
                     } else {
-                        error_log("Calendar saveEvent recurring: No existing namespace to preserve (received='$receivedNamespace')");
+                        $this->debugLog("Calendar saveEvent recurring: No existing namespace to preserve (received='$receivedNamespace')");
                     }
                 } else {
-                    error_log("Calendar saveEvent recurring: Using new namespace '$namespace' (received='$receivedNamespace')");
+                    $this->debugLog("Calendar saveEvent recurring: Using new namespace '$namespace' (received='$receivedNamespace')");
                 }
             } else {
-                error_log("Calendar saveEvent recurring: No existing data found, using namespace='$namespace'");
+                $this->debugLog("Calendar saveEvent recurring: No existing data found, using namespace='$namespace'");
             }
             
             $this->createRecurringEvents($namespace, $date, $endDate, $title, $time, $description, 
@@ -196,7 +332,7 @@ class action_plugin_calendar extends DokuWiki_Action_Plugin {
                     }
                     
                     file_put_contents($oldEventFile, json_encode($oldEvents, JSON_PRETTY_PRINT));
-                    error_log("Calendar saveEvent: Deleted event from old location - namespace:'$oldNamespace', date:'$deleteDate'");
+                    $this->debugLog("Calendar saveEvent: Deleted event from old location - namespace:'$oldNamespace', date:'$deleteDate'");
                 }
             }
         }
@@ -205,7 +341,7 @@ class action_plugin_calendar extends DokuWiki_Action_Plugin {
             $events[$date] = [];
         } elseif (!is_array($events[$date])) {
             // Fix corrupted data - ensure it's an array
-            error_log("Calendar saveEvent: Fixing corrupted data at $date - was not an array");
+            $this->debugLog("Calendar saveEvent: Fixing corrupted data at $date - was not an array");
             $events[$date] = [];
         }
         
@@ -225,7 +361,7 @@ class action_plugin_calendar extends DokuWiki_Action_Plugin {
         ];
         
         // Debug logging
-        error_log("Calendar saveEvent: Saving event '$title' with namespace='$namespace' to file $eventFile");
+        $this->debugLog("Calendar saveEvent: Saving event '$title' with namespace='$namespace' to file $eventFile");
         
         // If editing, replace existing event
         if ($eventId) {
@@ -274,7 +410,7 @@ class action_plugin_calendar extends DokuWiki_Action_Plugin {
                     if (json_last_error() === JSON_ERROR_NONE && is_array($decoded)) {
                         $currentEvents = $decoded;
                     } else {
-                        error_log("Calendar saveEvent: JSON decode error in $currentEventFile: " . json_last_error_msg());
+                        $this->debugLog("Calendar saveEvent: JSON decode error in $currentEventFile: " . json_last_error_msg());
                     }
                 }
                 
@@ -283,7 +419,7 @@ class action_plugin_calendar extends DokuWiki_Action_Plugin {
                     $currentEvents[$firstDayOfMonth] = [];
                 } elseif (!is_array($currentEvents[$firstDayOfMonth])) {
                     // Fix corrupted data - ensure it's an array
-                    error_log("Calendar saveEvent: Fixing corrupted data at $firstDayOfMonth - was not an array");
+                    $this->debugLog("Calendar saveEvent: Fixing corrupted data at $firstDayOfMonth - was not an array");
                     $currentEvents[$firstDayOfMonth] = [];
                 }
                 
@@ -478,13 +614,29 @@ class action_plugin_calendar extends DokuWiki_Action_Plugin {
         $year = $INPUT->int('year');
         $month = $INPUT->int('month');
         
-        error_log("=== Calendar loadMonth DEBUG ===");
-        error_log("Requested: year=$year, month=$month, namespace='$namespace'");
+        // Validate year (reasonable range: 1970-2100)
+        if ($year < 1970 || $year > 2100) {
+            $year = (int)date('Y');
+        }
+        
+        // Validate month (1-12)
+        if ($month < 1 || $month > 12) {
+            $month = (int)date('n');
+        }
+        
+        // Validate namespace format
+        if ($namespace && !preg_match('/^[a-zA-Z0-9_:;*-]*$/', $namespace)) {
+            echo json_encode(['success' => false, 'error' => 'Invalid namespace format']);
+            return;
+        }
+        
+        $this->debugLog("=== Calendar loadMonth DEBUG ===");
+        $this->debugLog("Requested: year=$year, month=$month, namespace='$namespace'");
         
         // Check if multi-namespace or wildcard
         $isMultiNamespace = !empty($namespace) && (strpos($namespace, ';') !== false || strpos($namespace, '*') !== false);
         
-        error_log("isMultiNamespace: " . ($isMultiNamespace ? 'true' : 'false'));
+        $this->debugLog("isMultiNamespace: " . ($isMultiNamespace ? 'true' : 'false'));
         
         if ($isMultiNamespace) {
             $events = $this->loadEventsMultiNamespace($namespace, $year, $month);
@@ -492,9 +644,9 @@ class action_plugin_calendar extends DokuWiki_Action_Plugin {
             $events = $this->loadEventsSingleNamespace($namespace, $year, $month);
         }
         
-        error_log("Returning " . count($events) . " date keys");
+        $this->debugLog("Returning " . count($events) . " date keys");
         foreach ($events as $dateKey => $dayEvents) {
-            error_log("  dateKey=$dateKey has " . count($dayEvents) . " events");
+            $this->debugLog("  dateKey=$dateKey has " . count($dayEvents) . " events");
         }
         
         echo json_encode([

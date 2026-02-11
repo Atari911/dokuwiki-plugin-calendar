@@ -70,10 +70,11 @@ $stats = [
 
 // Logging
 function logMessage($message, $level = 'INFO') {
-    global $logFile, $verbose;
+    global $logFile, $verbose, $config;
     
-    // Set timezone to Los Angeles
-    $tz = new DateTimeZone('America/Los_Angeles');
+    // Use timezone from config, fallback to America/Los_Angeles
+    $timezone = isset($config['timezone']) ? $config['timezone'] : 'America/Los_Angeles';
+    $tz = new DateTimeZone($timezone);
     $now = new DateTime('now', $tz);
     $timestamp = $now->format('Y-m-d H:i:s');
     

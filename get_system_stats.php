@@ -2,7 +2,23 @@
 /**
  * System Stats API Endpoint
  * Returns real-time CPU and memory usage
+ * 
+ * Requires admin authentication
  */
+
+// Initialize DokuWiki environment for authentication
+if (!defined('DOKU_INC')) {
+    define('DOKU_INC', dirname(__FILE__) . '/../../../');
+}
+require_once(DOKU_INC . 'inc/init.php');
+
+// Require admin privileges
+if (!auth_isadmin()) {
+    header('Content-Type: application/json');
+    http_response_code(403);
+    echo json_encode(['error' => 'Admin access required']);
+    exit;
+}
 
 header('Content-Type: application/json');
 header('Cache-Control: no-cache, must-revalidate');
@@ -190,11 +206,14 @@ function return_bytes($val) {
     $val = trim($val);
     $last = strtolower($val[strlen($val)-1]);
     $val = (int)$val;
+    // Intentional fallthrough for unit conversion cascade
     switch($last) {
         case 'g':
             $val *= 1024;
+            // fallthrough intentional
         case 'm':
             $val *= 1024;
+            // fallthrough intentional
         case 'k':
             $val *= 1024;
     }

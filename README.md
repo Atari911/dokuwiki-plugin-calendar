@@ -2,7 +2,7 @@
 
 A full-featured calendar plugin for DokuWiki with five visual themes, Outlook sync, conflict detection, and an admin panel for managing events across namespaces.
 
-**Version:** 6.0.0
+**Version:** 6.6.0
 **Author:** atari911 (atari911@gmail.com)
 **License:** GPL 2
 **Requires:** DokuWiki "Kaos" (2024) or newer

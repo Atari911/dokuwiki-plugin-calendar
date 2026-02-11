@@ -905,7 +905,7 @@ window.renderEventItem = function(event, date, calId, namespace) {
     const color = event.color || '#3498db';
     
     // Only inline style needed: border-left-color for event color indicator
-    let html = '<div class="event-compact-item' + completedClass + pastClass + pastDueClass + '" data-event-id="' + event.id + '" data-date="' + date + '" style="border-left-color: ' + color + ';" onclick="' + (isPast && !isPastDue ? 'togglePastEventExpand(this)' : '') + '">';
+    let html = '<div class="event-compact-item' + completedClass + pastClass + pastDueClass + '" data-event-id="' + event.id + '" data-date="' + date + '" style="border-left-color: ' + color + ' !important;" onclick="' + (isPast && !isPastDue ? 'togglePastEventExpand(this)' : '') + '">';
     
     html += '<div class="event-info">';
     html += '<div class="event-title-row">';
@@ -921,9 +921,9 @@ window.renderEventItem = function(event, date, calId, namespace) {
         }
         // Add PAST DUE or TODAY badge
         if (isPastDue) {
-            html += ' <span class="event-pastdue-badge">PAST DUE</span>';
+            html += ' <span class="event-pastdue-badge" style="background:var(--pastdue-color, #e74c3c) !important; color:white !important; -webkit-text-fill-color:white !important;">PAST DUE</span>';
         } else if (isToday) {
-            html += ' <span class="event-today-badge">TODAY</span>';
+            html += ' <span class="event-today-badge" style="background:var(--border-main, #9b59b6) !important; color:var(--background-site, white) !important; -webkit-text-fill-color:var(--background-site, white) !important;">TODAY</span>';
         }
         // Add namespace badge
         let eventNamespace = event.namespace || '';
@@ -931,7 +931,7 @@ window.renderEventItem = function(event, date, calId, namespace) {
             eventNamespace = event._namespace;
         }
         if (eventNamespace) {
-            html += ' <span class="event-namespace-badge" onclick="filterCalendarByNamespace(\'' + calId + '\', \'' + escapeHtml(eventNamespace) + '\')" title="Click to filter by this namespace">' + escapeHtml(eventNamespace) + '</span>';
+            html += ' <span class="event-namespace-badge" onclick="filterCalendarByNamespace(\'' + calId + '\', \'' + escapeHtml(eventNamespace) + '\')" style="background:var(--text-bright, #008800) !important; color:var(--background-site, white) !important; -webkit-text-fill-color:var(--background-site, white) !important;" title="Click to filter by this namespace">' + escapeHtml(eventNamespace) + '</span>';
         }
         // Add conflict warning if event has time conflicts
         if (event.hasConflict && event.conflictsWith && event.conflictsWith.length > 0) {
@@ -965,7 +965,7 @@ window.renderEventItem = function(event, date, calId, namespace) {
             eventNamespace = event._namespace;
         }
         if (eventNamespace) {
-            html += ' <span class="event-namespace-badge" onclick="filterCalendarByNamespace(\'' + calId + '\', \'' + escapeHtml(eventNamespace) + '\')" title="Click to filter by this namespace">' + escapeHtml(eventNamespace) + '</span>';
+            html += ' <span class="event-namespace-badge" onclick="filterCalendarByNamespace(\'' + calId + '\', \'' + escapeHtml(eventNamespace) + '\')" style="background:var(--text-bright, #008800) !important; color:var(--background-site, white) !important; -webkit-text-fill-color:var(--background-site, white) !important;" title="Click to filter by this namespace">' + escapeHtml(eventNamespace) + '</span>';
         }
         // Add conflict warning for past events too
         if (event.hasConflict && event.conflictsWith && event.conflictsWith.length > 0) {
@@ -1313,7 +1313,6 @@ window.editEvent = function(calId, eventId, date, namespace) {
                 if (namespaceSearch) {
                     namespaceSearch.value = event.namespace || '(default)';
                 }
-                console.log('Set namespace for editing:', event.namespace, 'Hidden value:', namespaceHidden.value);
             } else {
                 // No namespace on event, set to default
                 if (namespaceHidden) {
@@ -1322,7 +1321,6 @@ window.editEvent = function(calId, eventId, date, namespace) {
                 if (namespaceSearch) {
                     namespaceSearch.value = '(default)';
                 }
-                console.log('No namespace on event, using default');
             }
             
             title.textContent = 'Edit Event';
@@ -1344,7 +1342,8 @@ window.deleteEvent = function(calId, eventId, date, namespace) {
         action: 'delete_event',
         namespace: namespace,
         date: date,
-        eventId: eventId
+        eventId: eventId,
+        sectok: typeof JSINFO !== 'undefined' ? JSINFO.sectok : ''
     });
     
     fetch(DOKU_BASE + 'lib/exe/ajax.php', {
@@ -1432,7 +1431,8 @@ window.saveEventCompact = function(calId, namespace) {
         completed: completed ? '1' : '0',
         isRecurring: isRecurring ? '1' : '0',
         recurrenceType: recurrenceType,
-        recurrenceEnd: recurrenceEnd
+        recurrenceEnd: recurrenceEnd,
+        sectok: typeof JSINFO !== 'undefined' ? JSINFO.sectok : ''
     });
     
     fetch(DOKU_BASE + 'lib/exe/ajax.php', {
@@ -1517,29 +1517,24 @@ window.escapeHtml = function(text) {
 
 // Highlight event when clicking on bar in calendar
 window.highlightEvent = function(calId, eventId, date) {
-    console.log('Highlighting event:', calId, eventId, date);
     
     // Find the event item in the event list
     const eventList = document.querySelector('#' + calId + ' .event-list-compact');
     if (!eventList) {
-        console.log('Event list not found');
         return;
     }
     
     const eventItem = eventList.querySelector('[data-event-id="' + eventId + '"][data-date="' + date + '"]');
     if (!eventItem) {
-        console.log('Event item not found');
         return;
     }
     
-    console.log('Found event item:', eventItem);
     
     // Get theme
     const container = document.getElementById(calId);
     const theme = container ? container.dataset.theme : 'matrix';
     const themeStyles = container ? JSON.parse(container.dataset.themeStyles || '{}') : {};
     
-    console.log('Theme:', theme);
     
     // Theme-specific highlight colors
     let highlightBg, highlightShadow;
@@ -1556,11 +1551,10 @@ window.highlightEvent = function(calId, eventId, date) {
         highlightBg = '#3d2030';  // Darker pink
         highlightShadow = '0 0 20px rgba(255, 20, 147, 0.8), 0 0 40px rgba(255, 20, 147, 0.4)';
     } else if (theme === 'wiki') {
-        highlightBg = '#dce9f5';  // Light blue highlight
-        highlightShadow = '0 0 20px rgba(43, 115, 183, 0.4)';
+        highlightBg = themeStyles.header_bg || '#e8e8e8';  // __background_alt__
+        highlightShadow = '0 0 10px rgba(0, 0, 0, 0.15)';
     }
     
-    console.log('Highlight colors:', highlightBg, highlightShadow);
     
     // Store original styles
     const originalBg = eventItem.style.background;
@@ -1580,7 +1574,6 @@ window.highlightEvent = function(calId, eventId, date) {
     eventItem.style.setProperty('box-shadow', highlightShadow, 'important');
     eventItem.style.setProperty('transition', 'all 0.3s ease-in-out', 'important');
     
-    console.log('Applied highlight styles');
     
     // Scroll to event
     eventItem.scrollIntoView({ 
@@ -1591,7 +1584,6 @@ window.highlightEvent = function(calId, eventId, date) {
     
     // Remove highlight after 3 seconds and restore original styles
     setTimeout(() => {
-        console.log('Removing highlight');
         eventItem.classList.remove('event-highlighted');
         eventItem.style.setProperty('background', originalBg);
         eventItem.style.setProperty('box-shadow', originalShadow);
@@ -1751,7 +1743,8 @@ window.toggleTaskComplete = function(calId, eventId, date, namespace, completed)
         namespace: namespace,
         date: date,
         eventId: eventId,
-        completed: completed ? '1' : '0'
+        completed: completed ? '1' : '0',
+        sectok: typeof JSINFO !== 'undefined' ? JSINFO.sectok : ''
     });
     
     fetch(DOKU_BASE + 'lib/exe/ajax.php', {
@@ -1861,50 +1854,20 @@ if (!window._calendarClickDelegationInit) {
     document.addEventListener('click', function(e) {
     if (e.target.classList.contains('event-namespace-badge')) {
         const namespace = e.target.textContent;
-        const eventItem = e.target.closest('.event-compact-item');
-        const eventList = e.target.closest('.event-list-compact');
         const calendar = e.target.closest('.calendar-compact-container');
         
-        if (!eventList || !calendar) return;
+        if (!calendar) return;
         
         const calId = calendar.id;
         
-        // Check if already filtered
-        const isFiltered = eventList.classList.contains('namespace-filtered');
-        
-        if (isFiltered && eventList.dataset.filterNamespace === namespace) {
-            // Unfilter - show all
-            eventList.classList.remove('namespace-filtered');
-            delete eventList.dataset.filterNamespace;
-            delete calendar.dataset.filteredNamespace;
-            eventList.querySelectorAll('.event-compact-item').forEach(item => {
-                item.style.display = '';
-            });
-            
-            // Update header to show "all namespaces"
-            updateFilteredNamespaceDisplay(calId, null);
-        } else {
-            // Filter by this namespace
-            eventList.classList.add('namespace-filtered');
-            eventList.dataset.filterNamespace = namespace;
-            calendar.dataset.filteredNamespace = namespace;
-            eventList.querySelectorAll('.event-compact-item').forEach(item => {
-                const itemBadge = item.querySelector('.event-namespace-badge');
-                if (itemBadge && itemBadge.textContent === namespace) {
-                    item.style.display = '';
-                } else {
-                    item.style.display = 'none';
-                }
-            });
-            
-            // Update header to show filtered namespace
-            updateFilteredNamespaceDisplay(calId, namespace);
-        }
+        // Use AJAX reload to filter both calendar grid and event list
+        filterCalendarByNamespace(calId, namespace);
     }
     });
 } // end click delegation guard
 
 // Update the displayed filtered namespace in event list header
+// Legacy badge removed - namespace filtering still works but badge no longer shown
 window.updateFilteredNamespaceDisplay = function(calId, namespace) {
     const calendar = document.getElementById(calId);
     if (!calendar) return;
@@ -1912,18 +1875,10 @@ window.updateFilteredNamespaceDisplay = function(calId, namespace) {
     const headerContent = calendar.querySelector('.event-list-header-content');
     if (!headerContent) return;
     
-    // Remove existing filter badge
+    // Remove any existing filter badge (cleanup)
     let filterBadge = headerContent.querySelector('.namespace-filter-badge');
     if (filterBadge) {
         filterBadge.remove();
-    }
-    
-    // Add new filter badge if filtering
-    if (namespace) {
-        filterBadge = document.createElement('span');
-        filterBadge.className = 'namespace-badge namespace-filter-badge';
-        filterBadge.innerHTML = escapeHtml(namespace) + ' <button class="filter-clear-inline" onclick="clearNamespaceFilter(\'' + calId + '\'); event.stopPropagation();">✕</button>';
-        headerContent.appendChild(filterBadge);
     }
 };
 
@@ -2441,10 +2396,10 @@ window.showConflictTooltip = function(badgeElement) {
     tooltip.style.boxShadow = '0 4px 12px ' + shadow;
     
     // Build content with themed colors
-    let html = '<div class="conflict-tooltip-header" style="color: ' + textPrimary + '; border-bottom: 1px solid ' + border + ';">⚠️ Time Conflicts</div>';
+    let html = '<div class="conflict-tooltip-header" style="background: ' + border + '; color: ' + bg + '; border-bottom: 1px solid ' + border + ';">⚠️ Time Conflicts</div>';
     html += '<div class="conflict-tooltip-body">';
     conflicts.forEach(conflict => {
-        html += '<div class="conflict-item" style="color: ' + textDim + ';">• ' + escapeHtml(conflict) + '</div>';
+        html += '<div class="conflict-item" style="color: ' + textDim + '; border-bottom-color: ' + border + ';">• ' + escapeHtml(conflict) + '</div>';
     });
     html += '</div>';
     

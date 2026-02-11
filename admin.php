@@ -20,6 +20,31 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
     public function forAdminOnly() {
         return true;
     }
+    
+    /**
+     * Public entry point for AJAX actions routed from action.php
+     */
+    public function handleAjaxAction($action) {
+        // Verify admin privileges for all admin AJAX actions
+        if (!auth_isadmin()) {
+            echo json_encode(['success' => false, 'error' => 'Admin access required']);
+            return;
+        }
+        
+        switch ($action) {
+            case 'cleanup_empty_namespaces': $this->handleCleanupEmptyNamespaces(); break;
+            case 'trim_all_past_recurring': $this->handleTrimAllPastRecurring(); break;
+            case 'rescan_recurring': $this->handleRescanRecurring(); break;
+            case 'extend_recurring': $this->handleExtendRecurring(); break;
+            case 'trim_recurring': $this->handleTrimRecurring(); break;
+            case 'pause_recurring': $this->handlePauseRecurring(); break;
+            case 'resume_recurring': $this->handleResumeRecurring(); break;
+            case 'change_start_recurring': $this->handleChangeStartRecurring(); break;
+            case 'change_pattern_recurring': $this->handleChangePatternRecurring(); break;
+            default:
+                echo json_encode(['success' => false, 'error' => 'Unknown admin action']);
+        }
+    }
 
     public function handle() {
         global $INPUT;
@@ -66,6 +91,24 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
             $this->importConfig();
         } elseif ($action === 'get_log') {
             $this->getLog();
+        } elseif ($action === 'cleanup_empty_namespaces') {
+            $this->handleCleanupEmptyNamespaces();
+        } elseif ($action === 'trim_all_past_recurring') {
+            $this->handleTrimAllPastRecurring();
+        } elseif ($action === 'rescan_recurring') {
+            $this->handleRescanRecurring();
+        } elseif ($action === 'extend_recurring') {
+            $this->handleExtendRecurring();
+        } elseif ($action === 'trim_recurring') {
+            $this->handleTrimRecurring();
+        } elseif ($action === 'pause_recurring') {
+            $this->handlePauseRecurring();
+        } elseif ($action === 'resume_recurring') {
+            $this->handleResumeRecurring();
+        } elseif ($action === 'change_start_recurring') {
+            $this->handleChangeStartRecurring();
+        } elseif ($action === 'change_pattern_recurring') {
+            $this->handleChangePatternRecurring();
         } elseif ($action === 'clear_log') {
             $this->clearLogFile();
         } elseif ($action === 'download_log') {
@@ -924,66 +967,20 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
         echo '</div>';
         
         // Recurring Events Section
-        echo '<div style="background:' . $colors['bg'] . '; padding:12px; margin:10px 0; border-left:3px solid #00cc07; border-radius:3px; max-width:1200px;">';
-        echo '<h3 style="margin:0 0 8px 0; color:#00cc07; font-size:16px;">🔄 Recurring Events</h3>';
+        echo '<div id="recurring-section" style="background:' . $colors['bg'] . '; padding:12px; margin:10px 0; border-left:3px solid #00cc07; border-radius:3px; max-width:1200px;">';
+        echo '<div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:8px;">';
+        echo '<h3 style="margin:0; color:#00cc07; font-size:16px;">🔄 Recurring Events</h3>';
+        echo '<div style="display:flex; gap:6px;">';
+        echo '<button onclick="trimAllPastRecurring()" id="trim-all-past-btn" style="background:#e74c3c; color:#fff; border:none; padding:4px 12px; border-radius:3px; cursor:pointer; font-size:11px; font-weight:600; transition:all 0.15s;" onmouseover="this.style.filter=\'brightness(1.2)\'" onmouseout="this.style.filter=\'none\'">✂️ Trim All Past</button>';
+        echo '<button onclick="rescanRecurringEvents()" id="rescan-recurring-btn" style="background:#00cc07; color:#fff; border:none; padding:4px 12px; border-radius:3px; cursor:pointer; font-size:11px; font-weight:600; transition:all 0.15s;" onmouseover="this.style.filter=\'brightness(1.2)\'" onmouseout="this.style.filter=\'none\'">🔍 Rescan</button>';
+        echo '</div>';
+        echo '</div>';
         
         $recurringEvents = $this->findRecurringEvents();
         
-        if (empty($recurringEvents)) {
-            echo '<p style="color:' . $colors['text'] . '; font-size:13px; margin:5px 0;">No recurring events found.</p>';
-        } else {
-            // Search bar
-            echo '<div style="margin-bottom:8px;">';
-            echo '<input type="text" id="searchRecurring" onkeyup="filterRecurringEvents()" placeholder="🔍 Search recurring events..." style="width:100%; padding:6px 10px; border:1px solid ' . $colors['border'] . '; border-radius:3px; font-size:12px;">';
-            echo '</div>';
-            
-            echo '<style>
-                .sort-arrow {
-                    color: #999;
-                    font-size: 10px;
-                    margin-left: 3px;
-                    display: inline-block;
-                }
-                #recurringTable th:hover {
-                    background: #ddd;
-                }
-                #recurringTable th:hover .sort-arrow {
-                    color: #00cc07;
-                }
-                .recurring-row-hidden {
-                    display: none;
-                }
-            </style>';
-            echo '<div style="max-height:250px; overflow-y:auto; border:1px solid ' . $colors['border'] . '; border-radius:3px;">';
-            echo '<table id="recurringTable" style="width:100%; border-collapse:collapse; font-size:11px;">';
-            echo '<thead style="position:sticky; top:0; background:#e9e9e9;">';
-            echo '<tr>';
-            echo '<th onclick="sortRecurringTable(0)" style="padding:4px 6px; text-align:left; border-bottom:2px solid #ddd; cursor:pointer; user-select:none;">Title <span class="sort-arrow">⇅</span></th>';
-            echo '<th onclick="sortRecurringTable(1)" style="padding:4px 6px; text-align:left; border-bottom:2px solid #ddd; cursor:pointer; user-select:none;">Namespace <span class="sort-arrow">⇅</span></th>';
-            echo '<th onclick="sortRecurringTable(2)" style="padding:4px 6px; text-align:left; border-bottom:2px solid #ddd; cursor:pointer; user-select:none;">Pattern <span class="sort-arrow">⇅</span></th>';
-            echo '<th onclick="sortRecurringTable(3)" style="padding:4px 6px; text-align:left; border-bottom:2px solid #ddd; cursor:pointer; user-select:none;">First <span class="sort-arrow">⇅</span></th>';
-            echo '<th onclick="sortRecurringTable(4)" style="padding:4px 6px; text-align:left; border-bottom:2px solid #ddd; cursor:pointer; user-select:none;">Count <span class="sort-arrow">⇅</span></th>';
-            echo '<th style="padding:4px 6px; text-align:left; border-bottom:2px solid #ddd;">Actions</th>';
-            echo '</tr></thead><tbody id="recurringTableBody">';
-            
-            foreach ($recurringEvents as $series) {
-                echo '<tr style="border-bottom:1px solid #eee;">';
-                echo '<td style="padding:4px 6px;">' . hsc($series['title']) . '</td>';
-                echo '<td style="padding:4px 6px;"><code style="background:#f0f0f0; padding:1px 3px; border-radius:2px; font-size:10px;">' . hsc($series['namespace'] ?: '(default)') . '</code></td>';
-                echo '<td style="padding:4px 6px;">' . hsc($series['pattern']) . '</td>';
-                echo '<td style="padding:4px 6px;">' . hsc($series['firstDate']) . '</td>';
-                echo '<td style="padding:4px 6px;"><strong>' . $series['count'] . '</strong></td>';
-                echo '<td style="padding:4px 6px; white-space:nowrap;">';
-                echo '<button onclick="editRecurringSeries(\'' . hsc(addslashes($series['title'])) . '\', \'' . hsc($series['namespace']) . '\')" style="background:#00cc07; color:white; border:none; padding:2px 6px; border-radius:2px; cursor:pointer; font-size:10px; margin-right:2px;">Edit</button>';
-                echo '<button onclick="deleteRecurringSeries(\'' . hsc(addslashes($series['title'])) . '\', \'' . hsc($series['namespace']) . '\')" style="background:#e74c3c; color:white; border:none; padding:2px 6px; border-radius:2px; cursor:pointer; font-size:10px;">Del</button>';
-                echo '</td>';
-                echo '</tr>';
-            }
-            
-            echo '</tbody></table>';
-            echo '</div>';
-            echo '<p style="color:' . $colors['text'] . '; font-size:10px; margin:5px 0 0;">Total: ' . count($recurringEvents) . ' series</p>';
-        }
+        echo '<div id="recurring-content">';
+        $this->renderRecurringTable($recurringEvents, $colors);
+        echo '</div>';
         echo '</div>';
         
         // Compact Tree-based Namespace Manager
@@ -1017,8 +1014,12 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
         echo '</datalist>';
         echo '<button type="submit" style="background:#00cc07; color:white; border:none; padding:4px 10px; border-radius:2px; cursor:pointer; font-size:11px; font-weight:bold;">➡️ Move</button>';
         echo '<button type="button" onclick="createNewNamespace()" style="background:#7b1fa2; color:white; border:none; padding:4px 10px; border-radius:2px; cursor:pointer; font-size:11px; font-weight:bold; margin-left:5px;">➕ New Namespace</button>';
+        echo '<button type="button" onclick="cleanupEmptyNamespaces()" id="cleanup-ns-btn" style="background:#e74c3c; color:white; border:none; padding:4px 10px; border-radius:2px; cursor:pointer; font-size:11px; font-weight:bold; margin-left:5px;">🧹 Cleanup</button>';
         echo '<span id="selectedCount" style="margin-left:auto; color:#00cc07; font-size:11px;">0 selected</span>';
         echo '</div>';
+        
+        // Cleanup status message - displayed prominently after control bar
+        echo '<div id="cleanup-ns-status" style="font-size:12px; margin-bottom:8px; min-height:18px;"></div>';
         
         echo '<div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">';
         
@@ -1089,8 +1090,234 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
         
         // JavaScript
         echo '<script>
+        var adminColors = {
+            text: "' . $colors['text'] . '",
+            bg: "' . $colors['bg'] . '",
+            border: "' . $colors['border'] . '"
+        };
         // Table sorting functionality - defined early so onclick handlers work
         let sortDirection = {}; // Track sort direction for each column
+        
+        function cleanupEmptyNamespaces() {
+            var btn = document.getElementById("cleanup-ns-btn");
+            var status = document.getElementById("cleanup-ns-status");
+            if (btn) { btn.textContent = "⏳ Scanning..."; btn.disabled = true; }
+            if (status) { status.innerHTML = ""; }
+            
+            // Dry run first
+            fetch(DOKU_BASE + "lib/exe/ajax.php", {
+                method: "POST",
+                headers: {"Content-Type": "application/x-www-form-urlencoded"},
+                body: "call=plugin_calendar&action=cleanup_empty_namespaces&dry_run=1&sectok=" + JSINFO.sectok
+            })
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+                if (btn) { btn.textContent = "🧹 Cleanup"; btn.disabled = false; }
+                if (!data.success) {
+                    if (status) { status.innerHTML = "<span style=\\\'color:#e74c3c;\\\'>❌ " + (data.error || "Failed") + "</span>"; }
+                    return;
+                }
+                
+                var details = data.details || [];
+                var totalActions = details.length;
+                
+                if (totalActions === 0) {
+                    if (status) { status.innerHTML = "<span style=\\\'color:#00cc07;\\\'>✅ No empty namespaces or orphan calendar folders found.</span>"; }
+                    return;
+                }
+                
+                // Build detail list for confirm
+                var msg = "Found " + totalActions + " item(s) to clean up:\\n\\n";
+                for (var i = 0; i < details.length; i++) {
+                    msg += "• " + details[i] + "\\n";
+                }
+                msg += "\\nProceed with cleanup?";
+                
+                if (!confirm(msg)) return;
+                
+                // Execute
+                if (btn) { btn.textContent = "⏳ Cleaning..."; btn.disabled = true; }
+                fetch(DOKU_BASE + "lib/exe/ajax.php", {
+                    method: "POST",
+                    headers: {"Content-Type": "application/x-www-form-urlencoded"},
+                    body: "call=plugin_calendar&action=cleanup_empty_namespaces&sectok=" + JSINFO.sectok
+                })
+                .then(function(r) { return r.json(); })
+                .then(function(data2) {
+                    var msgText = data2.message || "Cleanup complete";
+                    if (data2.details && data2.details.length > 0) {
+                        msgText += " (" + data2.details.join(", ") + ")";
+                    }
+                    window.location.href = "?do=admin&page=calendar&tab=manage&msg=" + encodeURIComponent(msgText) + "&msgtype=success";
+                });
+            })
+            .catch(function(err) {
+                if (btn) { btn.textContent = "🧹 Cleanup"; btn.disabled = false; }
+                if (status) { status.innerHTML = "<span style=\\\'color:#e74c3c;\\\'>❌ Error: " + err + "</span>"; }
+            });
+        }
+        function trimAllPastRecurring() {
+            var btn = document.getElementById("trim-all-past-btn");
+            if (btn) { btn.textContent = "⏳ Counting..."; btn.disabled = true; }
+            
+            // Step 1: dry run to get count
+            fetch(DOKU_BASE + "lib/exe/ajax.php", {
+                method: "POST",
+                headers: {"Content-Type": "application/x-www-form-urlencoded"},
+                body: "call=plugin_calendar&action=trim_all_past_recurring&dry_run=1&sectok=" + JSINFO.sectok
+            })
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+                if (btn) { btn.textContent = "✂️ Trim All Past"; btn.disabled = false; }
+                var count = data.count || 0;
+                if (count === 0) {
+                    alert("No past recurring events found to remove.");
+                    return;
+                }
+                if (!confirm("Found " + count + " past recurring event" + (count !== 1 ? "s" : "") + " to remove.\n\nThis cannot be undone. Proceed?")) return;
+                
+                // Step 2: actually delete
+                if (btn) { btn.textContent = "⏳ Trimming..."; btn.disabled = true; }
+                fetch(DOKU_BASE + "lib/exe/ajax.php", {
+                    method: "POST",
+                    headers: {"Content-Type": "application/x-www-form-urlencoded"},
+                    body: "call=plugin_calendar&action=trim_all_past_recurring&sectok=" + JSINFO.sectok
+                })
+                .then(function(r) { return r.json(); })
+                .then(function(data2) {
+                    if (btn) {
+                        btn.textContent = data2.success ? ("✅ Removed " + (data2.count || 0)) : "❌ Failed";
+                        btn.disabled = false;
+                    }
+                    setTimeout(function() { if (btn) btn.textContent = "✂️ Trim All Past"; }, 3000);
+                    rescanRecurringEvents();
+                });
+            })
+            .catch(function(err) {
+                if (btn) { btn.textContent = "✂️ Trim All Past"; btn.disabled = false; }
+            });
+        }
+        
+        function rescanRecurringEvents() {
+            var btn = document.getElementById("rescan-recurring-btn");
+            var content = document.getElementById("recurring-content");
+            if (btn) { btn.textContent = "⏳ Scanning..."; btn.disabled = true; }
+            
+            fetch(DOKU_BASE + "lib/exe/ajax.php", {
+                method: "POST",
+                headers: {"Content-Type": "application/x-www-form-urlencoded"},
+                body: "call=plugin_calendar&action=rescan_recurring&sectok=" + JSINFO.sectok
+            })
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+                if (data.success && content) {
+                    content.innerHTML = data.html;
+                }
+                if (btn) { btn.textContent = "🔍 Rescan (" + (data.count || 0) + " found)"; btn.disabled = false; }
+                setTimeout(function() { if (btn) btn.textContent = "🔍 Rescan"; }, 3000);
+            })
+            .catch(function(err) {
+                if (btn) { btn.textContent = "🔍 Rescan"; btn.disabled = false; }
+                console.error("Rescan failed:", err);
+            });
+        }
+        
+        function recurringAction(action, params, statusEl) {
+            if (statusEl) statusEl.textContent = "⏳ Working...";
+            var body = "call=plugin_calendar&action=" + action + "&sectok=" + JSINFO.sectok;
+            for (var key in params) {
+                body += "&" + encodeURIComponent(key) + "=" + encodeURIComponent(params[key]);
+            }
+            return fetch(DOKU_BASE + "lib/exe/ajax.php", {
+                method: "POST",
+                headers: {"Content-Type": "application/x-www-form-urlencoded"},
+                body: body
+            })
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+                if (statusEl) {
+                    statusEl.textContent = data.success ? ("✅ " + data.message) : ("❌ " + (data.error || "Failed"));
+                    statusEl.style.color = data.success ? "#00cc07" : "#e74c3c";
+                }
+                return data;
+            })
+            .catch(function(err) {
+                if (statusEl) { statusEl.textContent = "❌ Error: " + err; statusEl.style.color = "#e74c3c"; }
+            });
+        }
+        
+        function manageRecurringSeries(title, namespace, count, firstDate, pattern, hasFlag) {
+            var isPaused = title.indexOf("⏸") === 0;
+            var cleanTitle = title.replace(/^⏸\s*/, "");
+            var safeTitle = title.replace(/\x27/g, "\\\x27");
+            var todayStr = new Date().toISOString().split("T")[0];
+            
+            var dialog = document.createElement("div");
+            dialog.style.cssText = "position:fixed; top:0; left:0; right:0; bottom:0; background:rgba(0,0,0,0.5); display:flex; align-items:center; justify-content:center; z-index:10000;";
+            dialog.addEventListener("click", function(e) { if (e.target === dialog) dialog.remove(); });
+            
+            var h = "<div style=\"background:' . $colors['bg'] . '; padding:20px; border-radius:8px; min-width:520px; max-width:700px; max-height:90vh; overflow-y:auto; font-family:system-ui,sans-serif;\">";
+            h += "<h3 style=\"margin:0 0 5px; color:#00cc07;\">⚙️ Manage Recurring Series</h3>";
+            h += "<p style=\"margin:0 0 15px; color:' . $colors['text'] . '; font-size:13px;\"><strong>" + cleanTitle + "</strong> — " + count + " occurrences, " + pattern + ", starts " + firstDate + "</p>";
+            h += "<div id=\"manage-status\" style=\"font-size:12px; min-height:18px; margin-bottom:10px;\"></div>";
+            
+            // Extend
+            h += "<div style=\"border:1px solid ' . $colors['border'] . '; border-radius:4px; padding:10px; margin-bottom:10px;\">";
+            h += "<div style=\"font-weight:700; color:#00cc07; font-size:12px; margin-bottom:6px;\">📅 Extend Series</div>";
+            h += "<div style=\"display:flex; gap:8px; align-items:end;\">";
+            h += "<div><label style=\"font-size:11px; display:block; margin-bottom:2px;\">Add occurrences:</label>";
+            h += "<input type=\"number\" id=\"manage-extend-count\" value=\"4\" min=\"1\" max=\"52\" style=\"width:60px; padding:4px; border:1px solid ' . $colors['border'] . '; border-radius:3px; font-size:12px;\"></div>";
+            h += "<div><label style=\"font-size:11px; display:block; margin-bottom:2px;\">Days apart:</label>";
+            h += "<select id=\"manage-extend-interval\" style=\"padding:4px; border:1px solid ' . $colors['border'] . '; border-radius:3px; font-size:12px;\">";
+            h += "<option value=\"1\">Daily</option><option value=\"7\" selected>Weekly</option><option value=\"14\">Bi-weekly</option><option value=\"30\">Monthly</option><option value=\"90\">Quarterly</option><option value=\"365\">Yearly</option></select></div>";
+            h += "<button onclick=\"recurringAction(\x27extend_recurring\x27, {title:\x27" + safeTitle + "\x27, namespace:\x27" + namespace + "\x27, count:document.getElementById(\x27manage-extend-count\x27).value, interval_days:document.getElementById(\x27manage-extend-interval\x27).value}, document.getElementById(\x27manage-status\x27))\" style=\"background:#00cc07; color:#fff; border:none; padding:5px 12px; border-radius:3px; cursor:pointer; font-size:11px; font-weight:600;\">Extend</button>";
+            h += "</div></div>";
+            
+            // Trim
+            h += "<div style=\"border:1px solid ' . $colors['border'] . '; border-radius:4px; padding:10px; margin-bottom:10px;\">";
+            h += "<div style=\"font-weight:700; color:#e74c3c; font-size:12px; margin-bottom:6px;\">✂️ Trim Past Events</div>";
+            h += "<div style=\"display:flex; gap:8px; align-items:end;\">";
+            h += "<div><label style=\"font-size:11px; display:block; margin-bottom:2px;\">Remove before:</label>";
+            h += "<input type=\"date\" id=\"manage-trim-date\" value=\"" + todayStr + "\" style=\"padding:4px; border:1px solid ' . $colors['border'] . '; border-radius:3px; font-size:12px;\"></div>";
+            h += "<button onclick=\"if(confirm(\x27Remove all occurrences before \x27 + document.getElementById(\x27manage-trim-date\x27).value + \x27?\x27)) recurringAction(\x27trim_recurring\x27, {title:\x27" + safeTitle + "\x27, namespace:\x27" + namespace + "\x27, cutoff_date:document.getElementById(\x27manage-trim-date\x27).value}, document.getElementById(\x27manage-status\x27))\" style=\"background:#e74c3c; color:#fff; border:none; padding:5px 12px; border-radius:3px; cursor:pointer; font-size:11px; font-weight:600;\">Trim</button>";
+            h += "</div></div>";
+            
+            // Change Pattern
+            h += "<div style=\"border:1px solid ' . $colors['border'] . '; border-radius:4px; padding:10px; margin-bottom:10px;\">";
+            h += "<div style=\"font-weight:700; color:#ff9800; font-size:12px; margin-bottom:6px;\">🔄 Change Pattern</div>";
+            h += "<p style=\"font-size:11px; color:' . $colors['text'] . '; margin:0 0 6px; opacity:0.7;\">Respaces future occurrences only. Past events stay in place.</p>";
+            h += "<div style=\"display:flex; gap:8px; align-items:end;\">";
+            h += "<div><label style=\"font-size:11px; display:block; margin-bottom:2px;\">New interval:</label>";
+            h += "<select id=\"manage-pattern-interval\" style=\"padding:4px; border:1px solid ' . $colors['border'] . '; border-radius:3px; font-size:12px;\">";
+            h += "<option value=\"1\">Daily</option><option value=\"7\">Weekly</option><option value=\"14\">Bi-weekly</option><option value=\"30\">Monthly</option><option value=\"90\">Quarterly</option><option value=\"365\">Yearly</option></select></div>";
+            h += "<button onclick=\"if(confirm(\x27Respace all future occurrences?\x27)) recurringAction(\x27change_pattern_recurring\x27, {title:\x27" + safeTitle + "\x27, namespace:\x27" + namespace + "\x27, interval_days:document.getElementById(\x27manage-pattern-interval\x27).value}, document.getElementById(\x27manage-status\x27))\" style=\"background:#ff9800; color:#fff; border:none; padding:5px 12px; border-radius:3px; cursor:pointer; font-size:11px; font-weight:600;\">Change</button>";
+            h += "</div></div>";
+            
+            // Change Start Date
+            h += "<div style=\"border:1px solid ' . $colors['border'] . '; border-radius:4px; padding:10px; margin-bottom:10px;\">";
+            h += "<div style=\"font-weight:700; color:#2196f3; font-size:12px; margin-bottom:6px;\">📆 Change Start Date</div>";
+            h += "<p style=\"font-size:11px; color:' . $colors['text'] . '; margin:0 0 6px; opacity:0.7;\">Shifts ALL occurrences by the difference between old and new start date.</p>";
+            h += "<div style=\"display:flex; gap:8px; align-items:end;\">";
+            h += "<div><label style=\"font-size:11px; display:block; margin-bottom:2px;\">Current: " + firstDate + "</label>";
+            h += "<input type=\"date\" id=\"manage-start-date\" value=\"" + firstDate + "\" style=\"padding:4px; border:1px solid ' . $colors['border'] . '; border-radius:3px; font-size:12px;\"></div>";
+            h += "<button onclick=\"if(confirm(\x27Shift all occurrences to new start date?\x27)) recurringAction(\x27change_start_recurring\x27, {title:\x27" + safeTitle + "\x27, namespace:\x27" + namespace + "\x27, new_start_date:document.getElementById(\x27manage-start-date\x27).value}, document.getElementById(\x27manage-status\x27))\" style=\"background:#2196f3; color:#fff; border:none; padding:5px 12px; border-radius:3px; cursor:pointer; font-size:11px; font-weight:600;\">Shift</button>";
+            h += "</div></div>";
+            
+            // Pause/Resume
+            h += "<div style=\"border:1px solid ' . $colors['border'] . '; border-radius:4px; padding:10px; margin-bottom:10px;\">";
+            h += "<div style=\"font-weight:700; color:#9c27b0; font-size:12px; margin-bottom:6px;\">" + (isPaused ? "▶️ Resume Series" : "⏸ Pause Series") + "</div>";
+            h += "<p style=\"font-size:11px; color:' . $colors['text'] . '; margin:0 0 6px; opacity:0.7;\">" + (isPaused ? "Removes ⏸ prefix and paused flag from all occurrences." : "Adds ⏸ prefix to future occurrences. They remain in the calendar but are visually marked as paused.") + "</p>";
+            h += "<button onclick=\"recurringAction(\x27" + (isPaused ? "resume_recurring" : "pause_recurring") + "\x27, {title:\x27" + safeTitle + "\x27, namespace:\x27" + namespace + "\x27}, document.getElementById(\x27manage-status\x27))\" style=\"background:#9c27b0; color:#fff; border:none; padding:5px 12px; border-radius:3px; cursor:pointer; font-size:11px; font-weight:600;\">" + (isPaused ? "▶️ Resume" : "⏸ Pause") + "</button>";
+            h += "</div>";
+            
+            // Close
+            h += "<div style=\"text-align:right; margin-top:10px;\">";
+            h += "<button onclick=\"this.closest(\x27[style*=fixed]\x27).remove(); rescanRecurringEvents();\" style=\"background:#666; color:#fff; border:none; padding:8px 20px; border-radius:3px; cursor:pointer; font-weight:600;\">Close</button>";
+            h += "</div></div>";
+            
+            dialog.innerHTML = h;
+            document.body.appendChild(dialog);
+        }
         
         function sortRecurringTable(columnIndex) {
             const table = document.getElementById("recurringTable");
@@ -1816,8 +2043,8 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
         echo '</div>'; // End flex container
         
         // Changelog section - Timeline viewer
-        echo '<div style="background:' . $colors['bg'] . '; padding:12px; margin:10px 0; border-left:3px solid #7b1fa2; border-radius:3px; max-width:1200px;">';
-        echo '<h3 style="margin:0 0 8px 0; color:#7b1fa2; font-size:16px;">📋 Version History</h3>';
+        echo '<div style="background:' . $colors['bg'] . '; padding:12px; margin:10px 0; border-left:3px solid #00cc07; border-radius:3px; max-width:1200px;">';
+        echo '<h3 style="margin:0 0 8px 0; color:#00cc07; font-size:16px;">📋 Version History</h3>';
         
         $changelogFile = DOKU_PLUGIN . 'calendar/CHANGELOG.md';
         if (file_exists($changelogFile)) {
@@ -1827,12 +2054,13 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
             $lines = explode("\n", $changelog);
             $versions = [];
             $currentVersion = null;
+            $currentSubsection = '';
             
             foreach ($lines as $line) {
-                $line = trim($line);
+                $trimmed = trim($line);
                 
                 // Version header (## Version X.X.X or ## Version X.X.X (date) - title)
-                if (preg_match('/^## Version (.+?)(?:\s*\(([^)]+)\))?\s*(?:-\s*(.+))?$/', $line, $matches)) {
+                if (preg_match('/^## Version (.+?)(?:\s*\(([^)]+)\))?\s*(?:-\s*(.+))?$/', $trimmed, $matches)) {
                     if ($currentVersion !== null) {
                         $versions[] = $currentVersion;
                     }
@@ -1842,16 +2070,32 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
                         'title' => isset($matches[3]) ? trim($matches[3]) : '',
                         'items' => []
                     ];
+                    $currentSubsection = '';
                 }
-                // List items (- **Type:** description)
-                elseif ($currentVersion !== null && preg_match('/^- \*\*(.+?):\*\* (.+)$/', $line, $matches)) {
+                // Subsection header (### Something)
+                elseif ($currentVersion !== null && preg_match('/^### (.+)$/', $trimmed, $matches)) {
+                    $currentSubsection = trim($matches[1]);
                     $currentVersion['items'][] = [
-                        'type' => $matches[1],
-                        'desc' => $matches[2]
+                        'type' => 'section',
+                        'desc' => $currentSubsection
+                    ];
+                }
+                // Formatted item (- **Type:** description)
+                elseif ($currentVersion !== null && preg_match('/^- \*\*(.+?):\*\*\s*(.+)$/', $trimmed, $matches)) {
+                    $currentVersion['items'][] = [
+                        'type' => trim($matches[1]),
+                        'desc' => trim($matches[2])
+                    ];
+                }
+                // Plain bullet item (- something)
+                elseif ($currentVersion !== null && preg_match('/^- (.+)$/', $trimmed, $matches)) {
+                    $currentVersion['items'][] = [
+                        'type' => $currentSubsection ?: 'Changed',
+                        'desc' => trim($matches[1])
                     ];
                 }
             }
-            // Don\'t forget last version
+            // Don't forget last version
             if ($currentVersion !== null) {
                 $versions[] = $currentVersion;
             }
@@ -1859,27 +2103,43 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
             $totalVersions = count($versions);
             $uniqueId = 'changelog_' . substr(md5(microtime()), 0, 6);
             
+            // Find the index of the currently running version
+            $runningVersion = trim($info['version']);
+            $runningIndex = 0;
+            foreach ($versions as $idx => $ver) {
+                if (trim($ver['number']) === $runningVersion) {
+                    $runningIndex = $idx;
+                    break;
+                }
+            }
+            
             if ($totalVersions > 0) {
                 // Timeline navigation bar
                 echo '<div id="' . $uniqueId . '_wrap" style="position:relative;">';
                 
                 // Nav controls
                 echo '<div style="display:flex; align-items:center; gap:8px; margin-bottom:10px;">';
-                echo '<button id="' . $uniqueId . '_prev" onclick="changelogNav(\'' . $uniqueId . '\', -1)" style="background:none; border:1px solid ' . $colors['border'] . '; color:' . $colors['text'] . '; width:32px; height:32px; border-radius:50%; cursor:pointer; font-size:16px; display:flex; align-items:center; justify-content:center; transition:all 0.15s;" onmouseover="this.style.borderColor=\'#7b1fa2\'; this.style.color=\'#7b1fa2\'" onmouseout="this.style.borderColor=\'' . $colors['border'] . '\'; this.style.color=\'' . $colors['text'] . '\'">‹</button>';
-                echo '<div style="flex:1; text-align:center;">';
+                echo '<button id="' . $uniqueId . '_prev" onclick="changelogNav(\'' . $uniqueId . '\', -1)" style="background:none; border:1px solid ' . $colors['border'] . '; color:' . $colors['text'] . '; width:32px; height:32px; border-radius:50%; cursor:pointer; font-size:16px; display:flex; align-items:center; justify-content:center; transition:all 0.15s;" onmouseover="this.style.borderColor=\'#00cc07\'; this.style.color=\'#00cc07\'" onmouseout="this.style.borderColor=\'' . $colors['border'] . '\'; this.style.color=\'' . $colors['text'] . '\'">‹</button>';
+                echo '<div style="flex:1; text-align:center; display:flex; align-items:center; justify-content:center; gap:10px;">';
                 echo '<span id="' . $uniqueId . '_counter" style="font-size:11px; color:' . $colors['text'] . '; opacity:0.7;">1 of ' . $totalVersions . '</span>';
+                echo '<button id="' . $uniqueId . '_current" onclick="changelogJumpTo(\'' . $uniqueId . '\', ' . $runningIndex . ')" style="background:#00cc07; border:none; color:#fff; padding:3px 10px; border-radius:3px; cursor:pointer; font-size:10px; font-weight:600; letter-spacing:0.3px; transition:all 0.15s;" onmouseover="this.style.filter=\'brightness(1.2)\'" onmouseout="this.style.filter=\'none\'">Current Release</button>';
                 echo '</div>';
-                echo '<button id="' . $uniqueId . '_next" onclick="changelogNav(\'' . $uniqueId . '\', 1)" style="background:none; border:1px solid ' . $colors['border'] . '; color:' . $colors['text'] . '; width:32px; height:32px; border-radius:50%; cursor:pointer; font-size:16px; display:flex; align-items:center; justify-content:center; transition:all 0.15s;" onmouseover="this.style.borderColor=\'#7b1fa2\'; this.style.color=\'#7b1fa2\'" onmouseout="this.style.borderColor=\'' . $colors['border'] . '\'; this.style.color=\'' . $colors['text'] . '\'">›</button>';
+                echo '<button id="' . $uniqueId . '_next" onclick="changelogNav(\'' . $uniqueId . '\', 1)" style="background:none; border:1px solid ' . $colors['border'] . '; color:' . $colors['text'] . '; width:32px; height:32px; border-radius:50%; cursor:pointer; font-size:16px; display:flex; align-items:center; justify-content:center; transition:all 0.15s;" onmouseover="this.style.borderColor=\'#00cc07\'; this.style.color=\'#00cc07\'" onmouseout="this.style.borderColor=\'' . $colors['border'] . '\'; this.style.color=\'' . $colors['text'] . '\'">›</button>';
                 echo '</div>';
                 
                 // Version cards (one per version, only first visible)
                 foreach ($versions as $i => $ver) {
                     $display = ($i === 0) ? 'block' : 'none';
-                    echo '<div class="' . $uniqueId . '_card" id="' . $uniqueId . '_card_' . $i . '" style="display:' . $display . '; padding:10px; background:' . $colors['bg'] . '; border:1px solid ' . $colors['border'] . '; border-left:3px solid #7b1fa2; border-radius:4px; transition:opacity 0.2s;">';
+                    $isRunning = (trim($ver['number']) === $runningVersion);
+                    $cardBorder = $isRunning ? '2px solid #00cc07' : '1px solid ' . $colors['border'];
+                    echo '<div class="' . $uniqueId . '_card" id="' . $uniqueId . '_card_' . $i . '" style="display:' . $display . '; padding:10px; background:' . $colors['bg'] . '; border:' . $cardBorder . '; border-left:3px solid #00cc07; border-radius:4px; transition:opacity 0.2s;">';
                     
                     // Version header
                     echo '<div style="display:flex; align-items:baseline; gap:8px; margin-bottom:8px;">';
-                    echo '<span style="font-weight:bold; color:#7b1fa2; font-size:14px;">v' . hsc($ver['number']) . '</span>';
+                    echo '<span style="font-weight:bold; color:#00cc07; font-size:14px;">v' . hsc($ver['number']) . '</span>';
+                    if ($isRunning) {
+                        echo '<span style="background:#00cc07; color:#fff; padding:1px 6px; border-radius:3px; font-size:9px; font-weight:700; letter-spacing:0.3px;">RUNNING</span>';
+                    }
                     if ($ver['date']) {
                         echo '<span style="font-size:11px; color:' . $colors['text'] . '; opacity:0.6;">' . hsc($ver['date']) . '</span>';
                     }
@@ -1892,15 +2152,20 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
                     if (!empty($ver['items'])) {
                         echo '<div style="font-size:12px; line-height:1.7;">';
                         foreach ($ver['items'] as $item) {
+                            if ($item['type'] === 'section') {
+                                echo '<div style="margin:6px 0 2px 0; font-weight:700; color:#00cc07; font-size:11px; letter-spacing:0.3px;">' . hsc($item['desc']) . '</div>';
+                                continue;
+                            }
                             $color = '#666'; $icon = '•';
                             $t = $item['type'];
-                            if ($t === 'Added') { $color = '#28a745'; $icon = '✨'; }
-                            elseif ($t === 'Fixed') { $color = '#dc3545'; $icon = '🔧'; }
-                            elseif ($t === 'Changed') { $color = '#7b1fa2'; $icon = '🔄'; }
-                            elseif ($t === 'Improved') { $color = '#ff9800'; $icon = '⚡'; }
+                            if ($t === 'Added' || $t === 'New') { $color = '#28a745'; $icon = '✨'; }
+                            elseif ($t === 'Fixed' || $t === 'Fix' || $t === 'Bug Fix') { $color = '#dc3545'; $icon = '🔧'; }
+                            elseif ($t === 'Changed' || $t === 'Change') { $color = '#00cc07'; $icon = '🔄'; }
+                            elseif ($t === 'Improved' || $t === 'Enhancement') { $color = '#ff9800'; $icon = '⚡'; }
                             elseif ($t === 'Removed') { $color = '#e91e63'; $icon = '🗑️'; }
                             elseif ($t === 'Development' || $t === 'Refactored') { $color = '#6c757d'; $icon = '🛠️'; }
                             elseif ($t === 'Result') { $color = '#2196f3'; $icon = '✅'; }
+                            else { $color = $colors['text']; $icon = '•'; }
                             
                             echo '<div style="margin:2px 0; padding-left:4px;">';
                             echo '<span style="color:' . $color . '; font-weight:600;">' . $icon . ' ' . hsc($item['type']) . ':</span> ';
@@ -1924,17 +2189,13 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
                     var total = ' . $totalVersions . ';
                     var current = 0;
                     
-                    window.changelogNav = function(uid, dir) {
-                        if (uid !== id) return;
-                        var next = current + dir;
-                        if (next < 0 || next >= total) return;
-                        
+                    function showCard(idx) {
                         // Hide current
                         var curCard = document.getElementById(id + "_card_" + current);
                         if (curCard) curCard.style.display = "none";
                         
-                        // Show next
-                        current = next;
+                        // Show target
+                        current = idx;
                         var nextCard = document.getElementById(id + "_card_" + current);
                         if (nextCard) nextCard.style.display = "block";
                         
@@ -1947,6 +2208,19 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
                         var nextBtn = document.getElementById(id + "_next");
                         if (prevBtn) prevBtn.style.opacity = (current === 0) ? "0.3" : "1";
                         if (nextBtn) nextBtn.style.opacity = (current === total - 1) ? "0.3" : "1";
+                    }
+                    
+                    window.changelogNav = function(uid, dir) {
+                        if (uid !== id) return;
+                        var next = current + dir;
+                        if (next < 0 || next >= total) return;
+                        showCard(next);
+                    };
+                    
+                    window.changelogJumpTo = function(uid, idx) {
+                        if (uid !== id) return;
+                        if (idx < 0 || idx >= total) return;
+                        showCard(idx);
                     };
                     
                     // Initialize button states
@@ -2267,112 +2541,871 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
         $dataDir = DOKU_INC . 'data/meta/';
         $recurring = [];
         $allEvents = []; // Track all events to detect patterns
+        $flaggedSeries = []; // Track events with recurring flag by recurringId
         
-        // Check root calendar directory first (blank/default namespace)
-        $rootCalendarDir = $dataDir . 'calendar';
-        if (is_dir($rootCalendarDir)) {
-            foreach (glob($rootCalendarDir . '/*.json') as $file) {
+        // Helper to process events from a calendar directory
+        $processCalendarDir = function($calDir, $fallbackNamespace) use (&$allEvents, &$flaggedSeries) {
+            if (!is_dir($calDir)) return;
+            
+            foreach (glob($calDir . '/*.json') as $file) {
                 $data = json_decode(file_get_contents($file), true);
-                if (!$data) continue;
+                if (!$data || !is_array($data)) continue;
                 
                 foreach ($data as $dateKey => $events) {
+                    if (!is_array($events)) continue;
                     foreach ($events as $event) {
-                        // Group by title + namespace (events with same title are likely recurring)
-                        $groupKey = strtolower(trim($event['title'])) . '_';
+                        if (!isset($event['title']) || empty(trim($event['title']))) continue;
+                        
+                        $ns = isset($event['namespace']) ? $event['namespace'] : $fallbackNamespace;
+                        
+                        // If event has recurring flag, group by recurringId
+                        if (!empty($event['recurring']) && !empty($event['recurringId'])) {
+                            $rid = $event['recurringId'];
+                            if (!isset($flaggedSeries[$rid])) {
+                                $flaggedSeries[$rid] = [
+                                    'title' => $event['title'],
+                                    'namespace' => $ns,
+                                    'dates' => [],
+                                    'events' => []
+                                ];
+                            }
+                            $flaggedSeries[$rid]['dates'][] = $dateKey;
+                            $flaggedSeries[$rid]['events'][] = $event;
+                        }
+                        
+                        // Also group by title+namespace for pattern detection
+                        $groupKey = strtolower(trim($event['title'])) . '|' . $ns;
                         
                         if (!isset($allEvents[$groupKey])) {
                             $allEvents[$groupKey] = [
                                 'title' => $event['title'],
-                                'namespace' => '',
+                                'namespace' => $ns,
                                 'dates' => [],
-                                'events' => []
+                                'events' => [],
+                                'hasFlag' => false
                             ];
                         }
                         $allEvents[$groupKey]['dates'][] = $dateKey;
                         $allEvents[$groupKey]['events'][] = $event;
+                        if (!empty($event['recurring'])) {
+                            $allEvents[$groupKey]['hasFlag'] = true;
+                        }
                     }
                 }
             }
+        };
+        
+        // Check root calendar directory (blank/default namespace)
+        $processCalendarDir($dataDir . 'calendar', '');
+        
+        // Scan all namespace directories (including nested)
+        $this->scanNamespaceDirs($dataDir, $processCalendarDir);
+        
+        // Deduplicate: remove from allEvents groups that are fully covered by flaggedSeries
+        $flaggedTitleNs = [];
+        foreach ($flaggedSeries as $rid => $series) {
+            $key = strtolower(trim($series['title'])) . '|' . $series['namespace'];
+            $flaggedTitleNs[$key] = $rid;
         }
         
-        // Scan all namespace directories
-        foreach (glob($dataDir . '*', GLOB_ONLYDIR) as $nsDir) {
+        // Build results from flaggedSeries first (known recurring)
+        $seen = [];
+        foreach ($flaggedSeries as $rid => $series) {
+            sort($series['dates']);
+            $dedupDates = array_unique($series['dates']);
+            
+            $pattern = $this->detectRecurrencePattern($dedupDates);
+            
+            $recurring[] = [
+                'baseId' => $rid,
+                'title' => $series['title'],
+                'namespace' => $series['namespace'],
+                'pattern' => $pattern,
+                'count' => count($dedupDates),
+                'firstDate' => $dedupDates[0],
+                'hasFlag' => true
+            ];
+            $seen[strtolower(trim($series['title'])) . '|' . $series['namespace']] = true;
+        }
+        
+        // Add pattern-detected recurring (3+ occurrences, not already in flaggedSeries)
+        foreach ($allEvents as $groupKey => $group) {
+            if (isset($seen[$groupKey])) continue;
+            
+            $dedupDates = array_unique($group['dates']);
+            sort($dedupDates);
+            
+            if (count($dedupDates) < 3) continue;
+            
+            $pattern = $this->detectRecurrencePattern($dedupDates);
+            
+            $baseId = isset($group['events'][0]['recurringId']) 
+                ? $group['events'][0]['recurringId'] 
+                : md5($group['title'] . $group['namespace']);
+            
+            $recurring[] = [
+                'baseId' => $baseId,
+                'title' => $group['title'],
+                'namespace' => $group['namespace'],
+                'pattern' => $pattern,
+                'count' => count($dedupDates),
+                'firstDate' => $dedupDates[0],
+                'hasFlag' => $group['hasFlag']
+            ];
+        }
+        
+        // Sort by title
+        usort($recurring, function($a, $b) {
+            return strcasecmp($a['title'], $b['title']);
+        });
+        
+        return $recurring;
+    }
+    
+    /**
+     * Recursively scan namespace directories for calendar data
+     */
+    private function scanNamespaceDirs($baseDir, $callback) {
+        foreach (glob($baseDir . '*', GLOB_ONLYDIR) as $nsDir) {
             $namespace = basename($nsDir);
             
-            // Skip the root 'calendar' dir (already processed above)
+            // Skip the root 'calendar' dir (already processed)
             if ($namespace === 'calendar') continue;
             
             $calendarDir = $nsDir . '/calendar';
+            if (is_dir($calendarDir)) {
+                // Derive namespace from path relative to meta dir
+                $metaDir = DOKU_INC . 'data/meta/';
+                $relPath = str_replace($metaDir, '', $nsDir);
+                $ns = str_replace('/', ':', trim($relPath, '/'));
+                $callback($calendarDir, $ns);
+            }
             
-            if (!is_dir($calendarDir)) continue;
+            // Recurse into subdirectories for nested namespaces
+            $this->scanNamespaceDirs($nsDir . '/', $callback);
+        }
+    }
+    
+    /**
+     * Detect recurrence pattern from sorted dates using median interval
+     */
+    private function detectRecurrencePattern($dates) {
+        if (count($dates) < 2) return 'Single';
+        
+        // Calculate all intervals between consecutive dates
+        $intervals = [];
+        for ($i = 1; $i < count($dates); $i++) {
+            try {
+                $d1 = new DateTime($dates[$i - 1]);
+                $d2 = new DateTime($dates[$i]);
+                $intervals[] = $d1->diff($d2)->days;
+            } catch (Exception $e) {
+                continue;
+            }
+        }
+        
+        if (empty($intervals)) return 'Custom';
+        
+        // Use median interval (more robust than first pair)
+        sort($intervals);
+        $mid = floor(count($intervals) / 2);
+        $median = (count($intervals) % 2 === 0) 
+            ? ($intervals[$mid - 1] + $intervals[$mid]) / 2 
+            : $intervals[$mid];
+        
+        if ($median <= 1) return 'Daily';
+        if ($median >= 6 && $median <= 8) return 'Weekly';
+        if ($median >= 13 && $median <= 16) return 'Bi-weekly';
+        if ($median >= 27 && $median <= 32) return 'Monthly';
+        if ($median >= 89 && $median <= 93) return 'Quarterly';
+        if ($median >= 180 && $median <= 186) return 'Semi-annual';
+        if ($median >= 363 && $median <= 368) return 'Yearly';
+        
+        return 'Every ~' . round($median) . ' days';
+    }
+    
+    /**
+     * Render the recurring events table HTML
+     */
+    private function renderRecurringTable($recurringEvents, $colors) {
+        if (empty($recurringEvents)) {
+            echo '<p style="color:' . $colors['text'] . '; font-size:13px; margin:5px 0;">No recurring events found.</p>';
+            return;
+        }
+        
+        // Search bar
+        echo '<div style="margin-bottom:8px;">';
+        echo '<input type="text" id="searchRecurring" onkeyup="filterRecurringEvents()" placeholder="🔍 Search recurring events..." style="width:100%; padding:6px 10px; border:1px solid ' . $colors['border'] . '; border-radius:3px; font-size:12px;">';
+        echo '</div>';
+        
+        echo '<style>
+            .sort-arrow {
+                color: #999;
+                font-size: 10px;
+                margin-left: 3px;
+                display: inline-block;
+            }
+            #recurringTable th:hover {
+                background: #ddd;
+            }
+            #recurringTable th:hover .sort-arrow {
+                color: #00cc07;
+            }
+            .recurring-row-hidden {
+                display: none;
+            }
+        </style>';
+        echo '<div style="max-height:250px; overflow-y:auto; border:1px solid ' . $colors['border'] . '; border-radius:3px;">';
+        echo '<table id="recurringTable" style="width:100%; border-collapse:collapse; font-size:11px;">';
+        echo '<thead style="position:sticky; top:0; background:#e9e9e9;">';
+        echo '<tr>';
+        echo '<th onclick="sortRecurringTable(0)" style="padding:4px 6px; text-align:left; border-bottom:2px solid #ddd; cursor:pointer; user-select:none;">Title <span class="sort-arrow">⇅</span></th>';
+        echo '<th onclick="sortRecurringTable(1)" style="padding:4px 6px; text-align:left; border-bottom:2px solid #ddd; cursor:pointer; user-select:none;">Namespace <span class="sort-arrow">⇅</span></th>';
+        echo '<th onclick="sortRecurringTable(2)" style="padding:4px 6px; text-align:left; border-bottom:2px solid #ddd; cursor:pointer; user-select:none;">Pattern <span class="sort-arrow">⇅</span></th>';
+        echo '<th onclick="sortRecurringTable(3)" style="padding:4px 6px; text-align:left; border-bottom:2px solid #ddd; cursor:pointer; user-select:none;">First <span class="sort-arrow">⇅</span></th>';
+        echo '<th onclick="sortRecurringTable(4)" style="padding:4px 6px; text-align:left; border-bottom:2px solid #ddd; cursor:pointer; user-select:none;">Count <span class="sort-arrow">⇅</span></th>';
+        echo '<th onclick="sortRecurringTable(5)" style="padding:4px 6px; text-align:left; border-bottom:2px solid #ddd; cursor:pointer; user-select:none;">Source <span class="sort-arrow">⇅</span></th>';
+        echo '<th style="padding:4px 6px; text-align:left; border-bottom:2px solid #ddd;">Actions</th>';
+        echo '</tr></thead><tbody id="recurringTableBody">';
+        
+        foreach ($recurringEvents as $series) {
+            $sourceLabel = $series['hasFlag'] ? '🏷️ Flagged' : '🔍 Detected';
+            $sourceColor = $series['hasFlag'] ? '#00cc07' : '#ff9800';
+            echo '<tr style="border-bottom:1px solid #eee;">';
+            echo '<td style="padding:4px 6px;">' . hsc($series['title']) . '</td>';
+            echo '<td style="padding:4px 6px;"><code style="background:#f0f0f0; padding:1px 3px; border-radius:2px; font-size:10px;">' . hsc($series['namespace'] ?: '(default)') . '</code></td>';
+            echo '<td style="padding:4px 6px;">' . hsc($series['pattern']) . '</td>';
+            echo '<td style="padding:4px 6px;">' . hsc($series['firstDate']) . '</td>';
+            echo '<td style="padding:4px 6px;"><strong>' . $series['count'] . '</strong></td>';
+            echo '<td style="padding:4px 6px;"><span style="color:' . $sourceColor . '; font-size:10px;">' . $sourceLabel . '</span></td>';
+            echo '<td style="padding:4px 6px; white-space:nowrap;">';
+            $jsTitle = hsc(addslashes($series['title']));
+            $jsNs = hsc($series['namespace']);
+            $jsCount = $series['count'];
+            $jsFirst = hsc($series['firstDate']);
+            $jsPattern = hsc($series['pattern']);
+            $jsHasFlag = $series['hasFlag'] ? 'true' : 'false';
+            echo '<button onclick="editRecurringSeries(\'' . $jsTitle . '\', \'' . $jsNs . '\')" style="background:#00cc07; color:white; border:none; padding:2px 6px; border-radius:2px; cursor:pointer; font-size:10px; margin-right:2px;" title="Edit title, time, namespace, interval">Edit</button>';
+            echo '<button onclick="manageRecurringSeries(\'' . $jsTitle . '\', \'' . $jsNs . '\', ' . $jsCount . ', \'' . $jsFirst . '\', \'' . $jsPattern . '\', ' . $jsHasFlag . ')" style="background:#ff9800; color:white; border:none; padding:2px 6px; border-radius:2px; cursor:pointer; font-size:10px; margin-right:2px;" title="Extend, trim, pause, change start">Manage</button>';
+            echo '<button onclick="deleteRecurringSeries(\'' . $jsTitle . '\', \'' . $jsNs . '\')" style="background:#e74c3c; color:white; border:none; padding:2px 6px; border-radius:2px; cursor:pointer; font-size:10px;" title="Delete all occurrences">Del</button>';
+            echo '</td>';
+            echo '</tr>';
+        }
+        
+        echo '</tbody></table>';
+        echo '</div>';
+        echo '<p style="color:' . $colors['text'] . '; font-size:10px; margin:5px 0 0;">Total: ' . count($recurringEvents) . ' series</p>';
+    }
+    
+    /**
+     * AJAX handler: rescan recurring events and return HTML
+     */
+    private function handleCleanupEmptyNamespaces() {
+        global $INPUT;
+        $dryRun = $INPUT->bool('dry_run', false);
+        
+        $metaDir = DOKU_INC . 'data/meta/';
+        $details = [];
+        $removedDirs = 0;
+        $removedCalDirs = 0;
+        
+        // 1. Find all calendar/ subdirectories anywhere under data/meta/
+        $allCalDirs = [];
+        $this->findAllCalendarDirsRecursive($metaDir, $allCalDirs);
+        
+        // 2. Check each calendar dir for empty JSON files
+        foreach ($allCalDirs as $calDir) {
+            $jsonFiles = glob($calDir . '/*.json');
+            $hasEvents = false;
             
-            // Scan all calendar files
-            foreach (glob($calendarDir . '/*.json') as $file) {
-                $data = json_decode(file_get_contents($file), true);
-                if (!$data) continue;
-                
-                foreach ($data as $dateKey => $events) {
-                    foreach ($events as $event) {
-                        $groupKey = strtolower(trim($event['title'])) . '_' . ($event['namespace'] ?? '');
-                        
-                        if (!isset($allEvents[$groupKey])) {
-                            $allEvents[$groupKey] = [
-                                'title' => $event['title'],
-                                'namespace' => $event['namespace'] ?? '',
-                                'dates' => [],
-                                'events' => []
-                            ];
+            foreach ($jsonFiles as $jsonFile) {
+                $data = json_decode(file_get_contents($jsonFile), true);
+                if ($data && is_array($data)) {
+                    // Check if any date key has actual events
+                    foreach ($data as $dateKey => $events) {
+                        if (is_array($events) && !empty($events)) {
+                            $hasEvents = true;
+                            break 2;
                         }
-                        $allEvents[$groupKey]['dates'][] = $dateKey;
-                        $allEvents[$groupKey]['events'][] = $event;
+                    }
+                    // JSON file has data but all dates are empty — remove it
+                    if (!$dryRun) unlink($jsonFile);
+                }
+            }
+            
+            // Re-check after cleaning empty JSON files
+            if (!$dryRun) {
+                $jsonFiles = glob($calDir . '/*.json');
+            }
+            
+            // Derive display name from path
+            $relPath = str_replace($metaDir, '', $calDir);
+            $relPath = rtrim(str_replace('/calendar', '', $relPath), '/');
+            $displayName = $relPath ?: '(root)';
+            
+            if ($displayName === '(root)') continue; // Never remove root calendar dir
+            
+            if (!$hasEvents || empty($jsonFiles)) {
+                $removedCalDirs++;
+                $details[] = "Remove empty calendar folder: " . $displayName . "/calendar/ (0 events)";
+                
+                if (!$dryRun) {
+                    // Remove all remaining files in calendar dir
+                    foreach (glob($calDir . '/*') as $f) {
+                        if (is_file($f)) unlink($f);
+                    }
+                    @rmdir($calDir);
+                    
+                    // Check if parent namespace dir is now empty too
+                    $parentDir = dirname($calDir);
+                    if ($parentDir !== $metaDir && is_dir($parentDir)) {
+                        $remaining = array_diff(scandir($parentDir), ['.', '..']);
+                        if (empty($remaining)) {
+                            @rmdir($parentDir);
+                            $removedDirs++;
+                            $details[] = "Removed empty namespace directory: " . $displayName . "/";
+                        }
                     }
                 }
             }
         }
         
-        // Analyze patterns - only include if 3+ occurrences
-        foreach ($allEvents as $groupKey => $group) {
-            if (count($group['dates']) >= 3) {
-                // Sort dates
-                sort($group['dates']);
-                
-                // Calculate interval between first and second occurrence
-                $date1 = new DateTime($group['dates'][0]);
-                $date2 = new DateTime($group['dates'][1]);
-                $interval = $date1->diff($date2);
-                
-                // Determine pattern
-                $pattern = 'Custom';
-                if ($interval->days == 1) {
-                    $pattern = 'Daily';
-                } elseif ($interval->days == 7) {
-                    $pattern = 'Weekly';
-                } elseif ($interval->days >= 14 && $interval->days <= 16) {
-                    $pattern = 'Bi-weekly';
-                } elseif ($interval->days >= 28 && $interval->days <= 31) {
-                    $pattern = 'Monthly';
-                } elseif ($interval->days >= 365 && $interval->days <= 366) {
-                    $pattern = 'Yearly';
+        // 3. Also scan for namespace dirs that have a calendar/ subdir with 0 json files
+        //    (already covered above, but also check for namespace dirs without calendar/ at all
+        //    that are tracked in the event system)
+        
+        $total = $removedCalDirs + $removedDirs;
+        $message = $dryRun 
+            ? "Found $total item(s) to clean up"
+            : "Cleaned up $removedCalDirs empty calendar folder(s)" . ($removedDirs > 0 ? " and $removedDirs empty namespace directory(ies)" : "");
+        
+        if (!$dryRun) $this->clearStatsCache();
+        
+        echo json_encode([
+            'success' => true,
+            'count' => $total,
+            'message' => $message,
+            'details' => $details
+        ]);
+    }
+    
+    /**
+     * Recursively find all 'calendar' directories under a base path
+     */
+    private function findAllCalendarDirsRecursive($baseDir, &$results) {
+        $entries = glob($baseDir . '*', GLOB_ONLYDIR);
+        if (!$entries) return;
+        
+        foreach ($entries as $dir) {
+            $name = basename($dir);
+            if ($name === 'calendar') {
+                $results[] = $dir;
+            } else {
+                // Check for calendar subdir
+                if (is_dir($dir . '/calendar')) {
+                    $results[] = $dir . '/calendar';
                 }
+                // Recurse into subdirectories for nested namespaces
+                $this->findAllCalendarDirsRecursive($dir . '/', $results);
+            }
+        }
+    }
+    
+    private function handleTrimAllPastRecurring() {
+        global $INPUT;
+        $dryRun = $INPUT->bool('dry_run', false);
+        $today = date('Y-m-d');
+        $dataDir = DOKU_INC . 'data/meta/';
+        $calendarDirs = [];
+        
+        if (is_dir($dataDir . 'calendar')) {
+            $calendarDirs[] = $dataDir . 'calendar';
+        }
+        $this->findCalendarDirs($dataDir, $calendarDirs);
+        
+        $removed = 0;
+        
+        foreach ($calendarDirs as $calDir) {
+            foreach (glob($calDir . '/*.json') as $file) {
+                $data = json_decode(file_get_contents($file), true);
+                if (!$data || !is_array($data)) continue;
                 
-                // Use first event's ID or create a synthetic one
-                $baseId = isset($group['events'][0]['recurringId']) 
-                    ? $group['events'][0]['recurringId'] 
-                    : md5($group['title'] . $group['namespace']);
+                $modified = false;
+                foreach ($data as $dateKey => &$dayEvents) {
+                    if ($dateKey >= $today) continue;
+                    if (!is_array($dayEvents)) continue;
+                    
+                    $filtered = [];
+                    foreach ($dayEvents as $event) {
+                        if (!empty($event['recurring']) || !empty($event['recurringId'])) {
+                            $removed++;
+                            if (!$dryRun) $modified = true;
+                        } else {
+                            $filtered[] = $event;
+                        }
+                    }
+                    if (!$dryRun) $dayEvents = $filtered;
+                }
+                unset($dayEvents);
                 
-                $recurring[] = [
-                    'baseId' => $baseId,
-                    'title' => $group['title'],
-                    'namespace' => $group['namespace'],
-                    'pattern' => $pattern,
-                    'count' => count($group['dates']),
-                    'firstDate' => $group['dates'][0],
-                    'interval' => $interval->days
-                ];
+                if (!$dryRun && $modified) {
+                    foreach ($data as $dk => $evts) {
+                        if (empty($evts)) unset($data[$dk]);
+                    }
+                    if (empty($data)) {
+                        unlink($file);
+                    } else {
+                        file_put_contents($file, json_encode($data, JSON_PRETTY_PRINT));
+                    }
+                }
             }
         }
         
-        return $recurring;
+        if (!$dryRun) $this->clearStatsCache();
+        echo json_encode(['success' => true, 'count' => $removed, 'message' => "Removed $removed past recurring occurrences"]);
+    }
+    
+    private function handleRescanRecurring() {
+        $colors = $this->getTemplateColors();
+        $recurringEvents = $this->findRecurringEvents();
+        
+        ob_start();
+        $this->renderRecurringTable($recurringEvents, $colors);
+        $html = ob_get_clean();
+        
+        echo json_encode([
+            'success' => true,
+            'html' => $html,
+            'count' => count($recurringEvents)
+        ]);
+    }
+    
+    /**
+     * Helper: find all events matching a title in a namespace's calendar dir
+     */
+    private function getRecurringSeriesEvents($title, $namespace) {
+        $dataDir = DOKU_INC . 'data/meta/';
+        if ($namespace !== '') {
+            $dataDir .= str_replace(':', '/', $namespace) . '/';
+        }
+        $dataDir .= 'calendar/';
+        
+        $events = []; // ['date' => dateKey, 'file' => filepath, 'event' => eventData, 'index' => idx]
+        
+        if (!is_dir($dataDir)) return $events;
+        
+        foreach (glob($dataDir . '*.json') as $file) {
+            $data = json_decode(file_get_contents($file), true);
+            if (!$data || !is_array($data)) continue;
+            
+            foreach ($data as $dateKey => $dayEvents) {
+                if (!is_array($dayEvents)) continue;
+                foreach ($dayEvents as $idx => $event) {
+                    if (strtolower(trim($event['title'])) === strtolower(trim($title))) {
+                        $events[] = [
+                            'date' => $dateKey,
+                            'file' => $file,
+                            'event' => $event,
+                            'index' => $idx
+                        ];
+                    }
+                }
+            }
+        }
+        
+        // Sort by date
+        usort($events, function($a, $b) {
+            return strcmp($a['date'], $b['date']);
+        });
+        
+        return $events;
+    }
+    
+    /**
+     * Extend series: add more future occurrences
+     */
+    private function handleExtendRecurring() {
+        global $INPUT;
+        $title = $INPUT->str('title');
+        $namespace = $INPUT->str('namespace');
+        $count = $INPUT->int('count', 4);
+        $intervalDays = $INPUT->int('interval_days', 7);
+        
+        $events = $this->getRecurringSeriesEvents($title, $namespace);
+        if (empty($events)) {
+            echo json_encode(['success' => false, 'error' => 'Series not found']);
+            return;
+        }
+        
+        // Use last event as template
+        $lastEvent = end($events);
+        $lastDate = new DateTime($lastEvent['date']);
+        $template = $lastEvent['event'];
+        
+        $dataDir = DOKU_INC . 'data/meta/';
+        if ($namespace !== '') {
+            $dataDir .= str_replace(':', '/', $namespace) . '/';
+        }
+        $dataDir .= 'calendar/';
+        
+        if (!is_dir($dataDir)) mkdir($dataDir, 0755, true);
+        
+        $added = 0;
+        $baseId = isset($template['recurringId']) ? $template['recurringId'] : md5($title . $namespace);
+        $maxExistingIdx = 0;
+        foreach ($events as $e) {
+            if (isset($e['event']['id']) && preg_match('/-(\d+)$/', $e['event']['id'], $m)) {
+                $maxExistingIdx = max($maxExistingIdx, (int)$m[1]);
+            }
+        }
+        
+        for ($i = 1; $i <= $count; $i++) {
+            $newDate = clone $lastDate;
+            $newDate->modify('+' . ($i * $intervalDays) . ' days');
+            $dateKey = $newDate->format('Y-m-d');
+            list($year, $month) = explode('-', $dateKey);
+            
+            $file = $dataDir . sprintf('%04d-%02d.json', $year, $month);
+            $fileData = file_exists($file) ? json_decode(file_get_contents($file), true) : [];
+            if (!is_array($fileData)) $fileData = [];
+            
+            if (!isset($fileData[$dateKey])) $fileData[$dateKey] = [];
+            
+            $newEvent = $template;
+            $newEvent['id'] = $baseId . '-' . ($maxExistingIdx + $i);
+            $newEvent['recurring'] = true;
+            $newEvent['recurringId'] = $baseId;
+            $newEvent['created'] = date('Y-m-d H:i:s');
+            unset($newEvent['completed']);
+            $newEvent['completed'] = false;
+            
+            $fileData[$dateKey][] = $newEvent;
+            file_put_contents($file, json_encode($fileData, JSON_PRETTY_PRINT));
+            $added++;
+        }
+        
+        $this->clearStatsCache();
+        echo json_encode(['success' => true, 'message' => "Added $added new occurrences"]);
+    }
+    
+    /**
+     * Trim series: remove past occurrences before a cutoff date
+     */
+    private function handleTrimRecurring() {
+        global $INPUT;
+        $title = $INPUT->str('title');
+        $namespace = $INPUT->str('namespace');
+        $cutoffDate = $INPUT->str('cutoff_date', date('Y-m-d'));
+        
+        $events = $this->getRecurringSeriesEvents($title, $namespace);
+        $removed = 0;
+        
+        foreach ($events as $entry) {
+            if ($entry['date'] < $cutoffDate) {
+                // Remove this event from its file
+                $data = json_decode(file_get_contents($entry['file']), true);
+                if (!$data || !isset($data[$entry['date']])) continue;
+                
+                // Find and remove by matching title
+                foreach ($data[$entry['date']] as $k => $evt) {
+                    if (strtolower(trim($evt['title'])) === strtolower(trim($title))) {
+                        unset($data[$entry['date']][$k]);
+                        $data[$entry['date']] = array_values($data[$entry['date']]);
+                        $removed++;
+                        break;
+                    }
+                }
+                
+                // Clean up empty dates
+                if (empty($data[$entry['date']])) unset($data[$entry['date']]);
+                
+                if (empty($data)) {
+                    unlink($entry['file']);
+                } else {
+                    file_put_contents($entry['file'], json_encode($data, JSON_PRETTY_PRINT));
+                }
+            }
+        }
+        
+        $this->clearStatsCache();
+        echo json_encode(['success' => true, 'message' => "Removed $removed past occurrences before $cutoffDate"]);
+    }
+    
+    /**
+     * Pause series: mark all future occurrences as paused
+     */
+    private function handlePauseRecurring() {
+        global $INPUT;
+        $title = $INPUT->str('title');
+        $namespace = $INPUT->str('namespace');
+        $today = date('Y-m-d');
+        
+        $events = $this->getRecurringSeriesEvents($title, $namespace);
+        $paused = 0;
+        
+        foreach ($events as $entry) {
+            if ($entry['date'] >= $today) {
+                $data = json_decode(file_get_contents($entry['file']), true);
+                if (!$data || !isset($data[$entry['date']])) continue;
+                
+                foreach ($data[$entry['date']] as $k => &$evt) {
+                    if (strtolower(trim($evt['title'])) === strtolower(trim($title))) {
+                        $evt['paused'] = true;
+                        $evt['title'] = '⏸ ' . preg_replace('/^⏸\s*/', '', $evt['title']);
+                        $paused++;
+                        break;
+                    }
+                }
+                unset($evt);
+                
+                file_put_contents($entry['file'], json_encode($data, JSON_PRETTY_PRINT));
+            }
+        }
+        
+        $this->clearStatsCache();
+        echo json_encode(['success' => true, 'message' => "Paused $paused future occurrences"]);
+    }
+    
+    /**
+     * Resume series: unmark paused occurrences
+     */
+    private function handleResumeRecurring() {
+        global $INPUT;
+        $title = $INPUT->str('title');
+        $namespace = $INPUT->str('namespace');
+        
+        // Search for both paused and non-paused versions
+        $dataDir = DOKU_INC . 'data/meta/';
+        if ($namespace !== '') {
+            $dataDir .= str_replace(':', '/', $namespace) . '/';
+        }
+        $dataDir .= 'calendar/';
+        
+        $resumed = 0;
+        $cleanTitle = preg_replace('/^⏸\s*/', '', $title);
+        
+        if (!is_dir($dataDir)) {
+            echo json_encode(['success' => false, 'error' => 'Directory not found']);
+            return;
+        }
+        
+        foreach (glob($dataDir . '*.json') as $file) {
+            $data = json_decode(file_get_contents($file), true);
+            if (!$data) continue;
+            
+            $modified = false;
+            foreach ($data as $dateKey => &$dayEvents) {
+                foreach ($dayEvents as $k => &$evt) {
+                    $evtCleanTitle = preg_replace('/^⏸\s*/', '', $evt['title']);
+                    if (strtolower(trim($evtCleanTitle)) === strtolower(trim($cleanTitle)) && 
+                        (!empty($evt['paused']) || strpos($evt['title'], '⏸') === 0)) {
+                        $evt['paused'] = false;
+                        $evt['title'] = $cleanTitle;
+                        $resumed++;
+                        $modified = true;
+                    }
+                }
+                unset($evt);
+            }
+            unset($dayEvents);
+            
+            if ($modified) {
+                file_put_contents($file, json_encode($data, JSON_PRETTY_PRINT));
+            }
+        }
+        
+        $this->clearStatsCache();
+        echo json_encode(['success' => true, 'message' => "Resumed $resumed occurrences"]);
+    }
+    
+    /**
+     * Change start date: shift all occurrences by an offset
+     */
+    private function handleChangeStartRecurring() {
+        global $INPUT;
+        $title = $INPUT->str('title');
+        $namespace = $INPUT->str('namespace');
+        $newStartDate = $INPUT->str('new_start_date');
+        
+        if (empty($newStartDate)) {
+            echo json_encode(['success' => false, 'error' => 'No start date provided']);
+            return;
+        }
+        
+        $events = $this->getRecurringSeriesEvents($title, $namespace);
+        if (empty($events)) {
+            echo json_encode(['success' => false, 'error' => 'Series not found']);
+            return;
+        }
+        
+        // Calculate offset from old first date to new first date
+        $oldFirst = new DateTime($events[0]['date']);
+        $newFirst = new DateTime($newStartDate);
+        $offsetDays = (int)$oldFirst->diff($newFirst)->format('%r%a');
+        
+        if ($offsetDays === 0) {
+            echo json_encode(['success' => true, 'message' => 'Start date unchanged']);
+            return;
+        }
+        
+        $dataDir = DOKU_INC . 'data/meta/';
+        if ($namespace !== '') {
+            $dataDir .= str_replace(':', '/', $namespace) . '/';
+        }
+        $dataDir .= 'calendar/';
+        
+        // Collect all events to move
+        $toMove = [];
+        foreach ($events as $entry) {
+            $oldDate = new DateTime($entry['date']);
+            $newDate = clone $oldDate;
+            $newDate->modify(($offsetDays > 0 ? '+' : '') . $offsetDays . ' days');
+            
+            $toMove[] = [
+                'oldDate' => $entry['date'],
+                'newDate' => $newDate->format('Y-m-d'),
+                'event' => $entry['event'],
+                'file' => $entry['file']
+            ];
+        }
+        
+        // Remove all from old positions
+        foreach ($toMove as $move) {
+            $data = json_decode(file_get_contents($move['file']), true);
+            if (!$data || !isset($data[$move['oldDate']])) continue;
+            
+            foreach ($data[$move['oldDate']] as $k => $evt) {
+                if (strtolower(trim($evt['title'])) === strtolower(trim($title))) {
+                    unset($data[$move['oldDate']][$k]);
+                    $data[$move['oldDate']] = array_values($data[$move['oldDate']]);
+                    break;
+                }
+            }
+            if (empty($data[$move['oldDate']])) unset($data[$move['oldDate']]);
+            if (empty($data)) {
+                unlink($move['file']);
+            } else {
+                file_put_contents($move['file'], json_encode($data, JSON_PRETTY_PRINT));
+            }
+        }
+        
+        // Add to new positions
+        $moved = 0;
+        foreach ($toMove as $move) {
+            list($year, $month) = explode('-', $move['newDate']);
+            $file = $dataDir . sprintf('%04d-%02d.json', $year, $month);
+            $data = file_exists($file) ? json_decode(file_get_contents($file), true) : [];
+            if (!is_array($data)) $data = [];
+            
+            if (!isset($data[$move['newDate']])) $data[$move['newDate']] = [];
+            $data[$move['newDate']][] = $move['event'];
+            file_put_contents($file, json_encode($data, JSON_PRETTY_PRINT));
+            $moved++;
+        }
+        
+        $dir = $offsetDays > 0 ? 'forward' : 'back';
+        $this->clearStatsCache();
+        echo json_encode(['success' => true, 'message' => "Shifted $moved occurrences $dir by " . abs($offsetDays) . " days"]);
+    }
+    
+    /**
+     * Change pattern: re-space all future events with a new interval
+     */
+    private function handleChangePatternRecurring() {
+        global $INPUT;
+        $title = $INPUT->str('title');
+        $namespace = $INPUT->str('namespace');
+        $newIntervalDays = $INPUT->int('interval_days', 7);
+        
+        $events = $this->getRecurringSeriesEvents($title, $namespace);
+        $today = date('Y-m-d');
+        
+        // Split into past and future
+        $pastEvents = [];
+        $futureEvents = [];
+        foreach ($events as $e) {
+            if ($e['date'] < $today) {
+                $pastEvents[] = $e;
+            } else {
+                $futureEvents[] = $e;
+            }
+        }
+        
+        if (empty($futureEvents)) {
+            echo json_encode(['success' => false, 'error' => 'No future occurrences to respace']);
+            return;
+        }
+        
+        $dataDir = DOKU_INC . 'data/meta/';
+        if ($namespace !== '') {
+            $dataDir .= str_replace(':', '/', $namespace) . '/';
+        }
+        $dataDir .= 'calendar/';
+        
+        // Use first future event as anchor
+        $anchorDate = new DateTime($futureEvents[0]['date']);
+        
+        // Remove all future events from files
+        foreach ($futureEvents as $entry) {
+            $data = json_decode(file_get_contents($entry['file']), true);
+            if (!$data || !isset($data[$entry['date']])) continue;
+            
+            foreach ($data[$entry['date']] as $k => $evt) {
+                if (strtolower(trim($evt['title'])) === strtolower(trim($title))) {
+                    unset($data[$entry['date']][$k]);
+                    $data[$entry['date']] = array_values($data[$entry['date']]);
+                    break;
+                }
+            }
+            if (empty($data[$entry['date']])) unset($data[$entry['date']]);
+            if (empty($data)) {
+                unlink($entry['file']);
+            } else {
+                file_put_contents($entry['file'], json_encode($data, JSON_PRETTY_PRINT));
+            }
+        }
+        
+        // Re-create with new spacing
+        $template = $futureEvents[0]['event'];
+        $baseId = isset($template['recurringId']) ? $template['recurringId'] : md5($title . $namespace);
+        $count = count($futureEvents);
+        $created = 0;
+        
+        for ($i = 0; $i < $count; $i++) {
+            $newDate = clone $anchorDate;
+            $newDate->modify('+' . ($i * $newIntervalDays) . ' days');
+            $dateKey = $newDate->format('Y-m-d');
+            list($year, $month) = explode('-', $dateKey);
+            
+            $file = $dataDir . sprintf('%04d-%02d.json', $year, $month);
+            $fileData = file_exists($file) ? json_decode(file_get_contents($file), true) : [];
+            if (!is_array($fileData)) $fileData = [];
+            
+            if (!isset($fileData[$dateKey])) $fileData[$dateKey] = [];
+            
+            $newEvent = $template;
+            $newEvent['id'] = $baseId . '-respace-' . $i;
+            $newEvent['recurring'] = true;
+            $newEvent['recurringId'] = $baseId;
+            
+            $fileData[$dateKey][] = $newEvent;
+            file_put_contents($file, json_encode($fileData, JSON_PRETTY_PRINT));
+            $created++;
+        }
+        
+        $this->clearStatsCache();
+        $patternName = $this->intervalToPattern($newIntervalDays);
+        echo json_encode(['success' => true, 'message' => "Respaced $created future occurrences to $patternName ($newIntervalDays days)"]);
+    }
+    
+    private function intervalToPattern($days) {
+        if ($days == 1) return 'Daily';
+        if ($days == 7) return 'Weekly';
+        if ($days == 14) return 'Bi-weekly';
+        if ($days >= 28 && $days <= 31) return 'Monthly';
+        if ($days >= 89 && $days <= 93) return 'Quarterly';
+        if ($days >= 363 && $days <= 368) return 'Yearly';
+        return "Every $days days";
     }
     
     private function getEventsByNamespace() {
@@ -2540,26 +3573,29 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
         $eventTitle = $INPUT->str('event_title');
         $namespace = $INPUT->str('namespace');
         
-        // Determine calendar directory
-        if ($namespace === '') {
-            $dataDir = DOKU_INC . 'data/meta/calendar';
-        } else {
-            $dataDir = DOKU_INC . 'data/meta/' . $namespace . '/calendar';
+        // Collect ALL calendar directories
+        $dataDir = DOKU_INC . 'data/meta/';
+        $calendarDirs = [];
+        if (is_dir($dataDir . 'calendar')) {
+            $calendarDirs[] = $dataDir . 'calendar';
         }
+        $this->findCalendarDirs($dataDir, $calendarDirs);
         
         $count = 0;
         
-        if (is_dir($dataDir)) {
-            foreach (glob($dataDir . '/*.json') as $file) {
+        foreach ($calendarDirs as $calDir) {
+            foreach (glob($calDir . '/*.json') as $file) {
                 $data = json_decode(file_get_contents($file), true);
-                if (!$data) continue;
+                if (!$data || !is_array($data)) continue;
                 
                 $modified = false;
                 foreach ($data as $dateKey => $events) {
                     $filtered = [];
                     foreach ($events as $event) {
-                        // Match by title (case-insensitive)
-                        if (strtolower(trim($event['title'])) === strtolower(trim($eventTitle))) {
+                        $eventNs = isset($event['namespace']) ? $event['namespace'] : '';
+                        // Match by title AND namespace field
+                        if (strtolower(trim($event['title'])) === strtolower(trim($eventTitle)) &&
+                            strtolower(trim($eventNs)) === strtolower(trim($namespace))) {
                             $count++;
                             $modified = true;
                         } else {
@@ -2570,7 +3606,6 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
                 }
                 
                 if ($modified) {
-                    // Clean up empty date keys
                     foreach ($data as $dk => $evts) {
                         if (empty($evts)) unset($data[$dk]);
                     }
@@ -2604,159 +3639,123 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
             $newNamespace = $oldNamespace;
         }
         
-        // Determine old calendar directory
-        if ($oldNamespace === '') {
-            $oldDataDir = DOKU_INC . 'data/meta/calendar';
-        } else {
-            $oldDataDir = DOKU_INC . 'data/meta/' . $oldNamespace . '/calendar';
+        // Collect ALL calendar directories to search
+        $dataDir = DOKU_INC . 'data/meta/';
+        $calendarDirs = [];
+        
+        // Root calendar dir
+        if (is_dir($dataDir . 'calendar')) {
+            $calendarDirs[] = $dataDir . 'calendar';
         }
         
-        $count = 0;
-        $eventsToMove = [];
-        $firstEventDate = null;
+        // All namespace dirs
+        $this->findCalendarDirs($dataDir, $calendarDirs);
         
-        if (is_dir($oldDataDir)) {
-            foreach (glob($oldDataDir . '/*.json') as $file) {
+        $count = 0;
+        
+        // Pass 1: Rename title, update time, update namespace field in ALL matching events
+        foreach ($calendarDirs as $calDir) {
+            if (is_string($calDir)) {
+                $dir = $calDir;
+            } else {
+                $dir = $calDir['dir'];
+            }
+            
+            foreach (glob($dir . '/*.json') as $file) {
                 $data = json_decode(file_get_contents($file), true);
-                if (!$data) continue;
+                if (!$data || !is_array($data)) continue;
                 
                 $modified = false;
-                foreach ($data as $dateKey => $events) {
-                    foreach ($events as $key => $event) {
-                        // Match by old title (case-insensitive)
-                        if (strtolower(trim($event['title'])) === strtolower(trim($oldTitle))) {
-                            // Update the title
-                            $data[$dateKey][$key]['title'] = $newTitle;
-                            
-                            // Update start time if provided
-                            if (!empty($startTime)) {
-                                $data[$dateKey][$key]['time'] = $startTime;
-                            }
-                            
-                            // Update end time if provided
-                            if (!empty($endTime)) {
-                                $data[$dateKey][$key]['endTime'] = $endTime;
-                            }
-                            
-                            // Update namespace
-                            $data[$dateKey][$key]['namespace'] = $newNamespace;
-                            
-                            // If changing interval, calculate new date
-                            if ($interval > 0 && $count > 0) {
-                                // Get the first event date as base
-                                if (empty($firstEventDate)) {
-                                    $firstEventDate = $dateKey;
-                                }
-                                
-                                // Calculate new date based on interval
-                                $newDate = date('Y-m-d', strtotime($firstEventDate . ' +' . ($count * $interval) . ' days'));
-                                
-                                // Store for moving
-                                $eventsToMove[] = [
-                                    'oldDate' => $dateKey,
-                                    'newDate' => $newDate,
-                                    'event' => $data[$dateKey][$key],
-                                    'key' => $key
-                                ];
-                            }
-                            
-                            $count++;
-                            $modified = true;
+                foreach ($data as $dateKey => &$dayEvents) {
+                    if (!is_array($dayEvents)) continue;
+                    foreach ($dayEvents as $key => &$event) {
+                        // Match by old title (case-insensitive) AND namespace field
+                        $eventNs = isset($event['namespace']) ? $event['namespace'] : '';
+                        if (strtolower(trim($event['title'])) !== strtolower(trim($oldTitle))) continue;
+                        if (strtolower(trim($eventNs)) !== strtolower(trim($oldNamespace))) continue;
+                        
+                        // Update title
+                        $event['title'] = $newTitle;
+                        
+                        // Update start time if provided
+                        if (!empty($startTime)) {
+                            $event['time'] = $startTime;
                         }
+                        
+                        // Update end time if provided
+                        if (!empty($endTime)) {
+                            $event['endTime'] = $endTime;
+                        }
+                        
+                        // Update namespace field
+                        $event['namespace'] = $newNamespace;
+                        
+                        $count++;
+                        $modified = true;
                     }
+                    unset($event);
                 }
+                unset($dayEvents);
                 
                 if ($modified) {
                     file_put_contents($file, json_encode($data, JSON_PRETTY_PRINT));
                 }
             }
+        }
+        
+        // Pass 2: Handle interval changes (respace events from first date)
+        if ($interval > 0 && $count > 0) {
+            // Use getRecurringSeriesEvents to find all events with the NEW title
+            $allEvents = $this->getRecurringSeriesEvents($newTitle, $newNamespace);
             
-            // Handle interval changes by moving events to new dates
-            if (!empty($eventsToMove)) {
-                // Remove from old dates first
-                foreach (glob($oldDataDir . '/*.json') as $file) {
-                    $data = json_decode(file_get_contents($file), true);
-                    if (!$data) continue;
+            if (count($allEvents) > 1) {
+                $firstDate = new DateTime($allEvents[0]['date']);
+                
+                // Remove all except first, then re-create with new spacing
+                for ($i = 1; $i < count($allEvents); $i++) {
+                    $entry = $allEvents[$i];
+                    $data = json_decode(file_get_contents($entry['file']), true);
+                    if (!$data || !isset($data[$entry['date']])) continue;
                     
-                    $modified = false;
-                    foreach ($eventsToMove as $moveData) {
-                        $oldMonth = substr($moveData['oldDate'], 0, 7);
-                        $fileMonth = basename($file, '.json');
-                        
-                        if ($oldMonth === $fileMonth && isset($data[$moveData['oldDate']])) {
-                            foreach ($data[$moveData['oldDate']] as $k => $evt) {
-                                if ($evt['id'] === $moveData['event']['id']) {
-                                    unset($data[$moveData['oldDate']][$k]);
-                                    $data[$moveData['oldDate']] = array_values($data[$moveData['oldDate']]);
-                                    $modified = true;
-                                }
-                            }
+                    foreach ($data[$entry['date']] as $k => $evt) {
+                        if (strtolower(trim($evt['title'])) === strtolower(trim($newTitle))) {
+                            unset($data[$entry['date']][$k]);
+                            $data[$entry['date']] = array_values($data[$entry['date']]);
+                            break;
                         }
                     }
-                    
-                    if ($modified) {
-                        file_put_contents($file, json_encode($data, JSON_PRETTY_PRINT));
+                    if (empty($data[$entry['date']])) unset($data[$entry['date']]);
+                    if (empty($data)) {
+                        unlink($entry['file']);
+                    } else {
+                        file_put_contents($entry['file'], json_encode($data, JSON_PRETTY_PRINT));
                     }
                 }
                 
-                // Add to new dates
-                foreach ($eventsToMove as $moveData) {
-                    $newMonth = substr($moveData['newDate'], 0, 7);
-                    $targetDir = ($newNamespace === '') ? DOKU_INC . 'data/meta/calendar' : DOKU_INC . 'data/meta/' . $newNamespace . '/calendar';
+                // Re-create with new interval
+                $template = $allEvents[0]['event'];
+                $targetDir = ($newNamespace === '') 
+                    ? DOKU_INC . 'data/meta/calendar' 
+                    : DOKU_INC . 'data/meta/' . str_replace(':', '/', $newNamespace) . '/calendar';
+                if (!is_dir($targetDir)) mkdir($targetDir, 0755, true);
+                
+                $baseId = isset($template['recurringId']) ? $template['recurringId'] : md5($newTitle . $newNamespace);
+                
+                for ($i = 1; $i < count($allEvents); $i++) {
+                    $newDate = clone $firstDate;
+                    $newDate->modify('+' . ($i * $interval) . ' days');
+                    $dateKey = $newDate->format('Y-m-d');
+                    list($year, $month) = explode('-', $dateKey);
                     
-                    if (!is_dir($targetDir)) {
-                        mkdir($targetDir, 0755, true);
-                    }
+                    $file = $targetDir . '/' . sprintf('%04d-%02d.json', $year, $month);
+                    $fileData = file_exists($file) ? json_decode(file_get_contents($file), true) : [];
+                    if (!is_array($fileData)) $fileData = [];
+                    if (!isset($fileData[$dateKey])) $fileData[$dateKey] = [];
                     
-                    $targetFile = $targetDir . '/' . $newMonth . '.json';
-                    $targetData = file_exists($targetFile) ? json_decode(file_get_contents($targetFile), true) : [];
-                    
-                    if (!isset($targetData[$moveData['newDate']])) {
-                        $targetData[$moveData['newDate']] = [];
-                    }
-                    
-                    $targetData[$moveData['newDate']][] = $moveData['event'];
-                    file_put_contents($targetFile, json_encode($targetData, JSON_PRETTY_PRINT));
-                }
-            }
-            
-            // Handle namespace change without interval change
-            if ($newNamespace !== $oldNamespace && empty($eventsToMove)) {
-                foreach (glob($oldDataDir . '/*.json') as $file) {
-                    $data = json_decode(file_get_contents($file), true);
-                    if (!$data) continue;
-                    
-                    $month = basename($file, '.json');
-                    $targetDir = ($newNamespace === '') ? DOKU_INC . 'data/meta/calendar' : DOKU_INC . 'data/meta/' . $newNamespace . '/calendar';
-                    
-                    if (!is_dir($targetDir)) {
-                        mkdir($targetDir, 0755, true);
-                    }
-                    
-                    $targetFile = $targetDir . '/' . $month . '.json';
-                    $targetData = file_exists($targetFile) ? json_decode(file_get_contents($targetFile), true) : [];
-                    
-                    $modified = false;
-                    foreach ($data as $dateKey => $events) {
-                        foreach ($events as $k => $event) {
-                            if (isset($event['namespace']) && $event['namespace'] === $newNamespace && 
-                                strtolower(trim($event['title'])) === strtolower(trim($newTitle))) {
-                                // Move this event
-                                if (!isset($targetData[$dateKey])) {
-                                    $targetData[$dateKey] = [];
-                                }
-                                $targetData[$dateKey][] = $event;
-                                unset($data[$dateKey][$k]);
-                                $data[$dateKey] = array_values($data[$dateKey]);
-                                $modified = true;
-                            }
-                        }
-                    }
-                    
-                    if ($modified) {
-                        file_put_contents($file, json_encode($data, JSON_PRETTY_PRINT));
-                        file_put_contents($targetFile, json_encode($targetData, JSON_PRETTY_PRINT));
-                    }
+                    $newEvent = $template;
+                    $newEvent['id'] = $baseId . '-respace-' . $i;
+                    $fileData[$dateKey][] = $newEvent;
+                    file_put_contents($file, json_encode($fileData, JSON_PRETTY_PRINT));
                 }
             }
         }
@@ -2772,6 +3771,24 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
         $this->redirect("Updated $count occurrences of recurring event$changeStr", 'success', 'manage');
     }
     
+    /**
+     * Find all calendar directories recursively
+     */
+    private function findCalendarDirs($baseDir, &$dirs) {
+        foreach (glob($baseDir . '*', GLOB_ONLYDIR) as $nsDir) {
+            $name = basename($nsDir);
+            if ($name === 'calendar') continue; // Skip root calendar (added separately)
+            
+            $calDir = $nsDir . '/calendar';
+            if (is_dir($calDir)) {
+                $dirs[] = $calDir;
+            }
+            
+            // Recurse
+            $this->findCalendarDirs($nsDir . '/', $dirs);
+        }
+    }
+
     private function moveEvents() {
         global $INPUT;
         
@@ -2995,6 +4012,18 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
         
         $namespace = $INPUT->str('namespace');
         
+        // Validate namespace name to prevent path traversal
+        if ($namespace !== '' && !preg_match('/^[a-zA-Z0-9_:-]+$/', $namespace)) {
+            $this->redirect('Invalid namespace name. Use only letters, numbers, underscore, hyphen, and colon.', 'error', 'manage');
+            return;
+        }
+        
+        // Additional safety: ensure no path traversal sequences
+        if (strpos($namespace, '..') !== false || strpos($namespace, '/') !== false || strpos($namespace, '\\') !== false) {
+            $this->redirect('Invalid namespace: path traversal not allowed', 'error', 'manage');
+            return;
+        }
+        
         // Convert namespace to directory path (e.g., "work:projects" → "work/projects")
         $namespacePath = str_replace(':', '/', $namespace);
         
@@ -3073,6 +4102,24 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
         
         $oldNamespace = $INPUT->str('old_namespace');
         $newNamespace = $INPUT->str('new_namespace');
+        
+        // Validate namespace names to prevent path traversal
+        if ($oldNamespace !== '' && !preg_match('/^[a-zA-Z0-9_:-]+$/', $oldNamespace)) {
+            $this->redirect('Invalid old namespace name. Use only letters, numbers, underscore, hyphen, and colon.', 'error', 'manage');
+            return;
+        }
+        
+        if ($newNamespace !== '' && !preg_match('/^[a-zA-Z0-9_:-]+$/', $newNamespace)) {
+            $this->redirect('Invalid new namespace name. Use only letters, numbers, underscore, hyphen, and colon.', 'error', 'manage');
+            return;
+        }
+        
+        // Additional safety: ensure no path traversal sequences
+        if (strpos($oldNamespace, '..') !== false || strpos($oldNamespace, '/') !== false || strpos($oldNamespace, '\\') !== false ||
+            strpos($newNamespace, '..') !== false || strpos($newNamespace, '/') !== false || strpos($newNamespace, '\\') !== false) {
+            $this->redirect('Invalid namespace: path traversal not allowed', 'error', 'manage');
+            return;
+        }
         
         // Validate new namespace name
         if ($newNamespace === '') {
@@ -3830,6 +4877,9 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
         $fileCount = 0;
         $errors = [];
         
+        // Ensure dir has trailing slash
+        $dir = rtrim($dir, '/') . '/';
+        
         if (!is_dir($dir)) {
             throw new Exception("Directory does not exist: $dir");
         }
@@ -3839,24 +4889,33 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
         }
         
         try {
-            $files = new RecursiveIteratorIterator(
+            // First, add all directories to preserve structure (including empty ones)
+            $dirs = new RecursiveIteratorIterator(
                 new RecursiveDirectoryIterator($dir, RecursiveDirectoryIterator::SKIP_DOTS),
-                RecursiveIteratorIterator::LEAVES_ONLY
+                RecursiveIteratorIterator::SELF_FIRST  // Process directories before their contents
             );
             
-            foreach ($files as $file) {
-                if (!$file->isDir()) {
-                    $filePath = $file->getRealPath();
-                    if ($filePath && is_readable($filePath)) {
-                        $relativePath = $zipPath . substr($filePath, strlen($dir));
-                        
-                        if ($zip->addFile($filePath, $relativePath)) {
+            foreach ($dirs as $item) {
+                $itemPath = $item->getRealPath();
+                if (!$itemPath) continue;
+                
+                // Calculate relative path from the source directory
+                $relativePath = $zipPath . substr($itemPath, strlen($dir));
+                
+                if ($item->isDir()) {
+                    // Add directory to ZIP (preserves empty directories and structure)
+                    $dirInZip = rtrim($relativePath, '/') . '/';
+                    $zip->addEmptyDir($dirInZip);
+                } else {
+                    // Add file to ZIP
+                    if (is_readable($itemPath)) {
+                        if ($zip->addFile($itemPath, $relativePath)) {
                             $fileCount++;
                         } else {
-                            $errors[] = "Failed to add: " . basename($filePath);
+                            $errors[] = "Failed to add: " . basename($itemPath);
                         }
                     } else {
-                        $errors[] = "Cannot read: " . ($filePath ? basename($filePath) : 'unknown');
+                        $errors[] = "Cannot read: " . basename($itemPath);
                     }
                 }
             }
@@ -3922,20 +4981,45 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
     }
     
     private function recursiveCopy($src, $dst) {
+        if (!is_dir($src)) {
+            return false;
+        }
+        
         $dir = opendir($src);
-        @mkdir($dst);
+        if (!$dir) {
+            return false;
+        }
+        
+        // Create destination directory with proper permissions (0755)
+        if (!is_dir($dst)) {
+            mkdir($dst, 0755, true);
+        }
         
         while (($file = readdir($dir)) !== false) {
             if ($file !== '.' && $file !== '..') {
-                if (is_dir($src . '/' . $file)) {
-                    $this->recursiveCopy($src . '/' . $file, $dst . '/' . $file);
+                $srcPath = $src . '/' . $file;
+                $dstPath = $dst . '/' . $file;
+                
+                if (is_dir($srcPath)) {
+                    // Recursively copy subdirectory
+                    $this->recursiveCopy($srcPath, $dstPath);
                 } else {
-                    copy($src . '/' . $file, $dst . '/' . $file);
+                    // Copy file and preserve permissions
+                    if (copy($srcPath, $dstPath)) {
+                        // Try to preserve file permissions from source, fallback to 0644
+                        $perms = @fileperms($srcPath);
+                        if ($perms !== false) {
+                            @chmod($dstPath, $perms);
+                        } else {
+                            @chmod($dstPath, 0644);
+                        }
+                    }
                 }
             }
         }
         
         closedir($dir);
+        return true;
     }
     
     private function formatBytes($bytes) {
@@ -4091,12 +5175,40 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
                     exit;
                 }
                 
-                // Validate PHP syntax
-                $valid = @eval('?>' . $configContent);
-                if ($valid === false) {
+                // Validate PHP config file structure (without using eval)
+                // Check that it starts with <?php and contains a return statement with array
+                if (strpos($configContent, '<?php') === false) {
                     echo json_encode([
                         'success' => false,
-                        'message' => 'Invalid config file format'
+                        'message' => 'Invalid config file: missing PHP opening tag'
+                    ]);
+                    exit;
+                }
+                
+                // Check for dangerous patterns that shouldn't be in a config file
+                $dangerousPatterns = [
+                    '/\b(exec|shell_exec|system|passthru|popen|proc_open)\s*\(/i',
+                    '/\b(eval|assert|create_function)\s*\(/i',
+                    '/\b(file_get_contents|file_put_contents|fopen|fwrite|unlink|rmdir)\s*\(/i',
+                    '/\$_(GET|POST|REQUEST|SERVER|FILES|COOKIE|SESSION)\s*\[/i',
+                    '/`[^`]+`/',  // Backtick execution
+                ];
+                
+                foreach ($dangerousPatterns as $pattern) {
+                    if (preg_match($pattern, $configContent)) {
+                        echo json_encode([
+                            'success' => false,
+                            'message' => 'Invalid config file: contains prohibited code patterns'
+                        ]);
+                        exit;
+                    }
+                }
+                
+                // Verify it looks like a valid config (has return array structure)
+                if (!preg_match('/return\s*\[/', $configContent)) {
+                    echo json_encode([
+                        'success' => false,
+                        'message' => 'Invalid config file: must contain a return array statement'
                     ]);
                     exit;
                 }

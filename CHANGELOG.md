@@ -1,4 +1,446 @@
 # Calendar Plugin Changelog
+
+## Version 6.6.1 (2026-02-11) - SECURITY FIXES
+
+### Security
+- **Critical:** Removed `eval()` remote code execution vulnerability in config import
+- **Critical:** Added admin authentication requirement to `get_system_stats.php` endpoint
+- **High:** Added CSRF token verification to all write operations (save, delete, toggle)
+- **High:** Fixed path traversal vulnerabilities in namespace delete/rename functions
+- **High:** Added admin privilege verification to AJAX admin routes
+
+### Improved
+- **Input Validation:** Date format (YYYY-MM-DD), time format (HH:MM), color format (#RRGGBB)
+- **Input Validation:** Year range (1970-2100), month range (1-12), namespace format
+- **Input Validation:** Recurrence type whitelist, title/description length limits
+- **Debug Logging:** All debug logging now conditional on `CALENDAR_DEBUG` constant (off by default)
+- **JSON Handling:** Added `safeJsonRead()` helper with proper error handling
+- **Timezone:** Sync script now uses configured timezone instead of hardcoded value
+
+### Code Quality
+- Documented intentional switch fallthrough in `get_system_stats.php`
+- Standardized error response format
+
+## Version 6.6.0 (2026-02-11) - BACKUP & UI IMPROVEMENTS
+
+### Fixed
+- **Backup:** Fixed recursive directory backup to properly include all subdirectories (including `lang/`)
+- **Backup:** Now uses `SELF_FIRST` iterator to process directories before their contents
+- **Backup:** Empty directories are now explicitly added with `addEmptyDir()` to preserve structure
+
+### UI Change
+- **Namespace Explorer:** Cleanup status message now appears prominently at top of section
+- Previously status message was at bottom, easy to miss after cleanup operations
+
+## Version 6.5.5 (2026-02-11) - FIX AJAX ROUTING & MOVE CLEANUP BUTTON
+
+### Bug Fix
+- All admin AJAX actions (cleanup, rescan, extend, trim, pause, resume, change start/pattern) were returning "Unknown action"
+- Root cause: AJAX calls go through `action.php`'s switch statement, not `admin.php`'s `handle()` method
+- Added routing in `action.php`: new cases forward to `admin.php` via `routeToAdmin()` helper
+- Added public `handleAjaxAction()` method in `admin.php` as the entry point from `action.php`
+
+### UI Change
+- Moved "🧹 Cleanup" button from standalone section to inline next to "➕ New Namespace" in the control bar
+- Status messages still appear below the namespace explorer
+
+## Version 6.5.4 (2026-02-11) - FIX PHP PARSE ERROR IN CLEANUP JS
+
+### Bug Fix
+- Root cause: `style='color:...'` single quotes inside PHP `echo '...'` block terminated the PHP string prematurely
+- PHP saw `color:#e74c3c` as unexpected PHP code instead of part of the JS string
+- Fixed all 5 occurrences in cleanupEmptyNamespaces JS: escaped single quotes as `\'`
+- Added `adminColors` JS object (text, bg, border) injected from PHP `$colors` at render time
+- Cleanup detail text uses `adminColors.text` to respect DokuWiki template theme colors
+
+## Version 6.5.3 (2026-02-11) - FIX CLEANUP NAMESPACES PARSE ERROR
+
+### Bug Fix
+- Fixed PHP parse error on line 1089 caused by `$colors['text']` PHP variable inside JS string concatenation
+- The cleanup results detail list now uses hardcoded `#666` for text color instead of attempting PHP interpolation within JS runtime code
+
+## Version 6.5.2 (2026-02-11) - CLEANUP EMPTY NAMESPACES
+
+### New Feature
+- "🧹 Cleanup Empty Namespaces" button added at bottom of Namespace Explorer section
+- Dry-run scan first: shows exactly what will be removed with bullet-point details in confirm dialog
+- Removes empty calendar folders (0 JSON files or all-empty JSON files) from any namespace
+- Removes parent namespace directories if they become empty after calendar folder removal
+- Root calendar directory is never removed
+- AJAX-powered with inline status showing results after cleanup
+- Page auto-reloads after 2 seconds to refresh the namespace explorer view
+- Recursively scans all nested namespace directories via `findAllCalendarDirsRecursive()`
+
+## Version 6.5.1 (2026-02-11) - TRIM ALL PAST: SHOW COUNT BEFORE DELETE
+
+### Improved
+- "Trim All Past" button now does a dry-run count before showing the confirmation dialog
+- Confirmation shows exact count: "Found 47 past recurring events to remove"
+- If zero found, shows "No past recurring events found to remove" instead of confirm
+- PHP handler supports `dry_run` parameter that counts without deleting
+
+## Version 6.5.0 (2026-02-11) - BULK TRIM ALL PAST RECURRING EVENTS
+
+### Bulk Action
+- Red "✂️ Trim All Past" button added next to the Rescan button in the Recurring Events section header
+- Removes ALL past occurrences (before today) from EVERY recurring series in one click
+- Only removes events with `recurring` or `recurringId` flags — non-recurring events are untouched
+- Confirmation dialog required before execution
+- AJAX-powered with inline status showing count removed, then auto-rescans the table
+- Searches all calendar directories recursively
+
+## Version 6.4.9 (2026-02-11) - FIX RECURRING EDIT/DELETE: SEARCH ALL DIRECTORIES
+
+### Bug Fix
+- Edit and Delete recurring series now search ALL calendar directories instead of building a path from the namespace field
+- Root cause: event's `namespace` field (stored in JSON) can differ from the filesystem directory where the file lives
+- Both handlers now use `findCalendarDirs()` to collect every calendar directory recursively
+- Events matched by title AND namespace field (case-insensitive) for precise targeting
+- Edit handler rewritten: rename/time/namespace updates in Pass 1, interval respace in Pass 2
+- New `findCalendarDirs()` helper method for recursive directory discovery
+
+## Version 6.4.8 (2026-02-11) - FIX PHP PARSE ERROR IN MANAGE DIALOG
+
+### Bug Fix
+- Rewrote `manageRecurringSeries()` JS function using string concatenation instead of template literals
+- JS template literals (`${...}`) inside PHP echo blocks caused PHP to parse them as variable interpolation
+- All inline onclick handlers now use `\x27` for single quotes to avoid escaping conflicts
+
+## Version 6.4.7 (2026-02-11) - RECURRING EVENTS: FULL MANAGEMENT CONTROLS
+
+### New "Manage" Button per Series
+- Orange "Manage" button opens a comprehensive management dialog for each recurring series
+
+### Extend Series
+- Add N new occurrences after the last event in the series
+- Configurable interval: Daily, Weekly, Bi-weekly, Monthly, Quarterly, Yearly
+- New events copy title, time, color, namespace, and recurring flag from the last event
+
+### Trim Past Events
+- Remove all occurrences before a selected cutoff date
+- Confirmation required before deletion
+- Cleans up empty date keys and files automatically
+
+### Change Pattern
+- Respace future occurrences with a new interval
+- Past events are untouched; only future events are removed and re-created
+- First future event becomes the anchor date
+
+### Change Start Date
+- Shift ALL occurrences by the difference between old and new start date
+- Events are removed from old positions and re-created at new positions
+- Preserves spacing between all events
+
+### Pause/Resume
+- Pause: adds ⏸ prefix and paused flag to all future occurrences
+- Resume: removes ⏸ prefix and paused flag from all occurrences
+- Button toggles based on whether series is currently paused
+
+### Infrastructure
+- New shared `recurringAction()` JS helper for all AJAX management operations
+- New `getRecurringSeriesEvents()` PHP helper for finding all events in a series
+- Status messages shown inline in the management dialog
+- Close button triggers automatic rescan to refresh the table
+
+## Version 6.4.6 (2026-02-11) - RECURRING EVENTS: RESCAN BUTTON & IMPROVED LOGIC
+
+### Rescan Button
+- Green "🔍 Rescan" button added to the Recurring Events section header
+- AJAX-powered: rescans all calendar data and refreshes the table without page reload
+- Shows count of found series briefly after scan completes
+
+### Improved Detection Logic
+- Events with `recurring: true` flag are now detected first (grouped by `recurringId`)
+- Pattern-detected events (3+ same-title occurrences) are found separately and deduplicated
+- New "Source" column shows 🏷️ Flagged (has recurring flag) vs 🔍 Detected (pattern match)
+- Median interval used for pattern detection instead of just first two dates (more robust)
+- New patterns recognized: Quarterly, Semi-annual, and "Every ~N days" for custom intervals
+- Empty/invalid titles and malformed date arrays are now skipped safely
+- Dates are deduplicated before counting (prevents inflated counts from multi-day events)
+- Nested namespace directories now scanned recursively
+- Results sorted alphabetically by title
+
+## Version 6.4.5 (2026-02-11) - ADMIN VERSION HISTORY OVERHAUL
+
+### Version History Viewer
+- All purple (#7b1fa2) accent colors replaced with green (#00cc07) to match admin theme
+- Changelog parser now handles `###` subsection headers (rendered as green bold labels)
+- Plain `- ` bullet items now parsed and categorized under their subsection
+- Previously only `- **Type:** description` format was recognized
+
+### Current Release Button
+- Green "Current Release" button added between nav arrows
+- Jumps directly to the card matching the running version from plugin.info.txt
+- Running version card shows green "RUNNING" badge and thicker green border
+
+## Version 6.4.4 (2026-02-11) - WIKI THEME: PAST EVENTS TOGGLE BACKGROUND
+
+### Fix
+- Wiki theme past events pulldown (retracted state) now uses `__background_neu__` (`--cell-today-bg`)
+- Previously used `--cell-bg` which appeared unthemed/white
+
+## Version 6.4.3 (2026-02-11) - WIKI THEME: DAY HEADERS BACKGROUND
+
+### Fix
+- Wiki theme SMTWTFS day headers now use `__background_neu__` (`--cell-today-bg`) instead of `--background-header`
+
+## Version 6.4.2 (2026-02-11) - WIKI THEME: DAY HEADERS (INITIAL)
+
+### Wiki Theme Day Headers
+- Added explicit CSS override for `.calendar-theme-wiki .calendar-day-headers`
+- Day header text uses `--text-primary` (template's `__text__` color)
+
+## Version 6.4.1 (2026-02-11) - WIKI THEME: EVENT HIGHLIGHT
+
+### Fix
+- Wiki theme event highlight (when clicking calendar bar) now uses `themeStyles.header_bg` (`__background_alt__`) instead of hardcoded blue (#dce9f5)
+- Subtle shadow instead of blue glow
+
+## Version 6.4.0 (2026-02-11) - DARK READER: SECTION BAR COLOR MATCHING
+
+### Fix
+- Wiki theme section left bar now uses a `<div>` with `background` instead of `border-left`
+- Dark Reader maps the same color differently for border vs background properties, causing visual mismatch
+- Both the bar and header now use `background`, so Dark Reader maps them identically
+- Flex layout wrapper added for wiki theme sections
+- Wiki fallback colors updated: `border` key now uses `#ccc` (matching `__border__`) instead of `#2b73b7`
+
+## Version 6.3.9 (2026-02-10) - WIKI THEME: SECTION BAR FIX (ATTEMPT)
+
+### Fix
+- Simplified wiki section container — removed `wiki-section-container` class
+- Added `background` from `$themeStyles['bg']` to section container
+
+## Version 6.3.8 (2026-02-10) - WIKI THEME: BUTTON & SECTION HEADER COLORS
+
+### Wiki Theme Buttons
+- Nav buttons (< >), Today button, and panel buttons now use `__link__` color background with white text
+- CSS overrides for `.calendar-theme-wiki .cal-nav-btn`, `.cal-today-btn`, panel buttons
+
+### Wiki Theme Section Headers
+- Today: `__link__` background (accent/link color)
+- Tomorrow: `__background_alt__` background (alternate background)
+- Important: `__border__` background (border color)
+- Each section now has a distinct color from the template palette
+
+## Version 6.3.7 (2026-02-10) - WIKI THEME CHECKBOX FIX
+
+### Fix
+- Wiki theme checkbox override changed from `border-color` to full `border: 2px solid` shorthand
+- Properly overrides the base rule which uses `border` shorthand
+- Hover state also uses full shorthand
+
+## Version 6.3.6 (2026-02-10) - WIKI THEME CHECKBOX BORDER COLOR
+
+### Fix
+- Wiki theme unchecked checkboxes now use `--border-main` (template's `__border__` color) for border
+- Checked state fills with border color
+- Hover state uses border color
+- Applied to calendar, sidebar, and eventlist containers
+
+## Version 6.3.5 (2026-02-10) - WIKI THEME: ALLOW DARK READER ON HEADERS
+
+### Fix
+- Wiki theme section headers (Today/Tomorrow/Important) no longer use `!important` or `-webkit-text-fill-color`
+- Dark Reader can now freely adjust background, text color, and borders on wiki theme headers
+- Clicked-day panel header and section border-left also unlocked for wiki theme
+- All other themes (matrix/purple/pink/professional) retain full Dark Reader protection
+
+## Version 6.3.4 (2026-02-10) - WIKI THEME: BORDER COLOR FOR HEADERS & BADGES
+
+### Wiki Theme Color Remapping
+- `border` (accent color) now maps to template's `__border__` instead of `__link__`
+- This affects: section headers (Today/Tomorrow/Important), badges (TODAY, namespace), sidebar widget border, clicked-day panel, `--border-main` CSS variable
+- `text_bright` still maps to `__link__` for link text and accent text
+- Section headers all use the same `__border__` color for consistent appearance
+- Updated COLOR_SCHEME mapping documentation
+
+## Version 6.3.3 (2026-02-10) - WIKI THEME SECTION HEADER TEXT COLOR
+
+### Fix
+- Wiki theme Today/Tomorrow/Important section header text now uses `$themeStyles['text_primary']` (mapped from template's `__text__` color) instead of hardcoded white
+- Clicked-day panel header text also uses template text color for wiki theme
+- Professional theme remains white text on blue headers
+
+## Version 6.3.2 (2026-02-10) - FIX THEME NOT UPDATING ON SIDEBAR EVENTLIST
+
+### Bug Fix
+- Added `$renderer->nocache()` to the render function
+- DokuWiki was caching the rendered sidebar HTML, so theme changes made in admin were never reflected until the page was manually edited
+- Now all calendar/eventlist/eventpanel outputs are rendered fresh on each page load, picking up the current theme from `calendar_theme.txt`
+
+## Version 6.3.1 (2026-02-10) - EVENTLIST THEMING
+
+### {{eventlist}} Theme Support
+- Eventlist containers now receive theme class (`eventlist-theme-matrix`, etc.) and full CSS variable injection
+- Dark themes get themed border + glow, light themes get subtle border
+- Container background set from `$themeStyles['bg']` with `!important`
+
+### Eventlist CSS Theme Rules (all 3 dark themes)
+- Title, header, time, date, body, links, strong, code, namespace badge, empty state
+- Today header, clock, date — all with `color` + `-webkit-text-fill-color` `!important`
+- Item borders, section backgrounds, code block backgrounds
+- Full Dark Reader protection via same inline+CSS approach as calendar/sidebar
+
+## Version 6.3.0 (2026-02-10) - DARK READER COMPATIBILITY & COMPLETE THEMING
+
+### Dark Reader Browser Extension Compatibility
+All dark themes (Matrix, Purple, Pink) now render correctly when the Dark Reader browser extension is active. The approach uses targeted inline `!important` styles and `-webkit-text-fill-color` overrides — no page-wide locks, no blanket CSS resets, no filter manipulation.
+
+**Protected elements:**
+- Section headers (Today/Tomorrow/Important) — background, text color, text-fill-color
+- Clicked-day panel header — background, text color, close button
+- All badges (TODAY, PAST DUE, namespace, panel namespace, eventlist-simple) — background, text, text-fill-color
+- Event titles, meta, descriptions — color with !important via CSS
+- Day numbers, nav buttons, calendar day headers — color with !important via CSS  
+- System status bars — inline background !important on tracks and fills
+- System tooltips — background, border-color, text color all set via setProperty with !important
+- Section left border bars — border-left with !important
+- Event color indicator bars — border-left-color with !important
+- Sidebar section event text (Purple and Pink themes)
+
+### Complete CSS Variable Audit (41 conversions in v6.1.1)
+- All remaining hardcoded colors in style.css converted to CSS variable references
+- Calendar borders, text colors, backgrounds, input focus shadows, accent borders
+- Only legitimate hardcodes remain (keyframe animations, theme-specific override blocks)
+
+### Semantic Color System
+- New CSS variables: `--pastdue-color`, `--pastdue-bg`, `--pastdue-bg-strong`, `--pastdue-bg-light`
+- New CSS variables: `--tomorrow-bg`, `--tomorrow-bg-strong`, `--tomorrow-bg-light`
+- Injected into all 3 CSS var blocks (full calendar, event panel, sidebar widget)
+- Today/Tomorrow/Important section colors now theme-derived instead of hardcoded
+
+### Section Headers Fully Themed
+- Today/Tomorrow/Important headers use theme accent colors instead of fixed green/orange/purple
+- Matrix: bright/standard/dim green, Purple: bright/standard/dim purple, Pink: hot/medium/light pink
+- Professional: blue shades, Wiki: template-derived colors
+- Dark theme headers use dark background color for text contrast
+
+### Pink Theme Enhancements
+- **Heart today indicator** — day number displayed inside a ♥ with hot pink glow, centered via inline-flex, `pink-heart-beat` animation with realistic double-beat pulse
+- **Firework button hover** — `pink-firework-burst` keyframe animation with multi-point radiating box-shadows, scale/brightness effects on hover, instant flash on click
+- **Checkbox glow** — hot pink border with ambient glow, hover intensifies, checked fills with glow
+
+### All Theme Checkbox Theming
+- Matrix: bright green border + green glow, Purple: purple border + purple glow
+- Pink: hot pink border + pink glow (with enhanced ambient effect)
+- Hover scales 1.1x with intensified glow on all themes
+- Checked state fills with theme accent color + outer glow
+
+### System Tooltips Themed
+- Both tooltip functions use theme-derived colors from `$themeStyles`
+- Green tooltip: `text_bright`, Purple: `border`, Orange: `text_primary`
+- Background from `$themeStyles['bg']`, divider borders use theme accent colors
+- All properties set with `style.setProperty(prop, value, "important")`
+
+### Namespace Filter Badge Cleanup
+- Removed inline namespace badge from event side panel header
+- Filter indicator bar ("Filtering: namespace ✕") retained and working
+- AJAX-based namespace filtering fully functional via onclick handlers
+
+## Version 6.1.0 (2026-02-10) - TODAY INDICATOR, BUTTON HOVER & CHECKBOXES
+
+### Today Indicator
+- **Added:** Today's day number now shows as a filled circle with theme accent color background and contrasting text (like Google Calendar's today indicator)
+- **Added:** Today cell has `--cell-today-bg` background AND a visible inset border glow on hover using `--border-main`
+- **Added:** `.day-num` now uses `--text-primary` for color instead of relying on browser default
+
+### Button Hover/Click Theming
+- **Fixed:** All buttons now use `filter: brightness(1.3)` on hover for a visible glow effect across all themes
+- **Fixed:** All buttons use `filter: brightness(0.85)` on click/active for a press-down darkening effect
+- **Fixed:** Cal nav buttons (‹/›), Today button, +Add Event button, panel nav/today/add buttons, dialog Save/Cancel buttons, month picker Go/Cancel buttons, popup + Add Event button — ALL now have visible themed hover/click feedback with shadow
+- **Removed:** Generic `opacity: 0.9` hover which was barely visible on dark themes
+
+### Checkboxes Themed
+- **Added:** Custom checkbox styling for `.task-checkbox` — uses `appearance: none` with themed border (`--border-main`), hover glow, and filled accent background when checked with ✓ mark
+- **Added:** `accent-color: var(--text-bright)` on all dialog checkboxes (task, recurring) for consistent theme coloring
+
+### Form Input Text
+- **Fixed:** `.input-sleek` now has `color: var(--text-primary)` — form text is visible on dark themes
+- **Added:** `::placeholder` styling for inputs/textareas using `--text-dim`
+
+## Version 6.0.9 (2026-02-09) - FORM TEXT, CELL HOVER & GLOW TUNING
+
+### Form Input Text Fix
+- **Fixed:** Form input text (`input-sleek`, `textarea-sleek`, `select`) had no `color` property — browser defaulted to black, invisible on dark themes. Now uses `var(--text-primary)`.
+- **Added:** Themed placeholder text (`::placeholder`) for inputs/textareas
+
+### Button & Cell Hover Theming
+- **Added:** Calendar day cells (`.cal-day`) now have a themed hover effect — background shifts to `--cell-today-bg` with an inset border glow using `--border-main`
+- **Improved:** Nav buttons (`◄`/`►`) and Today button hover now show a themed glow + scale effect instead of just opacity change
+- **Added:** Active (click) state for nav/today buttons with scale-down feedback
+- **Improved:** Month picker hover now also shows a subtle theme shadow
+
+### Glow Reduced to 1px for Matrix/Purple
+- Matrix and purple text glow reduced from 2px to 1px across: event titles, descriptions, meta, links, sidebar day numbers, sidebar event titles, sidebar dates
+- Matrix clock pulse animation reduced from 6px/10px+15px to 2px/4px+6px
+- Weather text glow reduced to 1px, clock to 2px
+- Pink remains at 2px (barely noticeable)
+
+## Version 6.0.8 (2026-02-09) - LINKS, GLOW CONSISTENCY & PINK TONE-DOWN
+
+### Links Themed
+- **Added:** `.cal-link` CSS class — all links rendered via `renderDescription()` now pick up theme accent color via `--text-bright`
+- **Fixed:** Sidebar widget links (`a.cal-link`) inherit theme colors
+- **Fixed:** Event list widget description links (`eventlist-widget-desc a`) use CSS vars
+- **Fixed:** Simple event list body links/strong/code all themed
+
+### Text Glow Consistency
+- **Added:** Subtle `text-shadow: 0 0 2px` glow on event titles, meta, and descriptions for all three dark themes (matrix, purple, pink) in the main calendar and event panel
+- **Added:** Subtle link glow on dark themes
+- **Added:** Matrix and purple now get the same barely-visible text glow that pink had on sidebar week grid day numbers and event titles
+
+### Pink Glow Toned Down
+- **Reduced:** Sidebar today header box-shadow from `0 0 10px 0.4` to `0 0 6px 0.25`
+- **Reduced:** Day number sparkle animation from 3px/6px+10px to 2px/3px
+- **Reduced:** Today cell shimmer from 3px+5px / 8px+12px to 2px+3px / 4px+6px
+- **Reduced:** Event bar glow pulse from 2px/4px+6px to 1px/2px+3px
+- **Reduced:** Today hover glow from 10px+15px to 5px+8px
+- **Reduced:** Event item glow from 2px/5px to 1px/3px
+- **Reduced:** Calendar container glow from 8px to 5px
+
+### Other
+- **Themed:** Sidebar weather, date, and clock text colors and glow via CSS vars
+
+## Version 6.0.7 (2026-02-09) - BADGES, BUTTONS & CONFLICT THEMING
+
+- **Fixed:** Namespace badges (`.namespace-badge`, `.event-namespace-badge`, `.panel-ns-badge`, standalone header badge) — all now use theme accent colors instead of hardcoded green/blue
+- **Fixed:** TODAY badge uses `--border-main` for background instead of hardcoded purple
+- **Fixed:** Conflict alert badge (`⚠️`) uses `--border-main` background and `--text-bright` border — matches theme accent
+- **Fixed:** Conflict tooltip header background now set inline from theme vars (tooltip is appended to body, can't inherit CSS vars)
+- **Fixed:** Conflict tooltip body items use themed text and border colors
+- **Fixed:** Month picker Go/Cancel buttons themed (`--text-bright` for save, `--cell-bg` for cancel)
+- **Fixed:** Calendar header month/year hover uses `--cell-today-bg` background
+- **Fixed:** Inline search input border uses `--border-color`
+- **Fixed:** Event list header border uses `--border-color`
+
+## Version 6.0.6 (2026-02-09) - COMPLETE TEXT THEMING
+
+- **Fixed:** Calendar header month/year title had hardcoded dark color — now uses `--text-primary`
+- **Fixed:** Month/year picker hover used hardcoded gray background and green text — now uses `--cell-today-bg` and `--text-bright`
+- **Fixed:** Event list items (titles, meta, descriptions, links, code blocks, bold text) — all now theme-aware via CSS vars
+- **Fixed:** Completed/past event states used hardcoded grays — now use `--cell-bg`, `--text-dim`, `--cell-today-bg`
+- **Fixed:** Scrollbar track/thumb colors now use theme vars
+- **Fixed:** Namespace filter indicator (background, label, badge, close button) — all themed
+- **Fixed:** Panel standalone month picker hover and namespace badge — themed
+- **Fixed:** Calendar header border-bottom — now uses `--border-color`
+
+## Version 6.0.5 (2026-02-09) - THEMED BORDERS & EVENT PANEL
+
+- **Added:** Theme-colored border and glow for calendar container on matrix, purple, and pink themes — matches the sidebar widget's `2px solid` + `box-shadow` glow style. Professional and wiki themes unchanged (keep subtle 1px gray border).
+- **Added:** Theme-colored border and glow for event panel (`{{eventpanel}}`) on dark themes using `[data-theme]` attribute selectors
+- **Themed:** Event panel header (nav buttons, month title, today button, search input, add button) — all now use CSS vars
+- **Themed:** Panel standalone header background and border
+
+## Version 6.0.4 (2026-02-09) - FULL DIALOG THEMING
+
+- **Fixed:** Day cell click popup (day-popup) used hardcoded white/gray colors — now fully theme-aware using CSS variables
+- **Fixed:** Event add/edit dialog (dialog-content-sleek) had hardcoded white background and blue header — now uses theme colors
+- **Fixed:** Month picker dialog had hardcoded white background and dark text — now themed
+- **Fixed:** Popup event items, titles, times, descriptions, footer, add-event button, close button — all now use CSS vars with sensible fallbacks
+- **Fixed:** Form elements (field labels, inputs, checkboxes, recurring options, color pickers) — all reference theme CSS vars
+- **How it works:** `propagateThemeVars()` copies CSS variables from the calendar container to dialogs/popups (which are `position:fixed` or appended to `document.body`). All CSS selectors now reference these variables with fallbacks for graceful degradation.
+
 ## Version 6.0.3 (2026-02-09) - MOVE IMPORTANT NAMESPACES TO MANAGE TAB
 
 - **Moved:** Important Namespaces section from Outlook Sync tab to Manage Events tab (between Events Manager and Cleanup sections)
