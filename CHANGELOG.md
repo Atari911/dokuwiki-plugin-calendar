@@ -1,5 +1,343 @@
 # Calendar Plugin Changelog
 
+## Version 6.11.4 (2026-02-13) - JAVASCRIPT LOCALIZATION
+
+### JavaScript Localization (calendar-main.js)
+- Added `getCalendarLang()` helper to read embedded language strings
+- Added `getMonthNames()` and `getMonthNamesShort()` helpers for localized arrays
+- Localized all month names (full and abbreviated)
+- Localized dialog titles: "Add Event" / "Edit Event"
+- Localized "Delete this event?" confirmation
+- Localized "Events" header
+- Localized "Past Events (X)" toggle
+- Localized "No events this month" / "No events on this day" messages
+- Localized "+ Add Event" buttons
+- Localized "Important" tooltip
+- Localized "PAST DUE" and "TODAY" badges
+
+### Language Strings Integration
+- Added `getJsLangStrings()` method to syntax.php
+- Embedded JSON language data in all calendar render functions:
+  - Main calendar (renderCompactCalendar)
+  - Event panel (renderEventPanelOnly) 
+  - Sidebar widget (renderSidebarWidget)
+
+### New Language Strings
+- Month names (full): January-December
+- Month names (short): Jan-Dec
+- Badge labels: PAST DUE, TODAY
+- Additional: no_events_week, no_events_month, add_event_short
+
+---
+
+## Version 6.11.3 (2026-02-13) - SIDEBAR WIDGET LOCALIZATION
+
+### Fixed
+- **Fixed newline issue in confirmation dialogs** - Changed all `\n` in single-quoted PHP strings to double-quoted strings so JavaScript receives proper newlines
+- **Localized "Runs every X minutes"** - Cron interval descriptions now use language strings
+
+### Sidebar Widget Localization (syntax.php)
+- Today/Tomorrow/Important section headers
+- Event dialog: all labels, placeholders, options
+- Day names (short and full)
+- Ordinal positions (First, Second, Third...)
+- Color names (Blue, Green, Red...)
+- Recurring event options (Day(s), Week(s), Month(s)...)
+- Buttons (Save, Cancel, Add)
+- Search placeholder and tooltips
+
+### New Language Strings Added
+- ~70 new sidebar/frontend strings per language file
+- Full German translations for all frontend UI
+
+---
+
+## Version 6.11.2 (2026-02-13) - ADMIN LOCALIZATION COMPLETE
+
+### Complete Admin Backend Localization
+- **Total getLang() calls increased from ~287 to 508**
+- All AJAX JSON response messages now localized
+- All redirect messages now localized
+- Fixed: Cache cleared/not found messages
+- Fixed: Recurring event deleted/updated messages  
+- Fixed: Event management messages (moved, not found, file errors)
+- Fixed: Namespace management (create, delete, rename, validation errors)
+- Fixed: Sync process messages (script not found, log file errors, completion/failure)
+- Fixed: Config import/export messages (encryption, validation, success/error)
+- Fixed: Theme saved message
+- Fixed: Backup/restore messages (creation, deletion, rename, restore errors)
+- Fixed: intervalToPattern function returns localized pattern names
+
+### Language Strings Added
+- English: ~100 new strings
+- German: ~100 new translated strings
+
+---
+
+## Version 6.11.1 (2026-02-13) - CONFIG IMPORT FIX
+
+### Fixed Config Import
+- **Bug Fix:** Import config now accepts both `return [` (short syntax) and `return array(` (long syntax)
+- **Bug Fix:** Added trim to handle whitespace in encrypted config data
+- **Improved:** Better error messages when decryption fails (indicates different DokuWiki installation)
+- **Improved:** Additional validation with trim on decrypted content
+
+---
+
+## Version 6.11.0 (2026-02-13) - COMPLETE GERMAN LOCALIZATION
+
+### Complete Localization of All Admin Tabs
+
+**Edit Recurring Dialog (editRecurringSeries function):**
+- Dialog header: "Edit Recurring Event" → "Wiederkehrenden Termin bearbeiten"
+- All field labels (Title, Start Time, End Time, Namespace)
+- "Changes apply to ALL occurrences of:" → "Änderungen gelten für ALLE Vorkommen von:"
+- Recurrence pattern section (Repeat every, On these days, Repeat on)
+- Day of month / Weekday pattern options
+- Repeat Until with hint text
+- Cancel / Save Changes buttons
+- Day names (short and full) from language files
+- Ordinal labels (First, Second, Third, etc.)
+- Recurrence type options (Day(s), Week(s), Month(s), Year(s))
+
+**Update Plugin Tab:**
+- "Update Plugin" → "Plugin aktualisieren"
+- "Current Version" → "Aktuelle Version"
+- All labels (Version, Author, Description, Location)
+- Permissions section with status messages
+- "Upload New Version" → "Neue Version hochladen"
+- "Create backup before updating" → "Backup vor Aktualisierung erstellen"
+- "Upload & Install" → "Hochladen & Installieren"
+- "Clear Cache" → "Cache leeren"
+- All Important Notes items
+- "Version History" → "Versionsgeschichte"
+- "Current Release" button → "Aktuelle Version"
+- "RUNNING" label → "AKTIV"
+- "Backups" → "Backups"
+- All backup table headers and action buttons (Download, Restore, Rename)
+
+**Outlook Sync Tab:**
+- "Outlook Sync Configuration" → "Outlook-Sync-Konfiguration"
+- "Export Config" / "Import Config" buttons
+- "Microsoft Azure App Credentials" → "Microsoft Azure App-Anmeldedaten"
+- All field labels (Tenant ID, Client ID, Client Secret, etc.)
+- "Outlook Settings" → "Outlook-Einstellungen"
+- "Sync Options" → "Sync-Optionen"
+- Checkbox labels for sync options
+- "Namespace → Category" mapping section
+- "Event Color → Category" mapping section
+- "Save Configuration" → "Konfiguration speichern"
+
+**Themes Tab:**
+- "Sidebar Widget Settings" → "Seitenleisten-Widget-Einstellungen"
+- "Week Start Day" section with Monday/Sunday options
+- "Itinerary Section" with Expanded/Collapsed options
+- "Visual Theme" → "Visuelles Design"
+- All theme names and descriptions
+- "Save Settings" → "Einstellungen speichern"
+
+### Added 120+ New Language Strings
+Comprehensive vocabulary for all admin interface elements in both English and German.
+
+### Technical Implementation
+- Extended $jsAdminLang object with additional Edit Recurring Dialog strings
+- Updated editRecurringSeries JavaScript function to use adminLang.* variables
+- All PHP echo statements now use $this->getLang() calls
+- Theme descriptions kept consistent with visual preview styling
+
+---
+
+## Version 6.10.6 (2026-02-13) - MANAGE RECURRING DIALOG LOCALIZATION
+
+### Localized Manage Recurring Series Dialog
+Complete translation of the "Manage" button dialog for recurring events:
+
+**Section Headers:**
+- "Manage Recurring Series" → "Wiederkehrende Serie verwalten"
+- "Extend Series" → "Serie erweitern"
+- "Trim Past Events" → "Vergangene Termine kürzen"
+- "Change Pattern" → "Muster ändern"
+- "Change Start Date" → "Startdatum ändern"
+- "Pause Series" / "Resume Series" → "Serie pausieren" / "Serie fortsetzen"
+
+**Labels & Buttons:**
+- All field labels (Add occurrences, Days apart, Remove before, New interval, etc.)
+- Action buttons (Extend, Trim, Change, Shift, Pause, Resume, Close)
+- Interval dropdown options (Daily, Weekly, Bi-weekly, Monthly, Quarterly, Yearly)
+- Help text and notes
+
+**Confirmation Dialogs:**
+- Trim confirmation with date
+- Respace confirmation
+- Shift confirmation
+
+### Added 60+ Language Strings for Dialogs
+Complete vocabulary for recurring event management in both English and German.
+
+### Note on Browser Validation Messages
+"Please fill out this field" is a browser-native message controlled by the browser's language setting, not our plugin.
+
+## Version 6.10.5 (2026-02-13) - DIALOG LOCALIZATION
+
+### Localized All JavaScript Dialogs
+
+**New Namespace Dialog:**
+- Prompt text with examples now in German
+- Invalid namespace error message
+
+**Rename Namespace Dialog:**
+- Prompt text with current name
+
+**Delete Confirmations:**
+- Delete selected events confirmation
+- Delete namespace confirmation
+- Delete recurring series confirmation
+
+**Trim Recurring Events:**
+- "Counting..." / "Zähle..."
+- "Trimming..." / "Kürze..."
+- "No past recurring events found" message
+- "Found X past recurring events" confirmation
+- Button text resets
+
+### Added 15+ New Dialog Strings
+Both English and German translations for all interactive prompts and confirmations.
+
+## Version 6.10.4 (2026-02-13) - COMPLETE MANAGE TAB LOCALIZATION
+
+### Fixed Remaining English Strings
+
+**Namespace Explorer Control Bar:**
+- "➡️ Move" → "➡️ Verschieben"
+- "➕ New Namespace" → "➕ Neuer Namensraum"
+- "🧹 Cleanup" → "🧹 Bereinigen"
+- "0 selected" → "0 ausgewählt"
+- "%d selected" → "%d ausgewählt"
+
+**Recurring Events Button Tooltips:**
+- "Edit title, time, namespace, pattern" → "Titel, Zeit, Namensraum, Muster bearbeiten"
+- "Extend, trim, pause, change dates" → "Erweitern, kürzen, pausieren, Daten ändern"
+- "Delete all occurrences" → "Alle Vorkommen löschen"
+
+**JavaScript Confirmation Messages:**
+- "No events selected" → "Keine Termine ausgewählt"
+- Delete confirmation with count
+- Delete namespace confirmation
+- "Scanning..." → "Scanne..."
+- "Cleaning..." → "Bereinige..."
+- "No empty namespaces found" message
+- "Found X item(s) to clean up" → "X Element(e) zum Bereinigen gefunden"
+- "Proceed with cleanup?" → "Mit Bereinigung fortfahren?"
+
+### Technical
+- Added adminLang JavaScript object with all translatable strings
+- All dynamic JavaScript messages now use language system
+
+## Version 6.10.3 (2026-02-13) - RECURRING EVENTS & DROP TARGET LOCALIZATION
+
+### Additional Localization for Manage Events Tab
+
+**Recurring Events Table:**
+- Search placeholder: "Wiederkehrende Termine suchen..."
+- Table headers: Titel, Namensraum, Muster, Zeitraum, Anzahl, Quelle, Aktionen
+- Source labels: Markiert / Erkannt (was Flagged / Detected)
+- Action buttons: Bearb. / Verwalten / Lö. (was Edit / Manage / Del)
+- Pattern badges: Täglich, Wöchentlich, Monatlich, Jährlich, Benutzerdefiniert
+- Footer: "Gesamt: X Serien" (was "Total: X series")
+- No results message
+
+**Namespace Explorer Drop Zones:**
+- Header: "🎯 Zielbereich" (was "Drop Target")
+- Drop hint: "Hier ablegen" (was "Drop here")
+- Default namespace label consistent
+
+### Added 25+ New Language Strings
+- Recurring table columns and labels
+- Pattern translations
+- Action button labels
+- Drop zone labels
+
+## Version 6.10.2 (2026-02-13) - MANAGE EVENTS TAB LOCALIZATION
+
+### Localized: Manage Events Tab (Complete)
+All text in the Manage Events admin tab now uses the language system:
+
+**Events Manager Section:**
+- Page title, section header, description
+- Statistics labels (Total Events, Namespaces, JSON Files, Recurring)
+- "Last scanned" timestamp label
+- Button labels (Re-scan Events, Export All Events, Import Events)
+- "View Breakdown by Namespace" expandable section
+- Table headers (Namespace, Events, Files)
+
+**Important Namespaces Section:**
+- Section header and description
+- Visual Effects descriptions (Calendar Grid, Event Sidebar, Sidebar Widget, Day Popup)
+- Save button and hint text
+
+**Cleanup Old Events Section:**
+- Section header and description
+- Radio button labels (By Age, By Status, By Date Range)
+- Age options (Delete events older than, months, years)
+- Status options (Completed tasks, Past events)
+- Date range labels (From, To)
+- Namespace filter label and placeholder
+- Preview and Delete button labels
+- JavaScript confirmation messages
+- Loading/error states
+
+**Recurring Events Section:**
+- Section header
+- Button labels (Trim All Past, Rescan)
+
+**Namespace Explorer Section:**
+- Section header and description
+- Search placeholder
+- Control bar buttons (All, None, Delete, Move to)
+- Datalist placeholder
+
+### Added 60+ New Language Strings
+Both English and German language files expanded with comprehensive admin terminology.
+
+## Version 6.10.1 (2026-02-13) - LANGUAGE SYSTEM FIX
+
+### Bug Fix: Language Files Not Working
+- Fixed `getMenuText()` to use `$this->getLang('menu')` instead of hardcoded string
+- Admin menu now correctly shows "Kalenderverwaltung" in German
+- Admin tabs now use language system:
+  - "Manage Events" → "Termine verwalten"
+  - "Update Plugin" → "Plugin aktualisieren"
+  - "Outlook Sync" → "Outlook-Sync"
+  - "Themes" → "Designs"
+
+### Added More Language Strings
+- Admin tab labels
+- Admin section headers (Event Browser, Important Namespaces, etc.)
+- Sync settings labels
+- Common button labels (Run Now, Download, Upload, Delete, etc.)
+
+## Version 6.10.0 (2026-02-13) - GERMAN LANGUAGE SUPPORT
+
+### New Feature: German Language Translation
+- Added complete German (de) language file
+- Expanded English language file with comprehensive translatable strings
+- Both files include 100+ translation strings covering:
+  - General terms (calendar, events, dates)
+  - Event fields (title, description, time, etc.)
+  - Actions (add, edit, delete, save, cancel)
+  - Task-related terms
+  - Recurring event options
+  - Days of week and months
+  - User messages and confirmations
+  - Search functionality
+  - Sync status messages
+  - Admin section labels
+  - Sidebar widget labels
+  - Time conflict warnings
+
+### Note
+The language strings are now available for future implementation throughout the plugin UI. Currently the admin menu uses the language system; other strings can be integrated as needed.
+
 ## Version 6.9.9 (2026-02-13) - CRITICAL SEARCH FIX
 
 ### Bug Fix: Month Search Not Working

@@ -178,15 +178,18 @@ class syntax_plugin_calendar extends DokuWiki_Syntax_Plugin {
         // Embed events data as JSON for JavaScript access
         $html .= '<script type="application/json" id="events-data-' . $calId . '">' . json_encode($events) . '</script>';
         
+        // Embed language strings for JavaScript
+        $html .= '<script type="application/json" id="calendar-lang-' . $calId . '">' . json_encode($this->getJsLangStrings()) . '</script>';
+        
         // Left side: Calendar
         $html .= '<div class="calendar-compact-left">';
         
         // Header with navigation
         $html .= '<div class="calendar-compact-header">';
         $html .= '<button class="cal-nav-btn" onclick="navCalendar(\'' . $calId . '\', ' . $prevYear . ', ' . $prevMonth . ', \'' . $namespace . '\')">‹</button>';
-        $html .= '<h3 class="calendar-month-picker" onclick="openMonthPicker(\'' . $calId . '\', ' . $year . ', ' . $month . ', \'' . $namespace . '\')" title="Click to jump to month">' . $monthName . '</h3>';
+        $html .= '<h3 class="calendar-month-picker" onclick="openMonthPicker(\'' . $calId . '\', ' . $year . ', ' . $month . ', \'' . $namespace . '\')" title="' . $this->getLang('click_to_jump') . '">' . $monthName . '</h3>';
         $html .= '<button class="cal-nav-btn" onclick="navCalendar(\'' . $calId . '\', ' . $nextYear . ', ' . $nextMonth . ', \'' . $namespace . '\')">›</button>';
-        $html .= '<button class="cal-today-btn" onclick="jumpToToday(\'' . $calId . '\', \'' . $namespace . '\')">Today</button>';
+        $html .= '<button class="cal-today-btn" onclick="jumpToToday(\'' . $calId . '\', \'' . $namespace . '\')">' . $this->getLang('today_btn') . '</button>';
         $html .= '</div>';
         
         // Calendar grid - day name headers as a separate div (avoids Firefox th height issues)
@@ -294,7 +297,7 @@ class syntax_plugin_calendar extends DokuWiki_Syntax_Plugin {
                             $eventId = isset($evt['id']) ? $evt['id'] : '';
                             $eventColor = isset($evt['color']) ? htmlspecialchars($evt['color']) : '#3498db';
                             $eventTime = isset($evt['time']) ? $evt['time'] : '';
-                            $eventTitle = isset($evt['title']) ? htmlspecialchars($evt['title']) : 'Event';
+                            $eventTitle = isset($evt['title']) ? htmlspecialchars($evt['title']) : $this->getLang('default_event');
                             $originalDate = isset($evt['_original_date']) ? $evt['_original_date'] : $dateKey;
                             $isFirstDay = isset($evt['_is_first_day']) ? $evt['_is_first_day'] : true;
                             $isLastDay = isset($evt['_is_last_day']) ? $evt['_is_last_day'] : true;
@@ -349,7 +352,7 @@ class syntax_plugin_calendar extends DokuWiki_Syntax_Plugin {
         $html .= '<div class="calendar-compact-right">';
         $html .= '<div class="event-list-header">';
         $html .= '<div class="event-list-header-content">';
-        $html .= '<h4 id="eventlist-title-' . $calId . '">Events</h4>';
+        $html .= '<h4 id="eventlist-title-' . $calId . '">' . $this->getLang('events_header') . '</h4>';
         if ($namespace) {
             $html .= '<span class="namespace-badge">' . htmlspecialchars($namespace) . '</span>';
         }
@@ -357,12 +360,12 @@ class syntax_plugin_calendar extends DokuWiki_Syntax_Plugin {
         
         // Search bar in header
         $html .= '<div class="event-search-container-inline">';
-        $html .= '<input type="text" class="event-search-input-inline" id="event-search-' . $calId . '" placeholder="🔍 Search..." oninput="filterEvents(\'' . $calId . '\', this.value)">';
+        $html .= '<input type="text" class="event-search-input-inline" id="event-search-' . $calId . '" placeholder="' . $this->getLang('search_placeholder') . '" oninput="filterEvents(\'' . $calId . '\', this.value)">';
         $html .= '<button class="event-search-clear-inline" id="search-clear-' . $calId . '" onclick="clearEventSearch(\'' . $calId . '\')" style="display:none;">✕</button>';
-        $html .= '<button class="event-search-mode-inline" id="search-mode-' . $calId . '" onclick="toggleSearchMode(\'' . $calId . '\', \'' . $namespace . '\')" title="Search this month only">📅</button>';
+        $html .= '<button class="event-search-mode-inline" id="search-mode-' . $calId . '" onclick="toggleSearchMode(\'' . $calId . '\', \'' . $namespace . '\')" title="' . $this->getLang('search_this_month') . '">📅</button>';
         $html .= '</div>';
         
-        $html .= '<button class="add-event-compact" onclick="openAddEvent(\'' . $calId . '\', \'' . $namespace . '\')">+ Add</button>';
+        $html .= '<button class="add-event-compact" onclick="openAddEvent(\'' . $calId . '\', \'' . $namespace . '\')">' . $this->getLang('add_btn') . '</button>';
         $html .= '</div>';
         
         $html .= '<div class="event-list-compact" id="eventlist-' . $calId . '">';
@@ -565,7 +568,7 @@ class syntax_plugin_calendar extends DokuWiki_Syntax_Plugin {
                 $eventHtml .= '<div class="event-title-row">';
                 // Add star for important namespace events
                 if ($isImportantNs) {
-                    $eventHtml .= '<span class="event-important-star" title="Important">⭐</span> ';
+                    $eventHtml .= '<span class="event-important-star" title="' . $this->getLang('important_tooltip') . '">⭐</span> ';
                 }
                 $eventHtml .= '<span class="event-title-compact">' . $title . '</span>';
                 $eventHtml .= '</div>';
@@ -917,6 +920,9 @@ class syntax_plugin_calendar extends DokuWiki_Syntax_Plugin {
         // Initialize DOKU_BASE for JavaScript
         $html .= '<script>if(typeof DOKU_BASE==="undefined"){window.DOKU_BASE="' . DOKU_BASE . '";}</script>';
         
+        // Embed language strings for JavaScript
+        $html .= '<script type="application/json" id="calendar-lang-' . $calId . '">' . json_encode($this->getJsLangStrings()) . '</script>';
+        
         // Compact two-row header designed for ~500px width
         $html .= '<div class="panel-header-compact">';
         
@@ -950,7 +956,7 @@ class syntax_plugin_calendar extends DokuWiki_Syntax_Plugin {
             }
         }
         
-        $html .= '<button class="panel-today-btn" onclick="jumpTodayPanel(\'' . $calId . '\', \'' . $namespace . '\')">Today</button>';
+        $html .= '<button class="panel-today-btn" onclick="jumpTodayPanel(\'' . $calId . '\', \'' . $namespace . '\')">' . $this->getLang('today_btn') . '</button>';
         $html .= '</div>';
         
         // Row 2: Search and add button
@@ -997,13 +1003,13 @@ class syntax_plugin_calendar extends DokuWiki_Syntax_Plugin {
         if ($range === 'day') {
             $startDate = date('Y-m-d', strtotime('-30 days')); // Include past 30 days for past due tasks
             $endDate = date('Y-m-d');
-            $headerText = 'Today';
+            $headerText = $this->getLang('range_today');
         } elseif ($range === 'week') {
             $startDate = date('Y-m-d', strtotime('-30 days')); // Include past 30 days for past due tasks
             $endDateTime = new DateTime();
             $endDateTime->modify('+7 days');
             $endDate = $endDateTime->format('Y-m-d');
-            $headerText = 'This Week';
+            $headerText = $this->getLang('range_this_week');
         } elseif ($range === 'month') {
             $startDate = date('Y-m-01', strtotime('-1 month')); // Include previous month for past due tasks
             $endDate = date('Y-m-t'); // Last of current month
@@ -1087,7 +1093,7 @@ class syntax_plugin_calendar extends DokuWiki_Syntax_Plugin {
         } elseif ($today) {
             $startDate = date('Y-m-d');
             $endDate = date('Y-m-d');
-            $headerText = 'Today';
+            $headerText = $this->getLang('range_today');
         } elseif ($daterange) {
             list($startDate, $endDate) = explode(':', $daterange);
             $start = new DateTime($startDate);
@@ -1647,7 +1653,7 @@ class syntax_plugin_calendar extends DokuWiki_Syntax_Plugin {
         
         // Header with drag handle and close button
         $html .= '<div class="dialog-header-sleek dialog-drag-handle" id="drag-handle-' . $calId . '">';
-        $html .= '<h3 id="dialog-title-' . $calId . '">Add Event</h3>';
+        $html .= '<h3 id="dialog-title-' . $calId . '">' . $this->getLang('dialog_add_event') . '</h3>';
         $html .= '<button type="button" class="dialog-close-btn" onclick="closeEventDialog(\'' . $calId . '\')">×</button>';
         $html .= '</div>';
         
@@ -1659,20 +1665,20 @@ class syntax_plugin_calendar extends DokuWiki_Syntax_Plugin {
         
         // 1. TITLE
         $html .= '<div class="form-field">';
-        $html .= '<label class="field-label">📝 Title</label>';
-        $html .= '<input type="text" id="event-title-' . $calId . '" name="title" required class="input-sleek input-compact" placeholder="Event or task title...">';
+        $html .= '<label class="field-label">' . $this->getLang('field_title') . '</label>';
+        $html .= '<input type="text" id="event-title-' . $calId . '" name="title" required class="input-sleek input-compact" placeholder="' . $this->getLang('field_title_placeholder') . '">';
         $html .= '</div>';
         
         // 1.5 NAMESPACE SELECTOR (Searchable with fuzzy matching)
         $html .= '<div class="form-field">';
-        $html .= '<label class="field-label">📁 Namespace</label>';
+        $html .= '<label class="field-label">' . $this->getLang('field_namespace') . '</label>';
         
         // Hidden field to store actual selected namespace
         $html .= '<input type="hidden" id="event-namespace-' . $calId . '" name="namespace" value="">';
         
         // Searchable input
         $html .= '<div class="namespace-search-wrapper">';
-        $html .= '<input type="text" id="event-namespace-search-' . $calId . '" class="input-sleek input-compact namespace-search-input" placeholder="Type to search or leave empty for default..." autocomplete="off">';
+        $html .= '<input type="text" id="event-namespace-search-' . $calId . '" class="input-sleek input-compact namespace-search-input" placeholder="' . $this->getLang('field_namespace_placeholder') . '" autocomplete="off">';
         $html .= '<div class="namespace-dropdown" id="event-namespace-dropdown-' . $calId . '" style="display:none;"></div>';
         $html .= '</div>';
         
@@ -1684,20 +1690,20 @@ class syntax_plugin_calendar extends DokuWiki_Syntax_Plugin {
         
         // 2. DESCRIPTION
         $html .= '<div class="form-field">';
-        $html .= '<label class="field-label">📄 Description</label>';
-        $html .= '<textarea id="event-desc-' . $calId . '" name="description" rows="2" class="input-sleek textarea-sleek textarea-compact" placeholder="Optional details..."></textarea>';
+        $html .= '<label class="field-label">' . $this->getLang('field_description') . '</label>';
+        $html .= '<textarea id="event-desc-' . $calId . '" name="description" rows="2" class="input-sleek textarea-sleek textarea-compact" placeholder="' . $this->getLang('field_description_placeholder') . '"></textarea>';
         $html .= '</div>';
         
         // 3. START DATE - END DATE (inline)
         $html .= '<div class="form-row-group">';
         
         $html .= '<div class="form-field form-field-half">';
-        $html .= '<label class="field-label-compact">📅 Start Date</label>';
+        $html .= '<label class="field-label-compact">' . $this->getLang('field_start_date') . '</label>';
         $html .= '<input type="date" id="event-date-' . $calId . '" name="date" required class="input-sleek input-date input-compact">';
         $html .= '</div>';
         
         $html .= '<div class="form-field form-field-half">';
-        $html .= '<label class="field-label-compact">🏁 End Date</label>';
+        $html .= '<label class="field-label-compact">' . $this->getLang('field_end_date') . '</label>';
         $html .= '<input type="date" id="event-end-date-' . $calId . '" name="endDate" class="input-sleek input-date input-compact" placeholder="Optional">';
         $html .= '</div>';
         
@@ -1707,7 +1713,7 @@ class syntax_plugin_calendar extends DokuWiki_Syntax_Plugin {
         $html .= '<div class="form-field form-field-checkbox form-field-checkbox-compact">';
         $html .= '<label class="checkbox-label checkbox-label-compact">';
         $html .= '<input type="checkbox" id="event-recurring-' . $calId . '" name="isRecurring" class="recurring-toggle" onchange="toggleRecurringOptions(\'' . $calId . '\')">';
-        $html .= '<span>🔄 Repeating Event</span>';
+        $html .= '<span>' . $this->getLang('recurring_label') . '</span>';
         $html .= '</label>';
         $html .= '</div>';
         
@@ -1718,17 +1724,17 @@ class syntax_plugin_calendar extends DokuWiki_Syntax_Plugin {
         $html .= '<div class="form-row-group" style="margin-bottom:6px;">';
         
         $html .= '<div class="form-field" style="flex:0 0 auto; min-width:0;">';
-        $html .= '<label class="field-label-compact">Repeat every</label>';
+        $html .= '<label class="field-label-compact">' . $this->getLang('recurring_repeat_every') . '</label>';
         $html .= '<input type="number" id="event-recurrence-interval-' . $calId . '" name="recurrenceInterval" class="input-sleek input-compact" value="1" min="1" max="99" style="width:50px;">';
         $html .= '</div>';
         
         $html .= '<div class="form-field" style="flex:1; min-width:0;">';
         $html .= '<label class="field-label-compact">&nbsp;</label>';
         $html .= '<select id="event-recurrence-type-' . $calId . '" name="recurrenceType" class="input-sleek input-compact" onchange="updateRecurrenceOptions(\'' . $calId . '\')">';
-        $html .= '<option value="daily">Day(s)</option>';
-        $html .= '<option value="weekly">Week(s)</option>';
-        $html .= '<option value="monthly">Month(s)</option>';
-        $html .= '<option value="yearly">Year(s)</option>';
+        $html .= '<option value="daily">' . $this->getLang('recurring_days') . '</option>';
+        $html .= '<option value="weekly">' . $this->getLang('recurring_weeks') . '</option>';
+        $html .= '<option value="monthly">' . $this->getLang('recurring_months') . '</option>';
+        $html .= '<option value="yearly">' . $this->getLang('recurring_years') . '</option>';
         $html .= '</select>';
         $html .= '</div>';
         
@@ -1736,9 +1742,9 @@ class syntax_plugin_calendar extends DokuWiki_Syntax_Plugin {
         
         // Row 2: Weekly options - day of week checkboxes
         $html .= '<div id="weekly-options-' . $calId . '" class="weekly-options" style="display:none; margin-bottom:6px;">';
-        $html .= '<label class="field-label-compact" style="display:block; margin-bottom:4px;">On these days:</label>';
+        $html .= '<label class="field-label-compact" style="display:block; margin-bottom:4px;">' . $this->getLang('recurring_on_these_days') . '</label>';
         $html .= '<div style="display:flex; flex-wrap:wrap; gap:2px;">';
-        $dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+        $dayNames = [$this->getLang('day_sun'), $this->getLang('day_mon'), $this->getLang('day_tue'), $this->getLang('day_wed'), $this->getLang('day_thu'), $this->getLang('day_fri'), $this->getLang('day_sat')];
         foreach ($dayNames as $idx => $day) {
             $html .= '<label style="display:inline-flex; align-items:center; padding:2px 6px; background:var(--cell-bg, #1a1a1a); border:1px solid var(--border-color, #333); border-radius:3px; cursor:pointer; font-size:10px;">';
             $html .= '<input type="checkbox" name="weekDays[]" value="' . $idx . '" style="margin-right:3px; width:12px; height:12px;">';
@@ -1750,48 +1756,48 @@ class syntax_plugin_calendar extends DokuWiki_Syntax_Plugin {
         
         // Row 3: Monthly options - day of month OR ordinal weekday
         $html .= '<div id="monthly-options-' . $calId . '" class="monthly-options" style="display:none; margin-bottom:6px;">';
-        $html .= '<label class="field-label-compact" style="display:block; margin-bottom:4px;">Repeat on:</label>';
+        $html .= '<label class="field-label-compact" style="display:block; margin-bottom:4px;">' . $this->getLang('recurring_repeat_on') . '</label>';
         
         // Radio: Day of month vs Ordinal weekday
         $html .= '<div style="margin-bottom:6px;">';
         $html .= '<label style="display:inline-flex; align-items:center; margin-right:12px; cursor:pointer; font-size:11px;">';
         $html .= '<input type="radio" name="monthlyType" value="dayOfMonth" checked onchange="updateMonthlyType(\'' . $calId . '\')" style="margin-right:4px;">';
-        $html .= 'Day of month';
+        $html .= $this->getLang('recurring_day_of_month');
         $html .= '</label>';
         $html .= '<label style="display:inline-flex; align-items:center; cursor:pointer; font-size:11px;">';
         $html .= '<input type="radio" name="monthlyType" value="ordinalWeekday" onchange="updateMonthlyType(\'' . $calId . '\')" style="margin-right:4px;">';
-        $html .= 'Weekday pattern';
+        $html .= $this->getLang('recurring_weekday_pattern');
         $html .= '</label>';
         $html .= '</div>';
         
         // Day of month input (shown by default)
         $html .= '<div id="monthly-day-' . $calId . '" style="display:flex; align-items:center; gap:6px;">';
-        $html .= '<span style="font-size:11px;">Day</span>';
+        $html .= '<span style="font-size:11px;">' . $this->getLang('recurring_day') . '</span>';
         $html .= '<input type="number" id="event-month-day-' . $calId . '" name="monthDay" class="input-sleek input-compact" value="1" min="1" max="31" style="width:50px;">';
-        $html .= '<span style="font-size:10px; color:var(--text-dim, #666);">of each month</span>';
+        $html .= '<span style="font-size:10px; color:var(--text-dim, #666);">' . $this->getLang('recurring_of_each_month') . '</span>';
         $html .= '</div>';
         
         // Ordinal weekday (hidden by default)
         $html .= '<div id="monthly-ordinal-' . $calId . '" style="display:none;">';
         $html .= '<div style="display:flex; align-items:center; gap:4px; flex-wrap:wrap;">';
         $html .= '<select id="event-ordinal-' . $calId . '" name="ordinalWeek" class="input-sleek input-compact" style="width:auto;">';
-        $html .= '<option value="1">First</option>';
-        $html .= '<option value="2">Second</option>';
-        $html .= '<option value="3">Third</option>';
-        $html .= '<option value="4">Fourth</option>';
-        $html .= '<option value="5">Fifth</option>';
-        $html .= '<option value="-1">Last</option>';
+        $html .= '<option value="1">' . $this->getLang('ordinal_first') . '</option>';
+        $html .= '<option value="2">' . $this->getLang('ordinal_second') . '</option>';
+        $html .= '<option value="3">' . $this->getLang('ordinal_third') . '</option>';
+        $html .= '<option value="4">' . $this->getLang('ordinal_fourth') . '</option>';
+        $html .= '<option value="5">' . $this->getLang('ordinal_fifth') . '</option>';
+        $html .= '<option value="-1">' . $this->getLang('ordinal_last') . '</option>';
         $html .= '</select>';
         $html .= '<select id="event-ordinal-day-' . $calId . '" name="ordinalDay" class="input-sleek input-compact" style="width:auto;">';
-        $html .= '<option value="0">Sunday</option>';
-        $html .= '<option value="1">Monday</option>';
-        $html .= '<option value="2">Tuesday</option>';
-        $html .= '<option value="3">Wednesday</option>';
-        $html .= '<option value="4">Thursday</option>';
-        $html .= '<option value="5">Friday</option>';
-        $html .= '<option value="6">Saturday</option>';
+        $html .= '<option value="0">' . $this->getLang('day_sunday') . '</option>';
+        $html .= '<option value="1">' . $this->getLang('day_monday') . '</option>';
+        $html .= '<option value="2">' . $this->getLang('day_tuesday') . '</option>';
+        $html .= '<option value="3">' . $this->getLang('day_wednesday') . '</option>';
+        $html .= '<option value="4">' . $this->getLang('day_thursday') . '</option>';
+        $html .= '<option value="5">' . $this->getLang('day_friday') . '</option>';
+        $html .= '<option value="6">' . $this->getLang('day_saturday') . '</option>';
         $html .= '</select>';
-        $html .= '<span style="font-size:10px; color:var(--text-dim, #666);">of each month</span>';
+        $html .= '<span style="font-size:10px; color:var(--text-dim, #666);">' . $this->getLang('recurring_of_each_month') . '</span>';
         $html .= '</div>';
         $html .= '</div>';
         
@@ -1800,9 +1806,9 @@ class syntax_plugin_calendar extends DokuWiki_Syntax_Plugin {
         // Row 4: End date
         $html .= '<div class="form-row-group">';
         $html .= '<div class="form-field">';
-        $html .= '<label class="field-label-compact">Repeat Until (optional)</label>';
+        $html .= '<label class="field-label-compact">' . $this->getLang('recurring_until') . '</label>';
         $html .= '<input type="date" id="event-recurrence-end-' . $calId . '" name="recurrenceEnd" class="input-sleek input-date input-compact" placeholder="Optional">';
-        $html .= '<div style="font-size:9px; color:var(--text-dim, #666); margin-top:2px;">Leave empty for 1 year of events</div>';
+        $html .= '<div style="font-size:9px; color:var(--text-dim, #666); margin-top:2px;">' . $this->getLang('recurring_until_hint') . '</div>';
         $html .= '</div>';
         $html .= '</div>'; // End row 4
         
@@ -1812,9 +1818,9 @@ class syntax_plugin_calendar extends DokuWiki_Syntax_Plugin {
         $html .= '<div class="form-row-group">';
         
         $html .= '<div class="form-field form-field-half">';
-        $html .= '<label class="field-label-compact">🕐 Start Time</label>';
+        $html .= '<label class="field-label-compact">' . $this->getLang('field_start_time') . '</label>';
         $html .= '<select id="event-time-' . $calId . '" name="time" class="input-sleek input-compact" onchange="updateEndTimeOptions(\'' . $calId . '\')">';
-        $html .= '<option value="">All day</option>';
+        $html .= '<option value="">' . $this->getLang('time_all_day') . '</option>';
         
         // Generate time options in 15-minute intervals
         for ($hour = 0; $hour < 24; $hour++) {
@@ -1831,9 +1837,9 @@ class syntax_plugin_calendar extends DokuWiki_Syntax_Plugin {
         $html .= '</div>';
         
         $html .= '<div class="form-field form-field-half">';
-        $html .= '<label class="field-label-compact">🕐 End Time</label>';
+        $html .= '<label class="field-label-compact">' . $this->getLang('field_end_time') . '</label>';
         $html .= '<select id="event-end-time-' . $calId . '" name="endTime" class="input-sleek input-compact">';
-        $html .= '<option value="">Same as start</option>';
+        $html .= '<option value="">' . $this->getLang('time_same_as_start') . '</option>';
         
         // Generate time options in 15-minute intervals
         for ($hour = 0; $hour < 24; $hour++) {
@@ -1855,17 +1861,17 @@ class syntax_plugin_calendar extends DokuWiki_Syntax_Plugin {
         $html .= '<div class="form-row-group">';
         
         $html .= '<div class="form-field form-field-full">';
-        $html .= '<label class="field-label-compact">🎨 Color</label>';
+        $html .= '<label class="field-label-compact">' . $this->getLang('field_color') . '</label>';
         $html .= '<div class="color-picker-wrapper">';
         $html .= '<select id="event-color-' . $calId . '" name="color" class="input-sleek input-compact color-select" onchange="updateCustomColorPicker(\'' . $calId . '\')">';
-        $html .= '<option value="#3498db" style="background:#3498db;color:white">🔵 Blue</option>';
-        $html .= '<option value="#2ecc71" style="background:#2ecc71;color:white">🟢 Green</option>';
-        $html .= '<option value="#e74c3c" style="background:#e74c3c;color:white">🔴 Red</option>';
-        $html .= '<option value="#f39c12" style="background:#f39c12;color:white">🟠 Orange</option>';
-        $html .= '<option value="#9b59b6" style="background:#9b59b6;color:white">🟣 Purple</option>';
-        $html .= '<option value="#e91e63" style="background:#e91e63;color:white">🔴 Pink</option>';
-        $html .= '<option value="#1abc9c" style="background:#1abc9c;color:white">🟢 Teal</option>';
-        $html .= '<option value="custom">🎨 Custom...</option>';
+        $html .= '<option value="#3498db" style="background:#3498db;color:white">' . $this->getLang('color_blue') . '</option>';
+        $html .= '<option value="#2ecc71" style="background:#2ecc71;color:white">' . $this->getLang('color_green') . '</option>';
+        $html .= '<option value="#e74c3c" style="background:#e74c3c;color:white">' . $this->getLang('color_red') . '</option>';
+        $html .= '<option value="#f39c12" style="background:#f39c12;color:white">' . $this->getLang('color_orange') . '</option>';
+        $html .= '<option value="#9b59b6" style="background:#9b59b6;color:white">' . $this->getLang('color_purple') . '</option>';
+        $html .= '<option value="#e91e63" style="background:#e91e63;color:white">' . $this->getLang('color_pink') . '</option>';
+        $html .= '<option value="#1abc9c" style="background:#1abc9c;color:white">' . $this->getLang('color_teal') . '</option>';
+        $html .= '<option value="custom">' . $this->getLang('color_custom') . '</option>';
         $html .= '</select>';
         $html .= '<input type="color" id="event-color-custom-' . $calId . '" class="color-picker-input color-picker-compact" value="#3498db" onchange="updateColorFromPicker(\'' . $calId . '\')">';
         $html .= '</div>';
@@ -1877,14 +1883,14 @@ class syntax_plugin_calendar extends DokuWiki_Syntax_Plugin {
         $html .= '<div class="form-field form-field-checkbox form-field-checkbox-compact">';
         $html .= '<label class="checkbox-label checkbox-label-compact">';
         $html .= '<input type="checkbox" id="event-is-task-' . $calId . '" name="isTask" class="task-toggle">';
-        $html .= '<span>📋 This is a task (can be checked off)</span>';
+        $html .= '<span>' . $this->getLang('task_label') . '</span>';
         $html .= '</label>';
         $html .= '</div>';
         
         // Action buttons
         $html .= '<div class="dialog-actions-sleek">';
-        $html .= '<button type="button" class="btn-sleek btn-cancel-sleek" onclick="closeEventDialog(\'' . $calId . '\')">Cancel</button>';
-        $html .= '<button type="submit" class="btn-sleek btn-save-sleek">💾 Save</button>';
+        $html .= '<button type="button" class="btn-sleek btn-cancel-sleek" onclick="closeEventDialog(\'' . $calId . '\')">' . $this->getLang('btn_cancel') . '</button>';
+        $html .= '<button type="submit" class="btn-sleek btn-save-sleek">' . $this->getLang('btn_save') . '</button>';
         $html .= '</div>';
         
         $html .= '</form>';
@@ -2242,7 +2248,7 @@ class syntax_plugin_calendar extends DokuWiki_Syntax_Plugin {
      */
     private function renderSidebarWidget($events, $namespace, $calId, $themeOverride = null) {
         if (empty($events)) {
-            return '<div style="width:200px; padding:12px; text-align:center; color:#999; font-size:11px;">No events this week</div>';
+            return '<div style="width:200px; padding:12px; text-align:center; color:#999; font-size:11px;">' . $this->getLang('no_events_week') . '</div>';
         }
         
         // Get important namespaces from config
@@ -2394,6 +2400,9 @@ class syntax_plugin_calendar extends DokuWiki_Syntax_Plugin {
             --tomorrow-bg-light: ' . $themeStyles['tomorrow_bg_light'] . ';
         }
         </style>';
+        
+        // Embed language strings for JavaScript
+        $html .= '<script type="application/json" id="calendar-lang-' . $calId . '">' . json_encode($this->getJsLangStrings()) . '</script>';
         
         // Add sparkle effect for pink theme
         if ($theme === 'pink') {
@@ -2762,7 +2771,7 @@ class syntax_plugin_calendar extends DokuWiki_Syntax_Plugin {
         
         $html .= '<div style="background:' . $addBtnBg . '; padding:0; margin:0; height:12px; line-height:10px; text-align:center; cursor:pointer; border-top:1px solid rgba(0, 0, 0, 0.1); border-bottom:1px solid rgba(0, 0, 0, 0.1); box-shadow:' . $addBtnShadow . '; transition:all 0.2s;" onclick="openAddEvent(\'' . $calId . '\', \'' . $namespace . '\', \'' . $todayStr . '\');" onmouseover="this.style.background=\'' . $addBtnHover . '\'; this.style.boxShadow=\'' . $addBtnHoverShadow . '\';" onmouseout="this.style.background=\'' . $addBtnBg . '\'; this.style.boxShadow=\'' . $addBtnShadow . '\';">';
         $addBtnTextShadow = ($theme === 'pink') ? '0 0 3px ' . $addBtnTextColor : 'none';
-        $html .= '<span style="color:' . $addBtnTextColor . '; font-size:8px; font-weight:700; letter-spacing:0.4px; font-family:system-ui, sans-serif; text-shadow:' . $addBtnTextShadow . '; position:relative; top:-1px;">+ ADD EVENT</span>';
+        $html .= '<span style="color:' . $addBtnTextColor . '; font-size:8px; font-weight:700; letter-spacing:0.4px; font-family:system-ui, sans-serif; text-shadow:' . $addBtnTextShadow . '; position:relative; top:-1px;">' . $this->getLang('add_event_short') . '</span>';
         $html .= '</div>';
         
         // Week grid (7 cells)
@@ -2825,22 +2834,22 @@ class syntax_plugin_calendar extends DokuWiki_Syntax_Plugin {
         
         // Today section
         if (!empty($todayEvents)) {
-            $html .= $this->renderSidebarSection('Today', $todayEvents, $todayColor, $calId, $themeStyles, $theme, $importantNsList);
+            $html .= $this->renderSidebarSection($this->getLang('itinerary_today'), $todayEvents, $todayColor, $calId, $themeStyles, $theme, $importantNsList);
         }
         
         // Tomorrow section
         if (!empty($tomorrowEvents)) {
-            $html .= $this->renderSidebarSection('Tomorrow', $tomorrowEvents, $tomorrowColor, $calId, $themeStyles, $theme, $importantNsList);
+            $html .= $this->renderSidebarSection($this->getLang('itinerary_tomorrow'), $tomorrowEvents, $tomorrowColor, $calId, $themeStyles, $theme, $importantNsList);
         }
         
         // Important events section
         if (!empty($importantEvents)) {
-            $html .= $this->renderSidebarSection('Important Events', $importantEvents, $importantColor, $calId, $themeStyles, $theme, $importantNsList);
+            $html .= $this->renderSidebarSection($this->getLang('itinerary_important'), $importantEvents, $importantColor, $calId, $themeStyles, $theme, $importantNsList);
         }
         
         // Empty state if no itinerary items
         if (!$hasItinerary) {
-            $html .= '<div style="padding:8px; text-align:center; color:' . $themeStyles['text_dim'] . '; font-size:10px; font-family:system-ui, sans-serif;">No upcoming events</div>';
+            $html .= '<div style="padding:8px; text-align:center; color:' . $themeStyles['text_dim'] . '; font-size:10px; font-family:system-ui, sans-serif;">' . $this->getLang('no_upcoming_events') . '</div>';
         }
         
         $html .= '</div>'; // Close itinerary-content
@@ -3831,5 +3840,76 @@ class syntax_plugin_calendar extends DokuWiki_Syntax_Plugin {
             return trim(file_get_contents($configFile)) === 'yes';
         }
         return false; // Default to expanded
+    }
+    
+    /**
+     * Get language strings needed by JavaScript
+     */
+    private function getJsLangStrings() {
+        return [
+            // Month names (full)
+            'month_january' => $this->getLang('month_january'),
+            'month_february' => $this->getLang('month_february'),
+            'month_march' => $this->getLang('month_march'),
+            'month_april' => $this->getLang('month_april'),
+            'month_may' => $this->getLang('month_may'),
+            'month_june' => $this->getLang('month_june'),
+            'month_july' => $this->getLang('month_july'),
+            'month_august' => $this->getLang('month_august'),
+            'month_september' => $this->getLang('month_september'),
+            'month_october' => $this->getLang('month_october'),
+            'month_november' => $this->getLang('month_november'),
+            'month_december' => $this->getLang('month_december'),
+            
+            // Month names (short)
+            'month_jan' => $this->getLang('month_jan'),
+            'month_feb' => $this->getLang('month_feb'),
+            'month_mar' => $this->getLang('month_mar'),
+            'month_apr' => $this->getLang('month_apr'),
+            'month_may_short' => $this->getLang('month_may_short'),
+            'month_jun' => $this->getLang('month_jun'),
+            'month_jul' => $this->getLang('month_jul'),
+            'month_aug' => $this->getLang('month_aug'),
+            'month_sep' => $this->getLang('month_sep'),
+            'month_oct' => $this->getLang('month_oct'),
+            'month_nov' => $this->getLang('month_nov'),
+            'month_dec' => $this->getLang('month_dec'),
+            
+            // Day names (short)
+            'day_sun' => $this->getLang('day_sun'),
+            'day_mon' => $this->getLang('day_mon'),
+            'day_tue' => $this->getLang('day_tue'),
+            'day_wed' => $this->getLang('day_wed'),
+            'day_thu' => $this->getLang('day_thu'),
+            'day_fri' => $this->getLang('day_fri'),
+            'day_sat' => $this->getLang('day_sat'),
+            
+            // UI labels
+            'events_header' => $this->getLang('events_header'),
+            'events_for_date' => $this->getLang('events_for_date'),
+            'past_events' => $this->getLang('past_events'),
+            'no_events_day' => $this->getLang('no_events_day'),
+            'no_events_month' => $this->getLang('no_events_month'),
+            'add_btn' => $this->getLang('add_btn'),
+            'add_event_btn' => $this->getLang('add_event_btn'),
+            'click_to_jump' => $this->getLang('click_to_jump'),
+            
+            // Dialog titles
+            'dialog_add_event' => $this->getLang('dialog_add_event'),
+            'dialog_edit_event' => $this->getLang('dialog_edit_event'),
+            
+            // Confirmations
+            'delete_event_confirm' => $this->getLang('delete_event_confirm'),
+            
+            // Badges
+            'badge_past_due' => $this->getLang('badge_past_due'),
+            'badge_today' => $this->getLang('badge_today'),
+            
+            // Tooltips
+            'important_tooltip' => $this->getLang('important_tooltip'),
+            
+            // Default text
+            'default_event' => $this->getLang('default_event'),
+        ];
     }
 }

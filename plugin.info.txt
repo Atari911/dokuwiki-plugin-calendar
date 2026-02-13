@@ -5,4 +5,4 @@ date     2026-02-13
 name     Calendar Plugin - Matrix Edition
 desc     Matrix-themed calendar with sidebar widget, Outlook sync, and system monitoring
 url      https://www.dokuwiki.org/plugin:calendar
-version  6.9.9
+version  6.11.4

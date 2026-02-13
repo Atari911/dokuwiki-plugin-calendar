@@ -33,6 +33,65 @@ if (typeof DOKU_BASE === 'undefined') {
 // Shorthand for convenience  
 var DOKU_BASE = window.DOKU_BASE || '/';
 
+// Helper: Get localized language strings for a calendar instance
+// Falls back to English defaults if not found
+function getCalendarLang(calId) {
+    // Try to find lang data for this specific calendar
+    let langEl = document.getElementById('calendar-lang-' + calId);
+    
+    // If not found, try to find any calendar lang data on page
+    if (!langEl) {
+        langEl = document.querySelector('[id^="calendar-lang-"]');
+    }
+    
+    if (langEl) {
+        try {
+            return JSON.parse(langEl.textContent);
+        } catch (e) {
+            console.error('Failed to parse calendar language data:', e);
+        }
+    }
+    
+    // Return English defaults as fallback
+    return {
+        month_january: 'January', month_february: 'February', month_march: 'March',
+        month_april: 'April', month_may: 'May', month_june: 'June',
+        month_july: 'July', month_august: 'August', month_september: 'September',
+        month_october: 'October', month_november: 'November', month_december: 'December',
+        month_jan: 'Jan', month_feb: 'Feb', month_mar: 'Mar', month_apr: 'Apr',
+        month_may_short: 'May', month_jun: 'Jun', month_jul: 'Jul', month_aug: 'Aug',
+        month_sep: 'Sep', month_oct: 'Oct', month_nov: 'Nov', month_dec: 'Dec',
+        day_sun: 'Sun', day_mon: 'Mon', day_tue: 'Tue', day_wed: 'Wed',
+        day_thu: 'Thu', day_fri: 'Fri', day_sat: 'Sat',
+        events_header: 'Events', events_for_date: 'Events - %s',
+        past_events: 'Past Events (%d)', no_events_day: 'No events on this day',
+        add_btn: '+ Add', add_event_btn: '+ Add Event',
+        dialog_add_event: 'Add Event', dialog_edit_event: 'Edit Event',
+        delete_event_confirm: 'Delete this event?',
+        important_tooltip: 'Important', default_event: 'Event'
+    };
+}
+
+// Helper: Get month names array from lang strings
+function getMonthNames(lang) {
+    return [
+        lang.month_january, lang.month_february, lang.month_march,
+        lang.month_april, lang.month_may, lang.month_june,
+        lang.month_july, lang.month_august, lang.month_september,
+        lang.month_october, lang.month_november, lang.month_december
+    ];
+}
+
+// Helper: Get short month names array from lang strings
+function getMonthNamesShort(lang) {
+    return [
+        lang.month_jan, lang.month_feb, lang.month_mar,
+        lang.month_apr, lang.month_may_short, lang.month_jun,
+        lang.month_jul, lang.month_aug, lang.month_sep,
+        lang.month_oct, lang.month_nov, lang.month_dec
+    ];
+}
+
 // Helper: propagate CSS variables from a calendar container to a target element
 // This is needed for dialogs/popups that use position:fixed (they inherit CSS vars
 // from DOM parents per spec, but some DokuWiki templates break this inheritance)
@@ -185,8 +244,8 @@ window.jumpToSelectedMonth = function(calId, namespace) {
 window.rebuildCalendar = function(calId, year, month, events, namespace) {
     
     const container = document.getElementById(calId);
-    const monthNames = ['January', 'February', 'March', 'April', 'May', 'June',
-                       'July', 'August', 'September', 'October', 'November', 'December'];
+    const lang = getCalendarLang(calId);
+    const monthNames = getMonthNames(lang);
     
     // Get theme data from container
     const theme = container.dataset.theme || 'matrix';
@@ -474,13 +533,15 @@ window.rebuildCalendar = function(calId, year, month, events, namespace) {
     
     // Update title
     const title = container.querySelector('#eventlist-title-' + calId);
-    title.textContent = 'Events';
+    title.textContent = lang.events_header;
 };
 
 // Render event list from data
 window.renderEventListFromData = function(events, calId, namespace, year, month) {
+    const lang = getCalendarLang(calId);
+    
     if (!events || Object.keys(events).length === 0) {
-        return '<p class="no-events-msg">No events this month</p>';
+        return '<p class="no-events-msg">' + (lang.no_events_month || 'No events this month') + '</p>';
     }
     
     // Get theme data from container
@@ -594,10 +655,11 @@ window.renderEventListFromData = function(events, calId, namespace, year, month)
     
     // Add collapsible past events section if any exist
     if (pastCount > 0) {
+        const pastEventsText = lang.past_events ? lang.past_events.replace('%d', pastCount) : 'Past Events (' + pastCount + ')';
         html += '<div class="past-events-section">';
         html += '<div class="past-events-toggle" onclick="togglePastEvents(\'' + calId + '\')">';
         html += '<span class="past-events-arrow" id="past-arrow-' + calId + '">▶</span> ';
-        html += '<span class="past-events-label">Past Events (' + pastCount + ')</span>';
+        html += '<span class="past-events-label">' + pastEventsText + '</span>';
         html += '</div>';
         html += '<div class="past-events-content" id="past-events-' + calId + '" style="display:none;">';
         html += pastHtml;
@@ -611,7 +673,7 @@ window.renderEventListFromData = function(events, calId, namespace, year, month)
     
     
     if (!html) {
-        return '<p class="no-events-msg">No events this month</p>';
+        return '<p class="no-events-msg">' + (lang.no_events_month || 'No events this month') + '</p>';
     }
     
     return html;
@@ -619,6 +681,8 @@ window.renderEventListFromData = function(events, calId, namespace, year, month)
 
 // Show day popup with events when clicking a date
 window.showDayPopup = function(calId, date, namespace) {
+    const lang = getCalendarLang(calId);
+    
     // Get events for this calendar
     const eventsDataEl = document.getElementById('events-data-' + calId);
     let events = {};
@@ -777,7 +841,7 @@ window.showDayPopup = function(calId, date, namespace) {
     html += '</div>';
     
     html += '<div class="day-popup-footer">';
-    html += '<button class="btn-add-event" onclick="openAddEvent(\'' + calId + '\', \'' + namespace + '\', \'' + date + '\'); closeDayPopup(\'' + calId + '\')">+ Add Event</button>';
+    html += '<button class="btn-add-event" onclick="openAddEvent(\'' + calId + '\', \'' + namespace + '\', \'' + date + '\'); closeDayPopup(\'' + calId + '\')">' + lang.add_event_btn + '</button>';
     html += '</div>';
     
     html += '</div>';
@@ -856,6 +920,8 @@ window.closeDayPopup = function(calId) {
 
 // Show events for a specific day (for event list panel)
 window.showDayEvents = function(calId, date, namespace) {
+    const lang = getCalendarLang(calId);
+    
     const params = new URLSearchParams({
         call: 'plugin_calendar',
         action: 'load_month',
@@ -882,19 +948,19 @@ window.showDayEvents = function(calId, date, namespace) {
             const title = document.getElementById('eventlist-title-' + calId);
             
             const dateObj = new Date(date + 'T00:00:00');
-            const displayDate = dateObj.toLocaleDateString('en-US', { 
+            const displayDate = dateObj.toLocaleDateString(undefined, { 
                 weekday: 'short', 
                 month: 'short', 
                 day: 'numeric' 
             });
             
-            title.textContent = 'Events - ' + displayDate;
+            title.textContent = lang.events_for_date ? lang.events_for_date.replace('%s', displayDate) : 'Events - ' + displayDate;
             
             // Filter events for this day
             const dayEvents = events[date] || [];
             
             if (dayEvents.length === 0) {
-                eventList.innerHTML = '<p class="no-events-msg">No events on this day<br><button class="add-event-compact" onclick="openAddEvent(\'' + calId + '\', \'' + namespace + '\', \'' + date + '\')">+ Add Event</button></p>';
+                eventList.innerHTML = '<p class="no-events-msg">' + lang.no_events_day + '<br><button class="add-event-compact" onclick="openAddEvent(\'' + calId + '\', \'' + namespace + '\', \'' + date + '\')">' + lang.add_event_btn + '</button></p>';
             } else {
                 let html = '';
                 dayEvents.forEach(event => {
@@ -909,6 +975,8 @@ window.showDayEvents = function(calId, date, namespace) {
 
 // Render a single event item
 window.renderEventItem = function(event, date, calId, namespace) {
+    const lang = getCalendarLang(calId);
+    
     // Get theme data from container
     const container = document.getElementById(calId);
     let themeStyles = {};
@@ -1016,7 +1084,7 @@ window.renderEventItem = function(event, date, calId, namespace) {
     html += '<div class="event-title-row">';
     // Add star for important namespace events
     if (isImportantNs) {
-        html += '<span class="event-important-star" title="Important">⭐</span> ';
+        html += '<span class="event-important-star" title="' + lang.important_tooltip + '">⭐</span> ';
     }
     html += '<span class="event-title-compact">' + escapeHtml(event.title) + '</span>';
     html += '</div>';
@@ -1030,9 +1098,9 @@ window.renderEventItem = function(event, date, calId, namespace) {
         }
         // Add PAST DUE or TODAY badge
         if (isPastDue) {
-            html += ' <span class="event-pastdue-badge" style="background:var(--pastdue-color, #e74c3c) !important; color:white !important; -webkit-text-fill-color:white !important;">PAST DUE</span>';
+            html += ' <span class="event-pastdue-badge" style="background:var(--pastdue-color, #e74c3c) !important; color:white !important; -webkit-text-fill-color:white !important;">' + (lang.badge_past_due || 'PAST DUE') + '</span>';
         } else if (isToday) {
-            html += ' <span class="event-today-badge" style="background:var(--border-main, #9b59b6) !important; color:var(--background-site, white) !important; -webkit-text-fill-color:var(--background-site, white) !important;">TODAY</span>';
+            html += ' <span class="event-today-badge" style="background:var(--border-main, #9b59b6) !important; color:var(--background-site, white) !important; -webkit-text-fill-color:var(--background-site, white) !important;">' + (lang.badge_today || 'TODAY') + '</span>';
         }
         // Add namespace badge
         if (eventNamespace) {
@@ -1246,6 +1314,7 @@ window.renderDescription = function(description) {
 
 // Open add event dialog
 window.openAddEvent = function(calId, namespace, date) {
+    const lang = getCalendarLang(calId);
     const dialog = document.getElementById('dialog-' + calId);
     const form = document.getElementById('eventform-' + calId);
     const title = document.getElementById('dialog-title-' + calId);
@@ -1334,7 +1403,7 @@ window.openAddEvent = function(calId, namespace, date) {
     initNamespaceSearch(calId);
     
     // Set title
-    title.textContent = 'Add Event';
+    title.textContent = lang.dialog_add_event;
     
     // Show dialog
     dialog.style.display = 'flex';
@@ -1351,6 +1420,8 @@ window.openAddEvent = function(calId, namespace, date) {
 
 // Edit event
 window.editEvent = function(calId, eventId, date, namespace) {
+    const lang = getCalendarLang(calId);
+    
     const params = new URLSearchParams({
         call: 'plugin_calendar',
         action: 'get_event',
@@ -1428,7 +1499,7 @@ window.editEvent = function(calId, eventId, date, namespace) {
                 }
             }
             
-            title.textContent = 'Edit Event';
+            title.textContent = lang.dialog_edit_event;
             dialog.style.display = 'flex';
             
             // Propagate CSS vars to dialog
@@ -1440,7 +1511,8 @@ window.editEvent = function(calId, eventId, date, namespace) {
 
 // Delete event
 window.deleteEvent = function(calId, eventId, date, namespace) {
-    if (!confirm('Delete this event?')) return;
+    const lang = getCalendarLang(calId);
+    if (!confirm(lang.delete_event_confirm)) return;
     
     const params = new URLSearchParams({
         call: 'plugin_calendar',
@@ -1895,21 +1967,21 @@ window.navEventPanel = function(calId, year, month, namespace) {
 // Rebuild event panel only
 window.rebuildEventPanel = function(calId, year, month, events, namespace) {
     const container = document.getElementById(calId);
-    const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-                       'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    const lang = getCalendarLang(calId);
+    const monthNames = getMonthNamesShort(lang);
     
     // Update month title in new compact header
     const monthTitle = container.querySelector('.panel-month-title');
     if (monthTitle) {
         monthTitle.textContent = monthNames[month - 1] + ' ' + year;
         monthTitle.setAttribute('onclick', `openMonthPickerPanel('${calId}', ${year}, ${month}, '${namespace}')`);
-        monthTitle.setAttribute('title', 'Click to jump to month');
+        monthTitle.setAttribute('title', lang.click_to_jump || 'Click to jump to month');
     }
     
     // Fallback: Update old header format if exists
     const oldHeader = container.querySelector('.panel-standalone-header h3, .calendar-month-picker');
     if (oldHeader && !monthTitle) {
-        oldHeader.textContent = monthNames[month - 1] + ' ' + year + ' Events';
+        oldHeader.textContent = monthNames[month - 1] + ' ' + year + ' ' + lang.events_header;
         oldHeader.setAttribute('onclick', `openMonthPickerPanel('${calId}', ${year}, ${month}, '${namespace}')`);
     }
     
