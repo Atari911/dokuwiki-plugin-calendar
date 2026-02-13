@@ -124,8 +124,18 @@ class syntax_plugin_calendar extends DokuWiki_Syntax_Plugin {
             $nextYear++;
         }
         
+        // Get important namespaces from config for highlighting
+        $configFile = DOKU_PLUGIN . 'calendar/sync_config.php';
+        $importantNsList = ['important']; // default
+        if (file_exists($configFile)) {
+            $config = include $configFile;
+            if (isset($config['important_namespaces']) && !empty($config['important_namespaces'])) {
+                $importantNsList = array_map('trim', explode(',', $config['important_namespaces']));
+            }
+        }
+        
         // Container - all styling via CSS variables
-        $html = '<div class="calendar-compact-container ' . $themeClass . '" id="' . $calId . '" data-namespace="' . htmlspecialchars($namespace) . '" data-original-namespace="' . htmlspecialchars($namespace) . '" data-year="' . $year . '" data-month="' . $month . '" data-theme="' . $theme . '" data-theme-styles="' . htmlspecialchars(json_encode($themeStyles)) . '">';
+        $html = '<div class="calendar-compact-container ' . $themeClass . '" id="' . $calId . '" data-namespace="' . htmlspecialchars($namespace) . '" data-original-namespace="' . htmlspecialchars($namespace) . '" data-year="' . $year . '" data-month="' . $month . '" data-theme="' . $theme . '" data-theme-styles="' . htmlspecialchars(json_encode($themeStyles)) . '" data-important-namespaces="' . htmlspecialchars(json_encode($importantNsList)) . '">';
         
         // Inject CSS variables for this calendar instance - all theming flows from here
         $html .= '<style>
@@ -289,15 +299,36 @@ class syntax_plugin_calendar extends DokuWiki_Syntax_Plugin {
                             $isFirstDay = isset($evt['_is_first_day']) ? $evt['_is_first_day'] : true;
                             $isLastDay = isset($evt['_is_last_day']) ? $evt['_is_last_day'] : true;
                             
+                            // Check if this event is from an important namespace
+                            $evtNs = isset($evt['namespace']) ? $evt['namespace'] : '';
+                            if (!$evtNs && isset($evt['_namespace'])) {
+                                $evtNs = $evt['_namespace'];
+                            }
+                            $isImportantEvent = false;
+                            foreach ($importantNsList as $impNs) {
+                                if ($evtNs === $impNs || strpos($evtNs, $impNs . ':') === 0) {
+                                    $isImportantEvent = true;
+                                    break;
+                                }
+                            }
+                            
                             $barClass = empty($eventTime) ? 'event-bar-no-time' : 'event-bar-timed';
                             
                             // Add classes for multi-day spanning
                             if (!$isFirstDay) $barClass .= ' event-bar-continues';
                             if (!$isLastDay) $barClass .= ' event-bar-continuing';
+                            if ($isImportantEvent) {
+                                $barClass .= ' event-bar-important';
+                                if ($isFirstDay) {
+                                    $barClass .= ' event-bar-has-star';
+                                }
+                            }
+                            
+                            $titlePrefix = $isImportantEvent ? '⭐ ' : '';
                             
                             $html .= '<span class="event-bar ' . $barClass . '" ';
                             $html .= 'style="background: ' . $eventColor . ';" ';
-                            $html .= 'title="' . $eventTitle . ($eventTime ? ' @ ' . $eventTime : '') . '" ';
+                            $html .= 'title="' . $titlePrefix . $eventTitle . ($eventTime ? ' @ ' . $eventTime : '') . '" ';
                             $html .= 'onclick="event.stopPropagation(); highlightEvent(\'' . $calId . '\', \'' . $eventId . '\', \'' . $originalDate . '\');">';
                             $html .= '</span>';
                         }
@@ -328,6 +359,7 @@ class syntax_plugin_calendar extends DokuWiki_Syntax_Plugin {
         $html .= '<div class="event-search-container-inline">';
         $html .= '<input type="text" class="event-search-input-inline" id="event-search-' . $calId . '" placeholder="🔍 Search..." oninput="filterEvents(\'' . $calId . '\', this.value)">';
         $html .= '<button class="event-search-clear-inline" id="search-clear-' . $calId . '" onclick="clearEventSearch(\'' . $calId . '\')" style="display:none;">✕</button>';
+        $html .= '<button class="event-search-mode-inline" id="search-mode-' . $calId . '" onclick="toggleSearchMode(\'' . $calId . '\', \'' . $namespace . '\')" title="Search this month only">📅</button>';
         $html .= '</div>';
         
         $html .= '<button class="add-event-compact" onclick="openAddEvent(\'' . $calId . '\', \'' . $namespace . '\')">+ Add</button>';
@@ -359,6 +391,18 @@ class syntax_plugin_calendar extends DokuWiki_Syntax_Plugin {
         if ($themeStyles === null) {
             $theme = $this->getSidebarTheme();
             $themeStyles = $this->getSidebarThemeStyles($theme);
+        } else {
+            $theme = $this->getSidebarTheme();
+        }
+        
+        // Get important namespaces from config
+        $configFile = DOKU_PLUGIN . 'calendar/sync_config.php';
+        $importantNsList = ['important']; // default
+        if (file_exists($configFile)) {
+            $config = include $configFile;
+            if (isset($config['important_namespaces']) && !empty($config['important_namespaces'])) {
+                $importantNsList = array_map('trim', explode(',', $config['important_namespaces']));
+            }
         }
         
         // Check for time conflicts
@@ -499,12 +543,30 @@ class syntax_plugin_calendar extends DokuWiki_Syntax_Plugin {
                 $pastDueClass = $isPastDue ? ' event-pastdue' : '';
                 $firstFutureAttr = ($firstFutureEventId === $eventId) ? ' data-first-future="true"' : '';
                 
+                // Check if this is an important namespace event
+                $eventNamespace = isset($event['namespace']) ? $event['namespace'] : '';
+                if (!$eventNamespace && isset($event['_namespace'])) {
+                    $eventNamespace = $event['_namespace'];
+                }
+                $isImportantNs = false;
+                foreach ($importantNsList as $impNs) {
+                    if ($eventNamespace === $impNs || strpos($eventNamespace, $impNs . ':') === 0) {
+                        $isImportantNs = true;
+                        break;
+                    }
+                }
+                $importantClass = $isImportantNs ? ' event-important' : '';
+                
                 // For all themes: use CSS variables, only keep border-left-color as inline
                 $pastClickHandler = ($isPast && !$isPastDue) ? ' onclick="togglePastEventExpand(this)"' : '';
-                $eventHtml = '<div class="event-compact-item' . $completedClass . $pastClass . $pastDueClass . '" data-event-id="' . $eventId . '" data-date="' . $dateKey . '" style="border-left-color: ' . $color . ' !important;"' . $pastClickHandler . $firstFutureAttr . '>';
+                $eventHtml = '<div class="event-compact-item' . $completedClass . $pastClass . $pastDueClass . $importantClass . '" data-event-id="' . $eventId . '" data-date="' . $dateKey . '" style="border-left-color: ' . $color . ' !important;"' . $pastClickHandler . $firstFutureAttr . '>';
                 $eventHtml .= '<div class="event-info">';
                 
                 $eventHtml .= '<div class="event-title-row">';
+                // Add star for important namespace events
+                if ($isImportantNs) {
+                    $eventHtml .= '<span class="event-important-star" title="Important">⭐</span> ';
+                }
                 $eventHtml .= '<span class="event-title-compact">' . $title . '</span>';
                 $eventHtml .= '</div>';
                 
@@ -808,7 +870,17 @@ class syntax_plugin_calendar extends DokuWiki_Syntax_Plugin {
         // Determine button text color based on theme
         $btnTextColor = ($theme === 'professional') ? '#fff' : $themeStyles['bg'];
         
-        $html = '<div class="event-panel-standalone" id="' . $calId . '" data-height="' . htmlspecialchars($height) . '" data-namespace="' . htmlspecialchars($namespace) . '" data-original-namespace="' . htmlspecialchars($namespace) . '" data-theme="' . $theme . '" data-theme-styles="' . htmlspecialchars(json_encode($themeStyles)) . '">';
+        // Get important namespaces from config for highlighting
+        $configFile = DOKU_PLUGIN . 'calendar/sync_config.php';
+        $importantNsList = ['important']; // default
+        if (file_exists($configFile)) {
+            $config = include $configFile;
+            if (isset($config['important_namespaces']) && !empty($config['important_namespaces'])) {
+                $importantNsList = array_map('trim', explode(',', $config['important_namespaces']));
+            }
+        }
+        
+        $html = '<div class="event-panel-standalone" id="' . $calId . '" data-height="' . htmlspecialchars($height) . '" data-namespace="' . htmlspecialchars($namespace) . '" data-original-namespace="' . htmlspecialchars($namespace) . '" data-theme="' . $theme . '" data-theme-styles="' . htmlspecialchars(json_encode($themeStyles)) . '" data-important-namespaces="' . htmlspecialchars(json_encode($importantNsList)) . '">';
         
         // Inject CSS variables for this panel instance - same as main calendar
         $html .= '<style>
@@ -884,8 +956,9 @@ class syntax_plugin_calendar extends DokuWiki_Syntax_Plugin {
         // Row 2: Search and add button
         $html .= '<div class="panel-header-row-2">';
         $html .= '<div class="panel-search-box">';
-        $html .= '<input type="text" class="panel-search-input" id="event-search-' . $calId . '" placeholder="Search events..." oninput="filterEvents(\'' . $calId . '\', this.value)">';
+        $html .= '<input type="text" class="panel-search-input" id="event-search-' . $calId . '" placeholder="Search this month..." oninput="filterEvents(\'' . $calId . '\', this.value)">';
         $html .= '<button class="panel-search-clear" id="search-clear-' . $calId . '" onclick="clearEventSearch(\'' . $calId . '\')" style="display:none;">✕</button>';
+        $html .= '<button class="panel-search-mode" id="search-mode-' . $calId . '" onclick="toggleSearchMode(\'' . $calId . '\', \'' . $namespace . '\')" title="Search this month only">📅</button>';
         $html .= '</div>';
         $html .= '<button class="panel-add-btn" onclick="openAddEventPanel(\'' . $calId . '\', \'' . $namespace . '\')">+ Add</button>';
         $html .= '</div>';
@@ -1193,65 +1266,59 @@ class syntax_plugin_calendar extends DokuWiki_Syntax_Plugin {
     }
     setInterval(updateClock, 1000);
     
-    // Fetch weather (geolocation-based)
+    // Fetch weather - uses default location, click weather to get local
+    var userLocationGranted = false;
+    var userLat = 38.5816;  // Sacramento default
+    var userLon = -121.4944;
+    
+    function fetchWeatherData(lat, lon) {
+        fetch("https://api.open-meteo.com/v1/forecast?latitude=" + lat + "&longitude=" + lon + "&current_weather=true&temperature_unit=fahrenheit")
+            .then(response => response.json())
+            .then(data => {
+                if (data.current_weather) {
+                    const temp = Math.round(data.current_weather.temperature);
+                    const weatherCode = data.current_weather.weathercode;
+                    const icon = getWeatherIcon(weatherCode);
+                    const iconEl = document.getElementById("weather-icon-' . $calId . '");
+                    const tempEl = document.getElementById("weather-temp-' . $calId . '");
+                    if (iconEl) iconEl.textContent = icon;
+                    if (tempEl) tempEl.innerHTML = temp + "&deg;";
+                }
+            })
+            .catch(error => {
+                console.log("Weather fetch error:", error);
+            });
+    }
+    
     function updateWeather() {
+        fetchWeatherData(userLat, userLon);
+    }
+    
+    // Allow user to click weather to get local weather (requires user gesture)
+    function requestLocalWeather() {
+        if (userLocationGranted) return; // Already have permission
+        
         if ("geolocation" in navigator) {
             navigator.geolocation.getCurrentPosition(function(position) {
-                const lat = position.coords.latitude;
-                const lon = position.coords.longitude;
-                
-                // Use Open-Meteo API (free, no key required)
-                fetch(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current_weather=true&temperature_unit=fahrenheit`)
-                    .then(response => response.json())
-                    .then(data => {
-                        if (data.current_weather) {
-                            const temp = Math.round(data.current_weather.temperature);
-                            const weatherCode = data.current_weather.weathercode;
-                            const icon = getWeatherIcon(weatherCode);
-                            const iconEl = document.getElementById("weather-icon-' . $calId . '");
-                            const tempEl = document.getElementById("weather-temp-' . $calId . '");
-                            if (iconEl) iconEl.textContent = icon;
-                            if (tempEl) tempEl.innerHTML = temp + "&deg;";
-                        }
-                    })
-                    .catch(error => {
-                        console.log("Weather fetch error:", error);
-                    });
+                userLat = position.coords.latitude;
+                userLon = position.coords.longitude;
+                userLocationGranted = true;
+                fetchWeatherData(userLat, userLon);
             }, function(error) {
-                // If geolocation fails, use Sacramento as default
-                fetch("https://api.open-meteo.com/v1/forecast?latitude=38.5816&longitude=-121.4944&current_weather=true&temperature_unit=fahrenheit")
-                    .then(response => response.json())
-                    .then(data => {
-                        if (data.current_weather) {
-                            const temp = Math.round(data.current_weather.temperature);
-                            const weatherCode = data.current_weather.weathercode;
-                            const icon = getWeatherIcon(weatherCode);
-                            const iconEl = document.getElementById("weather-icon-' . $calId . '");
-                            const tempEl = document.getElementById("weather-temp-' . $calId . '");
-                            if (iconEl) iconEl.textContent = icon;
-                            if (tempEl) tempEl.innerHTML = temp + "&deg;";
-                        }
-                    })
-                    .catch(err => console.log("Weather error:", err));
+                console.log("Geolocation denied or unavailable, using default location");
             });
-        } else {
-            // No geolocation, use Sacramento
-            fetch("https://api.open-meteo.com/v1/forecast?latitude=38.5816&longitude=-121.4944&current_weather=true&temperature_unit=fahrenheit")
-                .then(response => response.json())
-                .then(data => {
-                    if (data.current_weather) {
-                        const temp = Math.round(data.current_weather.temperature);
-                        const weatherCode = data.current_weather.weathercode;
-                        const icon = getWeatherIcon(weatherCode);
-                        const iconEl = document.getElementById("weather-icon-' . $calId . '");
-                        const tempEl = document.getElementById("weather-temp-' . $calId . '");
-                        if (iconEl) iconEl.textContent = icon;
-                        if (tempEl) tempEl.innerHTML = temp + "&deg;";
-                    }
-                })
-                .catch(err => console.log("Weather error:", err));
         }
     }
+    
+    // Add click handler to weather widget for local weather
+    setTimeout(function() {
+        var weatherEl = document.querySelector("#weather-icon-' . $calId . '");
+        if (weatherEl) {
+            weatherEl.style.cursor = "pointer";
+            weatherEl.title = "Click for local weather";
+            weatherEl.addEventListener("click", requestLocalWeather);
+        }
+    }, 100);
     
     // WMO Weather interpretation codes
     function getWeatherIcon(code) {
@@ -1645,26 +1712,100 @@ class syntax_plugin_calendar extends DokuWiki_Syntax_Plugin {
         $html .= '</div>';
         
         // Recurring options (shown when checkbox is checked)
-        $html .= '<div id="recurring-options-' . $calId . '" class="recurring-options" style="display:none;">';
+        $html .= '<div id="recurring-options-' . $calId . '" class="recurring-options" style="display:none; border:1px solid var(--border-color, #333); border-radius:4px; padding:8px; margin:4px 0; background:var(--background-alt, rgba(0,0,0,0.2));">';
         
-        $html .= '<div class="form-row-group">';
+        // Row 1: Repeat every [N] [period]
+        $html .= '<div class="form-row-group" style="margin-bottom:6px;">';
         
-        $html .= '<div class="form-field form-field-half">';
-        $html .= '<label class="field-label-compact">Repeat Every</label>';
-        $html .= '<select id="event-recurrence-type-' . $calId . '" name="recurrenceType" class="input-sleek input-compact">';
-        $html .= '<option value="daily">Daily</option>';
-        $html .= '<option value="weekly">Weekly</option>';
-        $html .= '<option value="monthly">Monthly</option>';
-        $html .= '<option value="yearly">Yearly</option>';
+        $html .= '<div class="form-field" style="flex:0 0 auto; min-width:0;">';
+        $html .= '<label class="field-label-compact">Repeat every</label>';
+        $html .= '<input type="number" id="event-recurrence-interval-' . $calId . '" name="recurrenceInterval" class="input-sleek input-compact" value="1" min="1" max="99" style="width:50px;">';
+        $html .= '</div>';
+        
+        $html .= '<div class="form-field" style="flex:1; min-width:0;">';
+        $html .= '<label class="field-label-compact">&nbsp;</label>';
+        $html .= '<select id="event-recurrence-type-' . $calId . '" name="recurrenceType" class="input-sleek input-compact" onchange="updateRecurrenceOptions(\'' . $calId . '\')">';
+        $html .= '<option value="daily">Day(s)</option>';
+        $html .= '<option value="weekly">Week(s)</option>';
+        $html .= '<option value="monthly">Month(s)</option>';
+        $html .= '<option value="yearly">Year(s)</option>';
         $html .= '</select>';
         $html .= '</div>';
         
-        $html .= '<div class="form-field form-field-half">';
-        $html .= '<label class="field-label-compact">Repeat Until</label>';
-        $html .= '<input type="date" id="event-recurrence-end-' . $calId . '" name="recurrenceEnd" class="input-sleek input-date input-compact" placeholder="Optional">';
+        $html .= '</div>'; // End row 1
+        
+        // Row 2: Weekly options - day of week checkboxes
+        $html .= '<div id="weekly-options-' . $calId . '" class="weekly-options" style="display:none; margin-bottom:6px;">';
+        $html .= '<label class="field-label-compact" style="display:block; margin-bottom:4px;">On these days:</label>';
+        $html .= '<div style="display:flex; flex-wrap:wrap; gap:2px;">';
+        $dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+        foreach ($dayNames as $idx => $day) {
+            $html .= '<label style="display:inline-flex; align-items:center; padding:2px 6px; background:var(--cell-bg, #1a1a1a); border:1px solid var(--border-color, #333); border-radius:3px; cursor:pointer; font-size:10px;">';
+            $html .= '<input type="checkbox" name="weekDays[]" value="' . $idx . '" style="margin-right:3px; width:12px; height:12px;">';
+            $html .= '<span>' . $day . '</span>';
+            $html .= '</label>';
+        }
+        $html .= '</div>';
+        $html .= '</div>'; // End weekly options
+        
+        // Row 3: Monthly options - day of month OR ordinal weekday
+        $html .= '<div id="monthly-options-' . $calId . '" class="monthly-options" style="display:none; margin-bottom:6px;">';
+        $html .= '<label class="field-label-compact" style="display:block; margin-bottom:4px;">Repeat on:</label>';
+        
+        // Radio: Day of month vs Ordinal weekday
+        $html .= '<div style="margin-bottom:6px;">';
+        $html .= '<label style="display:inline-flex; align-items:center; margin-right:12px; cursor:pointer; font-size:11px;">';
+        $html .= '<input type="radio" name="monthlyType" value="dayOfMonth" checked onchange="updateMonthlyType(\'' . $calId . '\')" style="margin-right:4px;">';
+        $html .= 'Day of month';
+        $html .= '</label>';
+        $html .= '<label style="display:inline-flex; align-items:center; cursor:pointer; font-size:11px;">';
+        $html .= '<input type="radio" name="monthlyType" value="ordinalWeekday" onchange="updateMonthlyType(\'' . $calId . '\')" style="margin-right:4px;">';
+        $html .= 'Weekday pattern';
+        $html .= '</label>';
         $html .= '</div>';
         
-        $html .= '</div>'; // End row
+        // Day of month input (shown by default)
+        $html .= '<div id="monthly-day-' . $calId . '" style="display:flex; align-items:center; gap:6px;">';
+        $html .= '<span style="font-size:11px;">Day</span>';
+        $html .= '<input type="number" id="event-month-day-' . $calId . '" name="monthDay" class="input-sleek input-compact" value="1" min="1" max="31" style="width:50px;">';
+        $html .= '<span style="font-size:10px; color:var(--text-dim, #666);">of each month</span>';
+        $html .= '</div>';
+        
+        // Ordinal weekday (hidden by default)
+        $html .= '<div id="monthly-ordinal-' . $calId . '" style="display:none;">';
+        $html .= '<div style="display:flex; align-items:center; gap:4px; flex-wrap:wrap;">';
+        $html .= '<select id="event-ordinal-' . $calId . '" name="ordinalWeek" class="input-sleek input-compact" style="width:auto;">';
+        $html .= '<option value="1">First</option>';
+        $html .= '<option value="2">Second</option>';
+        $html .= '<option value="3">Third</option>';
+        $html .= '<option value="4">Fourth</option>';
+        $html .= '<option value="5">Fifth</option>';
+        $html .= '<option value="-1">Last</option>';
+        $html .= '</select>';
+        $html .= '<select id="event-ordinal-day-' . $calId . '" name="ordinalDay" class="input-sleek input-compact" style="width:auto;">';
+        $html .= '<option value="0">Sunday</option>';
+        $html .= '<option value="1">Monday</option>';
+        $html .= '<option value="2">Tuesday</option>';
+        $html .= '<option value="3">Wednesday</option>';
+        $html .= '<option value="4">Thursday</option>';
+        $html .= '<option value="5">Friday</option>';
+        $html .= '<option value="6">Saturday</option>';
+        $html .= '</select>';
+        $html .= '<span style="font-size:10px; color:var(--text-dim, #666);">of each month</span>';
+        $html .= '</div>';
+        $html .= '</div>';
+        
+        $html .= '</div>'; // End monthly options
+        
+        // Row 4: End date
+        $html .= '<div class="form-row-group">';
+        $html .= '<div class="form-field">';
+        $html .= '<label class="field-label-compact">Repeat Until (optional)</label>';
+        $html .= '<input type="date" id="event-recurrence-end-' . $calId . '" name="recurrenceEnd" class="input-sleek input-date input-compact" placeholder="Optional">';
+        $html .= '<div style="font-size:9px; color:var(--text-dim, #666); margin-top:2px;">Leave empty for 1 year of events</div>';
+        $html .= '</div>';
+        $html .= '</div>'; // End row 4
+        
         $html .= '</div>'; // End recurring options
         
         // 5. TIME (Start & End) - COLOR (inline)
@@ -2461,62 +2602,55 @@ class syntax_plugin_calendar extends DokuWiki_Syntax_Plugin {
     }
     setInterval(updateClock, 1000);
     
-    // Weather update function
+    // Weather - uses default location, click weather to get local
+    var userLocationGranted = false;
+    var userLat = 38.5816;  // Sacramento default
+    var userLon = -121.4944;
+    
+    function fetchWeatherData(lat, lon) {
+        fetch("https://api.open-meteo.com/v1/forecast?latitude=" + lat + "&longitude=" + lon + "&current_weather=true&temperature_unit=fahrenheit")
+            .then(response => response.json())
+            .then(data => {
+                if (data.current_weather) {
+                    const temp = Math.round(data.current_weather.temperature);
+                    const weatherCode = data.current_weather.weathercode;
+                    const icon = getWeatherIcon(weatherCode);
+                    const iconEl = document.getElementById("weather-icon-' . $calId . '");
+                    const tempEl = document.getElementById("weather-temp-' . $calId . '");
+                    if (iconEl) iconEl.textContent = icon;
+                    if (tempEl) tempEl.innerHTML = temp + "&deg;";
+                }
+            })
+            .catch(error => console.log("Weather fetch error:", error));
+    }
+    
     function updateWeather() {
+        fetchWeatherData(userLat, userLon);
+    }
+    
+    // Click weather icon to request local weather (user gesture required)
+    function requestLocalWeather() {
+        if (userLocationGranted) return;
         if ("geolocation" in navigator) {
             navigator.geolocation.getCurrentPosition(function(position) {
-                const lat = position.coords.latitude;
-                const lon = position.coords.longitude;
-                
-                fetch(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current_weather=true&temperature_unit=fahrenheit`)
-                    .then(response => response.json())
-                    .then(data => {
-                        if (data.current_weather) {
-                            const temp = Math.round(data.current_weather.temperature);
-                            const weatherCode = data.current_weather.weathercode;
-                            const icon = getWeatherIcon(weatherCode);
-                            const iconEl = document.getElementById("weather-icon-' . $calId . '");
-                            const tempEl = document.getElementById("weather-temp-' . $calId . '");
-                            if (iconEl) iconEl.textContent = icon;
-                            if (tempEl) tempEl.innerHTML = temp + "&deg;";
-                        }
-                    })
-                    .catch(error => console.log("Weather fetch error:", error));
+                userLat = position.coords.latitude;
+                userLon = position.coords.longitude;
+                userLocationGranted = true;
+                fetchWeatherData(userLat, userLon);
             }, function(error) {
-                // If geolocation fails, use default location (Irvine, CA)
-                fetch("https://api.open-meteo.com/v1/forecast?latitude=33.6846&longitude=-117.8265&current_weather=true&temperature_unit=fahrenheit")
-                    .then(response => response.json())
-                    .then(data => {
-                        if (data.current_weather) {
-                            const temp = Math.round(data.current_weather.temperature);
-                            const weatherCode = data.current_weather.weathercode;
-                            const icon = getWeatherIcon(weatherCode);
-                            const iconEl = document.getElementById("weather-icon-' . $calId . '");
-                            const tempEl = document.getElementById("weather-temp-' . $calId . '");
-                            if (iconEl) iconEl.textContent = icon;
-                            if (tempEl) tempEl.innerHTML = temp + "&deg;";
-                        }
-                    })
-                    .catch(err => console.log("Weather error:", err));
+                console.log("Geolocation denied, using default location");
             });
-        } else {
-            // No geolocation, use default (Irvine, CA)
-            fetch("https://api.open-meteo.com/v1/forecast?latitude=33.6846&longitude=-117.8265&current_weather=true&temperature_unit=fahrenheit")
-                .then(response => response.json())
-                .then(data => {
-                    if (data.current_weather) {
-                        const temp = Math.round(data.current_weather.temperature);
-                        const weatherCode = data.current_weather.weathercode;
-                        const icon = getWeatherIcon(weatherCode);
-                        const iconEl = document.getElementById("weather-icon-' . $calId . '");
-                        const tempEl = document.getElementById("weather-temp-' . $calId . '");
-                        if (iconEl) iconEl.textContent = icon;
-                        if (tempEl) tempEl.innerHTML = temp + "&deg;";
-                    }
-                })
-                .catch(err => console.log("Weather error:", err));
         }
     }
+    
+    setTimeout(function() {
+        var weatherEl = document.querySelector("#weather-icon-' . $calId . '");
+        if (weatherEl) {
+            weatherEl.style.cursor = "pointer";
+            weatherEl.title = "Click for local weather";
+            weatherEl.addEventListener("click", requestLocalWeather);
+        }
+    }, 100);
     
     function getWeatherIcon(code) {
         const icons = {
@@ -2659,20 +2793,110 @@ class syntax_plugin_calendar extends DokuWiki_Syntax_Plugin {
             $importantColor = $themeStyles['header_border'];// __border__
         }
         
+        // Check if there are any itinerary items
+        $hasItinerary = !empty($todayEvents) || !empty($tomorrowEvents) || !empty($importantEvents);
+        
+        // Itinerary bar (collapsible toggle) - styled like +Add bar
+        $itineraryBg = $themeStyles['cell_today_bg'];
+        $itineraryHover = $themeStyles['grid_bg'];
+        $itineraryTextColor = ($theme === 'professional' || $theme === 'wiki') ? 
+                              $themeStyles['text_bright'] : $themeStyles['text_bright'];
+        $itineraryShadow = ($theme === 'professional' || $theme === 'wiki') ? 
+                           '0 2px 4px rgba(0,0,0,0.2)' : '0 0 8px ' . $themeStyles['shadow'];
+        $itineraryHoverShadow = ($theme === 'professional' || $theme === 'wiki') ? 
+                                '0 3px 6px rgba(0,0,0,0.3)' : '0 0 12px ' . $themeStyles['shadow'];
+        $itineraryTextShadow = ($theme === 'pink') ? '0 0 3px ' . $itineraryTextColor : 'none';
+        
+        // Sanitize calId for JavaScript
+        $jsCalId = str_replace('-', '_', $calId);
+        
+        // Get itinerary default state from settings
+        $itineraryDefaultCollapsed = $this->getItineraryCollapsed();
+        $arrowDefaultStyle = $itineraryDefaultCollapsed ? 'transform:rotate(-90deg);' : '';
+        $contentDefaultStyle = $itineraryDefaultCollapsed ? 'max-height:0px; opacity:0;' : '';
+        
+        $html .= '<div id="itinerary-bar-' . $calId . '" style="background:' . $itineraryBg . '; padding:0; margin:0; height:12px; line-height:10px; text-align:center; cursor:pointer; border-top:1px solid rgba(0, 0, 0, 0.1); border-bottom:1px solid rgba(0, 0, 0, 0.1); box-shadow:' . $itineraryShadow . '; transition:all 0.2s; display:flex; align-items:center; justify-content:center; gap:4px;" onclick="toggleItinerary_' . $jsCalId . '();" onmouseover="this.style.background=\'' . $itineraryHover . '\'; this.style.boxShadow=\'' . $itineraryHoverShadow . '\';" onmouseout="this.style.background=\'' . $itineraryBg . '\'; this.style.boxShadow=\'' . $itineraryShadow . '\';">';
+        $html .= '<span id="itinerary-arrow-' . $calId . '" style="color:' . $itineraryTextColor . '; font-size:6px; font-weight:700; font-family:system-ui, sans-serif; text-shadow:' . $itineraryTextShadow . '; position:relative; top:-1px; transition:transform 0.2s; ' . $arrowDefaultStyle . '">▼</span>';
+        $html .= '<span style="color:' . $itineraryTextColor . '; font-size:8px; font-weight:700; letter-spacing:0.4px; font-family:system-ui, sans-serif; text-shadow:' . $itineraryTextShadow . '; position:relative; top:-1px;">ITINERARY</span>';
+        $html .= '</div>';
+        
+        // Itinerary content container (collapsible)
+        $html .= '<div id="itinerary-content-' . $calId . '" style="transition:max-height 0.3s ease-out, opacity 0.2s ease-out; overflow:hidden; ' . $contentDefaultStyle . '">';
+        
         // Today section
         if (!empty($todayEvents)) {
-            $html .= $this->renderSidebarSection('Today', $todayEvents, $todayColor, $calId, $themeStyles, $theme);
+            $html .= $this->renderSidebarSection('Today', $todayEvents, $todayColor, $calId, $themeStyles, $theme, $importantNsList);
         }
         
         // Tomorrow section
         if (!empty($tomorrowEvents)) {
-            $html .= $this->renderSidebarSection('Tomorrow', $tomorrowEvents, $tomorrowColor, $calId, $themeStyles, $theme);
+            $html .= $this->renderSidebarSection('Tomorrow', $tomorrowEvents, $tomorrowColor, $calId, $themeStyles, $theme, $importantNsList);
         }
         
         // Important events section
         if (!empty($importantEvents)) {
-            $html .= $this->renderSidebarSection('Important Events', $importantEvents, $importantColor, $calId, $themeStyles, $theme);
+            $html .= $this->renderSidebarSection('Important Events', $importantEvents, $importantColor, $calId, $themeStyles, $theme, $importantNsList);
         }
+        
+        // Empty state if no itinerary items
+        if (!$hasItinerary) {
+            $html .= '<div style="padding:8px; text-align:center; color:' . $themeStyles['text_dim'] . '; font-size:10px; font-family:system-ui, sans-serif;">No upcoming events</div>';
+        }
+        
+        $html .= '</div>'; // Close itinerary-content
+        
+        // Get itinerary default state from settings
+        $itineraryDefaultCollapsed = $this->getItineraryCollapsed();
+        $itineraryExpandedDefault = $itineraryDefaultCollapsed ? 'false' : 'true';
+        $itineraryArrowDefault = $itineraryDefaultCollapsed ? 'rotate(-90deg)' : 'rotate(0deg)';
+        $itineraryContentDefault = $itineraryDefaultCollapsed ? 'max-height:0px; opacity:0;' : 'max-height:none;';
+        
+        // JavaScript for toggling itinerary
+        $html .= '<script>
+        (function() {
+            let itineraryExpanded_' . $jsCalId . ' = ' . $itineraryExpandedDefault . ';
+            
+            window.toggleItinerary_' . $jsCalId . ' = function() {
+                const content = document.getElementById("itinerary-content-' . $calId . '");
+                const arrow = document.getElementById("itinerary-arrow-' . $calId . '");
+                
+                if (itineraryExpanded_' . $jsCalId . ') {
+                    // Collapse
+                    content.style.maxHeight = "0px";
+                    content.style.opacity = "0";
+                    arrow.style.transform = "rotate(-90deg)";
+                    itineraryExpanded_' . $jsCalId . ' = false;
+                } else {
+                    // Expand
+                    content.style.maxHeight = content.scrollHeight + "px";
+                    content.style.opacity = "1";
+                    arrow.style.transform = "rotate(0deg)";
+                    itineraryExpanded_' . $jsCalId . ' = true;
+                    
+                    // After transition, set to auto for dynamic content
+                    setTimeout(function() {
+                        if (itineraryExpanded_' . $jsCalId . ') {
+                            content.style.maxHeight = "none";
+                        }
+                    }, 300);
+                }
+            };
+            
+            // Initialize based on default state
+            const content = document.getElementById("itinerary-content-' . $calId . '");
+            const arrow = document.getElementById("itinerary-arrow-' . $calId . '");
+            if (content && arrow) {
+                if (' . $itineraryExpandedDefault . ') {
+                    content.style.maxHeight = "none";
+                    arrow.style.transform = "rotate(0deg)";
+                } else {
+                    content.style.maxHeight = "0px";
+                    content.style.opacity = "0";
+                    arrow.style.transform = "rotate(-90deg)";
+                }
+            }
+        })();
+        </script>';
         
         $html .= '</div>';
         
@@ -2964,7 +3188,7 @@ class syntax_plugin_calendar extends DokuWiki_Syntax_Plugin {
     /**
      * Render a sidebar section (Today/Tomorrow/Important) - Matrix themed with colored borders
      */
-    private function renderSidebarSection($title, $events, $accentColor, $calId, $themeStyles, $theme) {
+    private function renderSidebarSection($title, $events, $accentColor, $calId, $themeStyles, $theme, $importantNsList = ['important']) {
         // Keep the original accent colors for borders
         $borderColor = $accentColor;
         
@@ -3049,7 +3273,7 @@ class syntax_plugin_calendar extends DokuWiki_Syntax_Plugin {
         $html .= '<div style="padding:4px 0;">';
         
         foreach ($events as $event) {
-            $html .= $this->renderSidebarEvent($event, $calId, $showDate, $accentColor, $themeStyles, $theme);
+            $html .= $this->renderSidebarEvent($event, $calId, $showDate, $accentColor, $themeStyles, $theme, $importantNsList);
         }
         
         $html .= '</div>';
@@ -3064,7 +3288,7 @@ class syntax_plugin_calendar extends DokuWiki_Syntax_Plugin {
     /**
      * Render individual event in sidebar - Theme-aware
      */
-    private function renderSidebarEvent($event, $calId, $showDate = false, $sectionColor = '#00cc07', $themeStyles = null, $theme = 'matrix') {
+    private function renderSidebarEvent($event, $calId, $showDate = false, $sectionColor = '#00cc07', $themeStyles = null, $theme = 'matrix', $importantNsList = ['important']) {
         $title = isset($event['title']) ? htmlspecialchars($event['title']) : 'Untitled';
         $time = isset($event['time']) ? $event['time'] : '';
         $endTime = isset($event['endTime']) ? $event['endTime'] : '';
@@ -3072,6 +3296,16 @@ class syntax_plugin_calendar extends DokuWiki_Syntax_Plugin {
         $date = isset($event['date']) ? $event['date'] : '';
         $isTask = isset($event['isTask']) && $event['isTask'];
         $completed = isset($event['completed']) && $event['completed'];
+        
+        // Check if this is an important namespace event
+        $eventNs = isset($event['namespace']) ? $event['namespace'] : '';
+        $isImportantNs = false;
+        foreach ($importantNsList as $impNs) {
+            if ($eventNs === $impNs || strpos($eventNs, $impNs . ':') === 0) {
+                $isImportantNs = true;
+                break;
+            }
+        }
         
         // Theme-aware colors
         $titleColor = $themeStyles ? $themeStyles['text_primary'] : '#00cc07';
@@ -3092,11 +3326,43 @@ class syntax_plugin_calendar extends DokuWiki_Syntax_Plugin {
             }
         }
         
-        // No background on individual events (transparent)
+        // No background on individual events (transparent) - unless important namespace
         // Use theme grid_border with slight opacity for subtle divider
         $borderColor = $themeStyles['grid_border'];
         
-        $html = '<div style="padding:4px 6px; border-bottom:1px solid ' . $borderColor . ' !important; font-size:10px; display:flex; align-items:stretch; gap:6px; min-height:20px;">';
+        // Important namespace highlighting - subtle themed background
+        $importantBg = '';
+        $importantBorder = '';
+        if ($isImportantNs) {
+            // Theme-specific important highlighting
+            switch ($theme) {
+                case 'matrix':
+                    $importantBg = 'background:rgba(0,204,7,0.08);';
+                    $importantBorder = 'border-right:2px solid rgba(0,204,7,0.4);';
+                    break;
+                case 'purple':
+                    $importantBg = 'background:rgba(156,39,176,0.08);';
+                    $importantBorder = 'border-right:2px solid rgba(156,39,176,0.4);';
+                    break;
+                case 'pink':
+                    $importantBg = 'background:rgba(255,105,180,0.1);';
+                    $importantBorder = 'border-right:2px solid rgba(255,105,180,0.5);';
+                    break;
+                case 'professional':
+                    $importantBg = 'background:rgba(33,150,243,0.08);';
+                    $importantBorder = 'border-right:2px solid rgba(33,150,243,0.4);';
+                    break;
+                case 'wiki':
+                    $importantBg = 'background:rgba(0,102,204,0.06);';
+                    $importantBorder = 'border-right:2px solid rgba(0,102,204,0.3);';
+                    break;
+                default:
+                    $importantBg = 'background:rgba(0,204,7,0.08);';
+                    $importantBorder = 'border-right:2px solid rgba(0,204,7,0.4);';
+            }
+        }
+        
+        $html = '<div style="padding:4px 6px; border-bottom:1px solid ' . $borderColor . ' !important; font-size:10px; display:flex; align-items:stretch; gap:6px; min-height:20px; ' . $importantBg . $importantBorder . '">';
         
         // Event's assigned color bar (single bar on the left)
         $barShadow = ($theme === 'professional') ? '0 1px 2px rgba(0,0,0,0.2)' : '0 0 3px ' . $eventColor;
@@ -3118,6 +3384,11 @@ class syntax_plugin_calendar extends DokuWiki_Syntax_Plugin {
             $checkIcon = $completed ? '☑' : '☐';
             $checkColor = $themeStyles ? $themeStyles['text_bright'] : '#00ff00';
             $html .= '<span style="font-size:11px; color:' . $checkColor . ';">' . $checkIcon . '</span> ';
+        }
+        
+        // Important indicator icon for important namespace events
+        if ($isImportantNs) {
+            $html .= '<span style="font-size:9px;" title="Important">⭐</span> ';
         }
         
         $html .= $title; // Already HTML-escaped on line 2625
@@ -3393,6 +3664,13 @@ class syntax_plugin_calendar extends DokuWiki_Syntax_Plugin {
             'cell_bg' => $background,    // Cells use __background__ (white/light)
             'cell_today_bg' => $bgNeu,
             'bar_glow' => '0 1px 2px',
+            'pastdue_color' => '#e74c3c',
+            'pastdue_bg' => '#ffe6e6',
+            'pastdue_bg_strong' => '#ffd9d9',
+            'pastdue_bg_light' => '#fff2f2',
+            'tomorrow_bg' => '#fff9e6',
+            'tomorrow_bg_strong' => '#fff4cc',
+            'tomorrow_bg_light' => '#fffbf0',
         ];
     }
     
@@ -3542,5 +3820,16 @@ class syntax_plugin_calendar extends DokuWiki_Syntax_Plugin {
             }
         }
         return 'sunday'; // Default to Sunday (US/Canada standard)
+    }
+    
+    /**
+     * Get itinerary collapsed default state
+     */
+    private function getItineraryCollapsed() {
+        $configFile = DOKU_INC . 'data/meta/calendar_itinerary_collapsed.txt';
+        if (file_exists($configFile)) {
+            return trim(file_get_contents($configFile)) === 'yes';
+        }
+        return false; // Default to expanded
     }
 }

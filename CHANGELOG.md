@@ -1,5 +1,487 @@
 # Calendar Plugin Changelog
 
+## Version 6.9.9 (2026-02-13) - CRITICAL SEARCH FIX
+
+### Bug Fix: Month Search Not Working
+- **Root cause:** Function name collision - there were two `fuzzyMatch` functions
+  - `window.fuzzyMatch` (for namespace search autocomplete) returns a score number or `null`
+  - Local `fuzzyMatch` (for event search) returns `true`/`false`
+- When filtering events, the wrong function was being called, returning `null` for all events
+- **Fix:** Renamed event search functions to `eventSearchNormalize` and `eventSearchMatch`
+- Month search now works correctly on first load and after navigation
+
+### Also in this version
+- Fixed jumpToDate to properly hide search clear button after navigation
+- Removed debug logging from production code
+
+## Version 6.9.8 (2026-02-12) - SEARCH & UI FIXES
+
+### Bug Fixes
+
+**All-Dates Search Navigation Fixed**
+- Clicking a search result now properly navigates to that event's month
+- Opens the day popup showing the event details
+- Was calling non-existent `loadMonth()` - now uses correct `navCalendar()`
+- Clears search results and restores normal event list view
+
+**"No Events" Message Fixed**
+- No longer shows "No events match your search" when in all-dates mode
+- All-dates mode has its own results display; the month-mode message was incorrectly appearing
+
+**Add Button Layout Fixed**
+- Search bar no longer pushes the "+ Add" button off the right edge
+- Search container has constrained max-width (160px) and proper flex settings
+- Header has overflow:hidden to prevent layout issues
+
+**Important Event Stars Fixed**
+- Stars now appear on initial page load (PHP rendering added)
+- Stars positioned outside the bar using CSS ::before pseudo-element
+- Added overflow:visible to event-indicators and event-bar containers
+- Bar remains full width; star sits in the left margin area
+
+### Technical
+- Star uses `event-bar-has-star` class for first-day-only display
+- jumpToDate() properly cleans up search state before navigation
+
+## Version 6.9.7 (2026-02-12) - IMPORTANT NAMESPACE IMPROVEMENTS
+
+### Bug Fix
+- **AJAX refresh now preserves important namespace highlighting**
+  - Important namespaces list now passed to JavaScript via data attribute
+  - Highlighting persists when navigating between months
+  - Works in both main calendar sidebar and standalone event panels
+
+### New Feature: Calendar Grid Star Icons
+- **Important events now show ⭐ on their color bars** in the calendar grid
+  - Small star appears on the first day of important events
+  - Tooltip prefixed with ⭐ for important events
+  - Visual distinction without cluttering the compact grid view
+
+### Admin Section Update
+- **Improved Important Namespaces description** in Admin → Calendar → Manage Events
+  - Now explains all visual effects:
+    - Calendar Grid: ⭐ star on event bars
+    - Event Sidebar: ⭐ star + highlighted background + accent border
+    - Sidebar Widget: Dedicated "Important Events" section
+    - Day Popup: Events shown with full details
+  - Better example placeholder text
+
+### Technical
+- Fixed PHP syntax error in fuzzy search (curly quotes replaced with escape sequences)
+- Important namespaces loaded once and stored in container dataset for JavaScript access
+
+## Version 6.9.6 (2026-02-12) - FUZZY SEARCH & SIDEBAR HIGHLIGHTING
+
+### Fuzzy Search
+- **Improved search matching:** Search is now more forgiving of punctuation differences
+  - "fathers day" matches "Father's Day"
+  - "new years" matches "New Year's Eve"
+  - Smart quotes, apostrophes, dashes, and common punctuation are ignored
+- **Multi-word search:** All words must be present but in any order
+  - "birthday john" matches "John's Birthday Party"
+- Works in both "this month" and "all dates" search modes
+
+### Important Namespace Highlighting (Calendar Sidebar)
+- Events from important namespaces now highlighted in the main calendar's event list sidebar
+- Same visual treatment as the itinerary sidebar widget:
+  - Subtle theme-colored background tint
+  - Right border accent bar
+  - ⭐ star icon before event title
+- Theme-specific colors:
+  - Matrix: green tint
+  - Purple: purple tint
+  - Pink: pink tint
+  - Professional: blue tint
+  - Wiki: light blue tint
+- Configure important namespaces in Admin → Calendar → Sync Settings
+
+## Version 6.9.5 (2026-02-12) - SEARCH MODE TOGGLE
+
+### New Feature: Search Scope Toggle
+- **Search mode button** (📅/🌐) added next to search input in both calendar views
+- **Default mode** (📅): Search only the current month's events (fast, local filtering)
+- **All dates mode** (🌐): Search across ALL calendar data via AJAX
+  - Click the 📅 button to toggle to 🌐 (green highlight when active)
+  - Requires at least 2 characters to search
+  - Shows results with date, time, and namespace
+  - Click any result to jump to that date and open the day popup
+  - Limited to 50 results for performance
+- Search placeholder text updates to indicate current mode
+- Compact button design takes minimal space
+
+### UI Details
+- Button sits flush with search input (no gap)
+- Green highlight when "all dates" mode is active
+- Results show full date (e.g., "Mon, Feb 12, 2026")
+- Namespace badge shown for multi-namespace setups
+
+## Version 6.9.4 (2026-02-12) - POPUP IMPROVEMENTS & IMPORTANT HIGHLIGHTING
+
+### Features
+- **Draggable Day Popup:** Calendar day popup window is now draggable by its header
+  - Click and drag the header to move the popup
+  - Header shows move cursor on hover
+  - Clicking the close button (×) still closes normally
+
+- **Important Namespace Highlighting in Sidebar:**
+  - Events from "important" namespaces (defined in Admin → Sync Settings) now have subtle highlighting
+  - Theme-aware background tint (green for Matrix, purple for Purple, pink for Pink, blue for Professional/Wiki)
+  - Right border accent bar for visual distinction
+  - ⭐ star icon appears before event title
+  - Works in Today, Tomorrow, and Important Events sections
+
+### Bug Fix
+- **Fixed event display in day popup:** Long titles no longer cut off the edit/delete buttons
+  - Event title now wraps to multiple lines instead of truncating
+  - Actions buttons always visible
+  - Time, date range, and namespace badges wrap properly
+  - Improved flex layout for better responsiveness
+
+## Version 6.9.3 (2026-02-12) - ADMIN EDIT DIALOG CONSISTENCY
+
+### UI Improvement
+- **Edit Recurring Event dialog** in Admin section now matches the main event editor exactly:
+  - Same dark theme styling (#1e1e1e background, #2c3e50 header)
+  - Same header layout with close button (×) in top-right corner
+  - Same input styling (dark inputs with green accent borders)
+  - Same footer with Cancel/Save buttons layout
+  - Same recurrence options box styling
+  - Consistent spacing, fonts, and colors throughout
+
+## Version 6.9.2 (2026-02-12) - MOBILE DIALOG FIX
+
+### Bug Fix
+- **Fixed:** Description textarea now extends full width on mobile/phone view
+  - Reduced form padding from 12px to 8px on screens ≤480px
+  - Added explicit `width: 100%` and `box-sizing: border-box` to textarea
+  - Ensured all form inputs/selects use full available width on mobile
+
+## Version 6.9.1 (2026-02-11) - ADMIN RECURRING EVENTS INTEGRATION
+
+### Admin Panel Updates
+- **Enhanced Recurring Events Table:**
+  - Pattern column now shows color-coded badges (daily=blue, weekly=green, monthly=orange, yearly=pink)
+  - "First" column renamed to "Range" showing full date span (e.g., "Feb 1, 2026 → Dec 15, 2026")
+  - Patterns now read from stored metadata when available, with smart fallback to detection
+
+- **Edit Recurring Series Dialog:**
+  - Full recurrence pattern editing (not just simple intervals)
+  - "Repeat every [N] [period]" with dropdown for Daily/Weekly/Monthly/Yearly
+  - Weekly: Day-of-week checkboxes (Sun-Sat) with current days pre-selected
+  - Monthly: Radio choice between "Day of month" or "Weekday pattern"
+  - Ordinal weekday selector (First/Second/Third/Fourth/Fifth/Last + day dropdown)
+  - Pre-populates all fields from stored recurrence metadata
+  - Properly reschedules future events using new pattern
+
+- **Manage Series Dialog:**
+  - Updated summary to show date range
+  - Extend/trim/change pattern functions work with new patterns
+
+### Technical Updates
+- `findRecurringEvents()` captures all recurrence metadata from events
+- `formatRecurrencePattern()` generates human-readable pattern descriptions
+- `detectRecurrencePattern()` enhanced to detect more interval variations
+- `editRecurringSeries()` PHP handler processes new recurrence parameters
+- `generateRecurrenceDates()` creates dates matching complex patterns
+- Recurrence metadata preserved and updated across all event occurrences
+
+## Version 6.9.0 (2026-02-11) - ADVANCED RECURRING EVENTS
+
+### New Features
+- **Enhanced Recurring Event Options:**
+  - **Interval support:** Repeat every N days/weeks/months/years (e.g., every 3 months)
+  - **Weekly day selection:** Choose specific days of the week (e.g., Mon, Wed, Fri)
+  - **Monthly options:**
+    - Day of month: Repeat on specific day (e.g., 15th of each month)
+    - Ordinal weekday: Repeat on pattern (e.g., 2nd Wednesday, Last Friday)
+  - **Examples now possible:**
+    - Every 2 weeks on Monday and Thursday
+    - Every 3 months on the 15th
+    - Every other month on the 2nd Wednesday
+    - Every year on the same date
+    - Last Friday of every month
+
+### UI Changes
+- Redesigned recurring options section with bordered container
+- "Repeat every [N] [period]" input with interval number field
+- Day-of-week checkboxes for weekly recurrence
+- Radio buttons for monthly: "Day of month" vs "Weekday pattern"
+- Ordinal dropdown (First/Second/Third/Fourth/Fifth/Last)
+- Day dropdown (Sunday through Saturday)
+- Helper text for end date field
+
+### Technical Details
+- New parameters: recurrenceInterval, weekDays, monthlyType, monthDay, ordinalWeek, ordinalDay
+- Recurrence pattern stored in event data for reference
+- Maximum 365 occurrences (up from 100) to support daily events for a year
+- Smart date iteration for complex patterns
+
+## Version 6.8.1 (2026-02-11) - ITINERARY DEFAULT STATE SETTING
+
+### New Feature
+- **Added:** Option to set itinerary default state (expanded or collapsed)
+  - New setting in Admin → Calendar → 🎨 Sidebar Widget Settings
+  - "📋 Itinerary Section" with two options:
+    - **Expanded** (default) - Show itinerary sections by default
+    - **Collapsed** - Hide itinerary sections by default (click bar to expand)
+  - Setting persists across page loads
+  - Arrow indicator and content state reflect the saved preference on page load
+
+## Version 6.8.0 (2026-02-11) - COLLAPSIBLE ITINERARY
+
+### New Feature
+- **Added:** Collapsible Itinerary bar in sidebar week view
+  - New "ITINERARY" bar below the week calendar (styled like +ADD EVENT bar)
+  - Click to collapse/expand the Today, Tomorrow, and Important Events sections
+  - Arrow indicator shows expanded (▼) or collapsed (►) state
+  - Smooth animation when collapsing/expanding
+  - Clicking a day in the week grid shows that day's events ABOVE the Itinerary bar
+  - Selected day events remain visible whether itinerary is expanded or collapsed
+  - Shows "No upcoming events" message when there are no itinerary items
+
+### UI Layout (top to bottom)
+1. Header with clock/system stats
+2. +ADD EVENT bar
+3. Week grid (7 days)
+4. Selected day's events (appears when clicking a day)
+5. ITINERARY bar (click to collapse/expand)
+6. Today section (collapsible)
+7. Tomorrow section (collapsible)
+8. Important Events section (collapsible)
+
+## Version 6.7.9 (2026-02-11) - FIX EVENTS MANAGER STATISTICS
+
+### Bug Fixes
+- **Fixed:** 📊 Events Manager showing inflated count (1195 instead of ~605)
+  - The `scanDirectoryForStats()` function was counting ALL entries in JSON files
+  - Now properly filters to only count date keys (`YYYY-MM-DD` format)
+  - Now validates events have `id` and `title` before counting
+  - Click "🔄 Rescan" to update the statistics with correct count
+
+## Version 6.7.8 (2026-02-11) - FILTER INVALID EVENTS
+
+### Bug Fixes
+- **Fixed:** Event Manager showing "(untitled)" and "mapping" entries
+  - Root cause: Calendar JSON files contain metadata keys (like "mapping") that were being parsed as events
+  - Added date format validation (`YYYY-MM-DD`) to skip non-date keys
+  - Added validation to require `id` and `title` fields for events
+  - Applied fix to all event-reading functions:
+    - `getEventsByNamespace()` - main event listing
+    - `scanNamespaceRecursive()` - namespace scanning
+    - `searchEvents()` - event search
+    - `findEventsByTitle()` - title lookup
+    - `deleteRecurringSeries()` - recurring deletion
+    - `renameRecurringSeries()` - recurring rename
+    - Recurring events scanner
+    - Recurring cleanup function
+
+### Technical Details
+- Date keys must match pattern `/^\d{4}-\d{2}-\d{2}$/`
+- Events must have non-empty `id` and `title` fields
+- All other entries in JSON files are now skipped
+
+## Version 6.7.7 (2026-02-11) - FIX PHP PATH & CLEAR LOG
+
+### Bug Fixes
+- **Fixed:** "sh: 1: '/usr/bin/php': not found" error - removed escapeshellarg() which was adding quotes around the PHP path
+- **Fixed:** "Could not clear log file" - added better error messages showing exact issue
+- **Improved:** findPhpBinary() now uses is_executable() and `which php` for detection
+- **Improved:** clearLogFile() now shows specific error (file not found, not writable, etc.)
+
+## Version 6.7.6 (2026-02-11) - FIX SYNC CONTROLS & LOGGING
+
+### Bug Fixes
+- **Fixed:** Double log entries - sync script logs internally, removed redundant stdout capture
+- **Fixed:** Manual sync not appearing in log - removed `--verbose` flag since script logs directly
+- **Fixed:** Better error messages when sync fails
+
+### Improvements
+- **Improved:** Sync now runs without `--verbose` flag - script logs to file internally
+- **Improved:** Crontab warning if `>>` redirect is detected (causes duplicate entries)
+- **Improved:** Log viewer now shows full path to log file
+- **Improved:** Better pre-flight checks (directory creation, file permissions)
+- **Improved:** PHP binary path is now properly escaped
+
+### Crontab Update Required
+If your crontab has `>> sync.log 2>&1`, remove it to prevent duplicate log entries:
+
+**Before (causes duplicates):**
+```
+*/2 * * * * cd /var/www/html/dokuwiki/lib/plugins/calendar && php sync_outlook.php >> /var/www/html/dokuwiki/data/meta/calendar/sync.log 2>&1
+```
+
+**After (correct):**
+```
+*/2 * * * * cd /var/www/html/dokuwiki/lib/plugins/calendar && php sync_outlook.php
+```
+
+The script automatically logs to `data/meta/calendar/sync.log`.
+
+## Version 6.7.5 (2026-02-11) - FIX SYNC LOG OUTPUT
+
+### Bug Fixes
+- **Fixed:** Sync log not showing output when running sync from admin panel
+  - Added `--verbose` flag to sync command so output is captured
+  - Sync output is now captured and written to the log file
+  - Log directory is created if it doesn't exist
+  - Better error handling if log directory isn't writable
+  - Command being executed is logged for debugging
+
+### Changes
+- Sync now runs in verbose mode when triggered from admin panel
+- All sync output (stdout/stderr) is written to the log file
+- Pre-flight check ensures log directory exists and is writable
+
+## Version 6.7.4 (2026-02-11) - FIX MANUAL SYNC EXECUTION
+
+### Bug Fix
+- **Fixed:** "Could not open input file: sync_outlook.php" when running manual sync
+  - The `$pluginDir` variable was missing from `runSync()` function
+  - Added `$pluginDir = DOKU_PLUGIN . 'calendar'` before building the command
+  - Sync now properly changes to the plugin directory before executing
+
+## Version 6.7.3 (2026-02-11) - FIX ADDITIONAL COUNT TYPE ERRORS
+
+### Bug Fix
+- **Fixed:** Additional TypeError "count(): Argument #1 ($value) must be of type Countable|array, int given"
+  - Fixed in `scanDirectoryForStats()` (line 5453)
+  - Fixed in namespace delete function (line 4137)
+  - Fixed in export function (line 5516)
+  - Fixed in import function (line 5636)
+  - All locations now check `is_array()` before calling `count()`
+
+## Version 6.7.2 (2026-02-11) - FIX EVENT MANAGER TYPE ERROR
+
+### Bug Fix
+- **Fixed:** TypeError "count(): Argument #1 ($value) must be of type Countable|array, int given"
+  - Added array type checks when iterating over calendar event data
+  - Protects against corrupted JSON data where event lists may not be arrays
+  - Added safeguards in `getEventsByNamespace()` and `scanNamespaceRecursive()`
+
+## Version 6.7.1 (2026-02-11) - BULK DELETE FOR BACKUPS
+
+### Changed
+- **Improved:** Backup management now uses bulk selection and delete
+  - Added checkboxes next to each backup file
+  - Added "Select All" checkbox in the action bar
+  - Added "🗑️ Delete Selected" button (appears when backups are selected)
+  - Removed individual delete buttons from each row
+  - Shows count of selected backups
+  - Backups are deleted sequentially with visual feedback
+  
+### UI
+- Clean action bar at top of backup table with selection controls
+- Selected count updates in real-time
+- Rows fade out smoothly when deleted
+
+## Version 6.7.0 (2026-02-11) - IMPROVED RESTORE FUNCTION
+
+### Changed
+- **Improved:** Restore function now uses DokuWiki's Extension Manager API
+  - Uses `helper_plugin_extension_extension` for proper installation
+  - Handles permissions correctly through DokuWiki's standard plugin installation process
+  - Falls back to manual instructions if Extension Manager is not available
+  
+### How It Works
+When you click "🔄 Restore" on a backup:
+1. The plugin loads DokuWiki's extension helper
+2. Calls `installFromLocal()` with the backup ZIP file
+3. DokuWiki's Extension Manager handles file extraction and installation
+4. This ensures proper permissions and follows DokuWiki standards
+
+### Fallback
+If the Extension Manager helper is not available, you'll be prompted to:
+- Download the backup ZIP
+- Go to Admin → Extension Manager → Install
+- Upload the ZIP file manually
+
+## Version 6.6.9 (2026-02-11) - REMOVE RESTORE FUNCTION
+
+### Removed
+- **Removed:** "Restore" button from backup management
+- **Removed:** `restoreBackup()` PHP method
+- **Removed:** `restoreBackup()` JavaScript function
+
+### Added
+- **Added:** Informational note in backup section explaining how to restore:
+  - Download the backup ZIP file
+  - Go to Admin → Extension Manager → Install
+  - Upload the ZIP file there
+  - DokuWiki's extension manager handles installation safely with proper permissions
+
+### Reason
+The restore function required write access to the plugin directory, which web servers typically don't have (and shouldn't have) for security reasons. Using DokuWiki's built-in Extension Manager is the safer and more reliable approach.
+
+## Version 6.6.8 (2026-02-11) - FIX THEME KEYS & FILE PERMISSIONS
+
+### Bug Fixes
+- **Fixed:** "Undefined array key" warnings for wiki theme (pastdue_color, pastdue_bg, tomorrow_bg, etc.)
+  - Added missing theme keys to `getWikiTemplateColors()` return array
+  
+- **Fixed:** "Permission denied" errors for sync.log and sync_state.json
+  - Moved sync files from plugin directory to `data/meta/calendar/` (writable location)
+  - Updated sync_outlook.php, admin.php to use new paths
+  - sync_config.php remains in plugin directory (must be manually configured)
+
+- **Fixed:** `findEventNamespace` now returns the actual DIRECTORY where event file lives
+  - This ensures deletion works correctly when stored namespace differs from file location
+
+### Note on lang.php Permission Error
+If you see a permission error for lang/en/lang.php, this occurs when trying to restore/update the plugin via admin panel and the web server doesn't have write access to the plugin directory. This is normal security - update via command line or FTP instead.
+
+## Version 6.6.7 (2026-02-11) - FIX NAMESPACE CHANGE BUG (PART 2)
+
+### Bug Fix
+- **Fixed:** Events in the DEFAULT namespace (no namespace) could not be moved to other namespaces
+  - Root cause: The comparison `$oldNamespace !== ''` was always FALSE for default namespace events
+  - Changed to `$oldNamespace !== null` to properly distinguish between "event not found" (null) and "event in default namespace" ('')
+  - This allows moving events FROM the default namespace TO any other namespace
+  - Also fixed null coalescing for recurring events: `$oldNamespace ?? $namespace` instead of `$oldNamespace ?: $namespace`
+
+## Version 6.6.6 (2026-02-11) - FIX NAMESPACE CHANGE & DELETE BUGS
+
+### Bug Fixes
+- **Fixed:** Changing an event's namespace now properly moves the event instead of creating a duplicate
+  - Root cause: `findEventNamespace()` was searching in the NEW namespace instead of ALL namespaces
+  - Now uses wildcard search `'*'` to find the existing event regardless of its current namespace
+  
+- **Fixed:** Deleting an event no longer causes the calendar to filter by the deleted event's namespace
+  - Root cause: After deletion, `reloadCalendarData()` was called with the deleted event's namespace
+  - Now retrieves the calendar's original namespace from `container.dataset.namespace`
+  - Also fixed in `saveEventCompact()` and `toggleTaskComplete()` for consistency
+
+## Version 6.6.5 (2026-02-11) - ADD AUTOCOMPLETE ATTRIBUTES
+
+### Improved
+- Added `autocomplete="new-password"` to client secret input field
+- Added `autocomplete="email"` to user email input field  
+- Added `autocomplete="off"` to client ID input field
+- Follows browser best practices for form inputs
+
+## Version 6.6.4 (2026-02-11) - FIX GEOLOCATION VIOLATION
+
+### Bug Fix
+- **Fixed:** Browser violation "Only request geolocation information in response to a user gesture"
+- Weather widget now uses Sacramento as the default location on page load
+- Geolocation is only requested when user **clicks** on the weather icon
+- Click the weather icon to get your local weather (browser will prompt for permission)
+- Weather icon shows tooltip "Click for local weather" and has pointer cursor
+
+## Version 6.6.3 (2026-02-11) - FIX MUTATIONOBSERVER ERROR
+
+### Bug Fix
+- **Fixed:** `Failed to execute 'observe' on 'MutationObserver': parameter 1 is not of type 'Node'` error
+- Root cause: MutationObserver tried to observe `document.body` before DOM was ready
+- Added `setupMutationObserver()` function that waits for DOMContentLoaded before attaching observer
+
+## Version 6.6.2 (2026-02-11) - FIX CONFLICT TOOLTIP JAVASCRIPT LOADING
+
+### Bug Fix
+- **Critical:** Fixed `showConflictTooltip is not defined` and `hideConflictTooltip is not defined` errors
+- Root cause: `addAssets()` in action.php was loading empty `script.js` instead of `calendar-main.js`
+- Changed `addAssets()` to load `calendar-main.js` directly
+- Updated `script.js` to dynamically load `calendar-main.js` as a fallback mechanism
+
 ## Version 6.6.1 (2026-02-11) - SECURITY FIXES
 
 ### Security

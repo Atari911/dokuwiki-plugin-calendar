@@ -391,6 +391,14 @@ window.rebuildCalendar = function(calId, year, month, events, namespace) {
                         return timeA.localeCompare(timeB);
                     });
                     
+                    // Get important namespaces
+                    let importantNamespaces = ['important'];
+                    if (container.dataset.importantNamespaces) {
+                        try {
+                            importantNamespaces = JSON.parse(container.dataset.importantNamespaces);
+                        } catch (e) {}
+                    }
+                    
                     // Show colored stacked bars for each event
                     html += '<div class="event-indicators">';
                     for (const evt of sortedEvents) {
@@ -402,14 +410,31 @@ window.rebuildCalendar = function(calId, year, month, events, namespace) {
                         const isFirstDay = evt._is_first_day !== undefined ? evt._is_first_day : true;
                         const isLastDay = evt._is_last_day !== undefined ? evt._is_last_day : true;
                         
+                        // Check if important namespace
+                        let evtNs = evt.namespace || evt._namespace || '';
+                        let isImportant = false;
+                        for (const impNs of importantNamespaces) {
+                            if (evtNs === impNs || evtNs.startsWith(impNs + ':')) {
+                                isImportant = true;
+                                break;
+                            }
+                        }
+                        
                         let barClass = !eventTime ? 'event-bar-no-time' : 'event-bar-timed';
                         if (!isFirstDay) barClass += ' event-bar-continues';
                         if (!isLastDay) barClass += ' event-bar-continuing';
+                        if (isImportant) {
+                            barClass += ' event-bar-important';
+                            if (isFirstDay) {
+                                barClass += ' event-bar-has-star';
+                            }
+                        }
                         
                         html += `<span class="event-bar ${barClass}" `;
                         html += `style="background: ${eventColor};" `;
-                        html += `title="${escapeHtml(eventTitle)}${eventTime ? ' @ ' + eventTime : ''}" `;
-                        html += `onclick="event.stopPropagation(); highlightEvent('${calId}', '${eventId}', '${originalDate}');"></span>`;
+                        html += `title="${isImportant ? '⭐ ' : ''}${escapeHtml(eventTitle)}${eventTime ? ' @ ' + eventTime : ''}" `;
+                        html += `onclick="event.stopPropagation(); highlightEvent('${calId}', '${eventId}', '${originalDate}');">`;
+                        html += '</span>';
                     }
                     html += '</div>';
                 }
@@ -764,6 +789,61 @@ window.showDayPopup = function(calId, date, namespace) {
     if (container) {
         propagateThemeVars(calId, popup.querySelector('.day-popup-content'));
     }
+    
+    // Make popup draggable by header
+    const popupContent = popup.querySelector('.day-popup-content');
+    const popupHeader = popup.querySelector('.day-popup-header');
+    
+    if (popupContent && popupHeader) {
+        // Reset position to center
+        popupContent.style.position = 'relative';
+        popupContent.style.left = '0';
+        popupContent.style.top = '0';
+        
+        // Store drag state on the element itself
+        popupHeader._isDragging = false;
+        
+        popupHeader.onmousedown = function(e) {
+            // Ignore if clicking the close button
+            if (e.target.classList.contains('popup-close')) return;
+            
+            popupHeader._isDragging = true;
+            popupHeader._dragStartX = e.clientX;
+            popupHeader._dragStartY = e.clientY;
+            
+            const rect = popupContent.getBoundingClientRect();
+            const parentRect = popup.getBoundingClientRect();
+            popupHeader._initialLeft = rect.left - parentRect.left - (parentRect.width / 2 - rect.width / 2);
+            popupHeader._initialTop = rect.top - parentRect.top - (parentRect.height / 2 - rect.height / 2);
+            
+            popupContent.style.transition = 'none';
+            e.preventDefault();
+        };
+        
+        popup.onmousemove = function(e) {
+            if (!popupHeader._isDragging) return;
+            
+            const deltaX = e.clientX - popupHeader._dragStartX;
+            const deltaY = e.clientY - popupHeader._dragStartY;
+            
+            popupContent.style.left = (popupHeader._initialLeft + deltaX) + 'px';
+            popupContent.style.top = (popupHeader._initialTop + deltaY) + 'px';
+        };
+        
+        popup.onmouseup = function() {
+            if (popupHeader._isDragging) {
+                popupHeader._isDragging = false;
+                popupContent.style.transition = '';
+            }
+        };
+        
+        popup.onmouseleave = function() {
+            if (popupHeader._isDragging) {
+                popupHeader._isDragging = false;
+                popupContent.style.transition = '';
+            }
+        };
+    }
 };
 
 // Close day popup
@@ -832,11 +912,20 @@ window.renderEventItem = function(event, date, calId, namespace) {
     // Get theme data from container
     const container = document.getElementById(calId);
     let themeStyles = {};
+    let importantNamespaces = ['important']; // default
     if (container && container.dataset.themeStyles) {
         try {
             themeStyles = JSON.parse(container.dataset.themeStyles);
         } catch (e) {
             console.error('Failed to parse theme styles:', e);
+        }
+    }
+    // Get important namespaces from container data attribute
+    if (container && container.dataset.importantNamespaces) {
+        try {
+            importantNamespaces = JSON.parse(container.dataset.importantNamespaces);
+        } catch (e) {
+            importantNamespaces = ['important'];
         }
     }
     
@@ -870,6 +959,21 @@ window.renderEventItem = function(event, date, calId, namespace) {
     
     const isToday = eventDate.getTime() === today.getTime();
     
+    // Check if this is an important namespace event
+    let eventNamespace = event.namespace || '';
+    if (!eventNamespace && event._namespace !== undefined) {
+        eventNamespace = event._namespace;
+    }
+    let isImportantNs = false;
+    if (eventNamespace) {
+        for (const impNs of importantNamespaces) {
+            if (eventNamespace === impNs || eventNamespace.startsWith(impNs + ':')) {
+                isImportantNs = true;
+                break;
+            }
+        }
+    }
+    
     // Format date display with day of week
     const displayDateKey = event.originalStartDate || date;
     const dateObj = new Date(displayDateKey + 'T00:00:00');
@@ -902,13 +1006,18 @@ window.renderEventItem = function(event, date, calId, namespace) {
     const isPastDue = isPast && isTask && !completed;
     const pastClass = (isPast && !isPastDue) ? ' event-past' : '';
     const pastDueClass = isPastDue ? ' event-pastdue' : '';
+    const importantClass = isImportantNs ? ' event-important' : '';
     const color = event.color || '#3498db';
     
     // Only inline style needed: border-left-color for event color indicator
-    let html = '<div class="event-compact-item' + completedClass + pastClass + pastDueClass + '" data-event-id="' + event.id + '" data-date="' + date + '" style="border-left-color: ' + color + ' !important;" onclick="' + (isPast && !isPastDue ? 'togglePastEventExpand(this)' : '') + '">';
+    let html = '<div class="event-compact-item' + completedClass + pastClass + pastDueClass + importantClass + '" data-event-id="' + event.id + '" data-date="' + date + '" style="border-left-color: ' + color + ' !important;" onclick="' + (isPast && !isPastDue ? 'togglePastEventExpand(this)' : '') + '">';
     
     html += '<div class="event-info">';
     html += '<div class="event-title-row">';
+    // Add star for important namespace events
+    if (isImportantNs) {
+        html += '<span class="event-important-star" title="Important">⭐</span> ';
+    }
     html += '<span class="event-title-compact">' + escapeHtml(event.title) + '</span>';
     html += '</div>';
     
@@ -926,10 +1035,6 @@ window.renderEventItem = function(event, date, calId, namespace) {
             html += ' <span class="event-today-badge" style="background:var(--border-main, #9b59b6) !important; color:var(--background-site, white) !important; -webkit-text-fill-color:var(--background-site, white) !important;">TODAY</span>';
         }
         // Add namespace badge
-        let eventNamespace = event.namespace || '';
-        if (!eventNamespace && event._namespace !== undefined) {
-            eventNamespace = event._namespace;
-        }
         if (eventNamespace) {
             html += ' <span class="event-namespace-badge" onclick="filterCalendarByNamespace(\'' + calId + '\', \'' + escapeHtml(eventNamespace) + '\')" style="background:var(--text-bright, #008800) !important; color:var(--background-site, white) !important; -webkit-text-fill-color:var(--background-site, white) !important;" title="Click to filter by this namespace">' + escapeHtml(eventNamespace) + '</span>';
         }
@@ -1357,8 +1462,13 @@ window.deleteEvent = function(calId, eventId, date, namespace) {
             // Extract year and month from date
             const [year, month] = date.split('-').map(Number);
             
-            // Reload calendar data via AJAX
-            reloadCalendarData(calId, year, month, namespace);
+            // Get the calendar's ORIGINAL namespace setting (not the deleted event's namespace)
+            // This preserves wildcard/multi-namespace views
+            const container = document.getElementById(calId);
+            const calendarNamespace = container ? (container.dataset.namespace || '') : namespace;
+            
+            // Reload calendar data via AJAX with the calendar's original namespace
+            reloadCalendarData(calId, year, month, calendarNamespace);
         }
     })
     .catch(err => console.error('Error:', err));
@@ -1404,6 +1514,39 @@ window.saveEventCompact = function(calId, namespace) {
     const recurrenceType = document.getElementById('event-recurrence-type-' + calId).value;
     const recurrenceEnd = document.getElementById('event-recurrence-end-' + calId).value;
     
+    // New recurrence options
+    const recurrenceIntervalInput = document.getElementById('event-recurrence-interval-' + calId);
+    const recurrenceInterval = recurrenceIntervalInput ? parseInt(recurrenceIntervalInput.value) || 1 : 1;
+    
+    // Weekly: collect selected days
+    let weekDays = [];
+    const weeklyOptions = document.getElementById('weekly-options-' + calId);
+    if (weeklyOptions && recurrenceType === 'weekly') {
+        const checkboxes = weeklyOptions.querySelectorAll('input[name="weekDays[]"]:checked');
+        weekDays = Array.from(checkboxes).map(cb => cb.value);
+    }
+    
+    // Monthly: collect day-of-month or ordinal weekday
+    let monthDay = '';
+    let monthlyType = 'dayOfMonth';
+    let ordinalWeek = '';
+    let ordinalDay = '';
+    const monthlyOptions = document.getElementById('monthly-options-' + calId);
+    if (monthlyOptions && recurrenceType === 'monthly') {
+        const monthlyTypeRadio = monthlyOptions.querySelector('input[name="monthlyType"]:checked');
+        monthlyType = monthlyTypeRadio ? monthlyTypeRadio.value : 'dayOfMonth';
+        
+        if (monthlyType === 'dayOfMonth') {
+            const monthDayInput = document.getElementById('event-month-day-' + calId);
+            monthDay = monthDayInput ? monthDayInput.value : '';
+        } else {
+            const ordinalSelect = document.getElementById('event-ordinal-' + calId);
+            const ordinalDaySelect = document.getElementById('event-ordinal-day-' + calId);
+            ordinalWeek = ordinalSelect ? ordinalSelect.value : '1';
+            ordinalDay = ordinalDaySelect ? ordinalDaySelect.value : '0';
+        }
+    }
+    
     if (!title) {
         alert('Please enter a title');
         return;
@@ -1431,7 +1574,13 @@ window.saveEventCompact = function(calId, namespace) {
         completed: completed ? '1' : '0',
         isRecurring: isRecurring ? '1' : '0',
         recurrenceType: recurrenceType,
+        recurrenceInterval: recurrenceInterval,
         recurrenceEnd: recurrenceEnd,
+        weekDays: weekDays.join(','),
+        monthlyType: monthlyType,
+        monthDay: monthDay,
+        ordinalWeek: ordinalWeek,
+        ordinalDay: ordinalDay,
         sectok: typeof JSINFO !== 'undefined' ? JSINFO.sectok : ''
     });
     
@@ -1454,8 +1603,13 @@ window.saveEventCompact = function(calId, namespace) {
             // Extract year and month from the NEW date (in case date was changed)
             const [year, month] = date.split('-').map(Number);
             
+            // Get the calendar's ORIGINAL namespace setting from the container
+            // This preserves wildcard/multi-namespace views after editing
+            const container = document.getElementById(calId);
+            const calendarNamespace = container ? (container.dataset.namespace || '') : namespace;
+            
             // Reload calendar data via AJAX to the month of the event
-            reloadCalendarData(calId, year, month, namespace);
+            reloadCalendarData(calId, year, month, calendarNamespace);
         } else {
             alert('Error: ' + (data.error || 'Unknown error'));
         }
@@ -1598,6 +1752,80 @@ window.toggleRecurringOptions = function(calId) {
     
     if (checkbox && options) {
         options.style.display = checkbox.checked ? 'block' : 'none';
+        if (checkbox.checked) {
+            // Initialize the sub-options based on current selection
+            updateRecurrenceOptions(calId);
+        }
+    }
+};
+
+// Update visible recurrence options based on type (daily/weekly/monthly/yearly)
+window.updateRecurrenceOptions = function(calId) {
+    const typeSelect = document.getElementById('event-recurrence-type-' + calId);
+    const weeklyOptions = document.getElementById('weekly-options-' + calId);
+    const monthlyOptions = document.getElementById('monthly-options-' + calId);
+    
+    if (!typeSelect) return;
+    
+    const recurrenceType = typeSelect.value;
+    
+    // Hide all conditional options first
+    if (weeklyOptions) weeklyOptions.style.display = 'none';
+    if (monthlyOptions) monthlyOptions.style.display = 'none';
+    
+    // Show relevant options
+    if (recurrenceType === 'weekly' && weeklyOptions) {
+        weeklyOptions.style.display = 'block';
+        // Auto-select today's day of week if nothing selected
+        const checkboxes = weeklyOptions.querySelectorAll('input[type="checkbox"]');
+        const anyChecked = Array.from(checkboxes).some(cb => cb.checked);
+        if (!anyChecked) {
+            const today = new Date().getDay();
+            const todayCheckbox = weeklyOptions.querySelector('input[value="' + today + '"]');
+            if (todayCheckbox) todayCheckbox.checked = true;
+        }
+    } else if (recurrenceType === 'monthly' && monthlyOptions) {
+        monthlyOptions.style.display = 'block';
+        // Set default day to current day of month
+        const monthDayInput = document.getElementById('event-month-day-' + calId);
+        if (monthDayInput && !monthDayInput.dataset.userSet) {
+            monthDayInput.value = new Date().getDate();
+        }
+    }
+};
+
+// Toggle between day-of-month and ordinal weekday for monthly recurrence
+window.updateMonthlyType = function(calId) {
+    const dayOfMonthDiv = document.getElementById('monthly-day-' + calId);
+    const ordinalDiv = document.getElementById('monthly-ordinal-' + calId);
+    const monthlyOptions = document.getElementById('monthly-options-' + calId);
+    
+    if (!monthlyOptions) return;
+    
+    const selectedRadio = monthlyOptions.querySelector('input[name="monthlyType"]:checked');
+    if (!selectedRadio) return;
+    
+    if (selectedRadio.value === 'dayOfMonth') {
+        if (dayOfMonthDiv) dayOfMonthDiv.style.display = 'flex';
+        if (ordinalDiv) ordinalDiv.style.display = 'none';
+    } else {
+        if (dayOfMonthDiv) dayOfMonthDiv.style.display = 'none';
+        if (ordinalDiv) ordinalDiv.style.display = 'block';
+        
+        // Set defaults based on current date
+        const now = new Date();
+        const dayOfWeek = now.getDay();
+        const weekOfMonth = Math.ceil(now.getDate() / 7);
+        
+        const ordinalSelect = document.getElementById('event-ordinal-' + calId);
+        const ordinalDaySelect = document.getElementById('event-ordinal-day-' + calId);
+        
+        if (ordinalSelect && !ordinalSelect.dataset.userSet) {
+            ordinalSelect.value = weekOfMonth;
+        }
+        if (ordinalDaySelect && !ordinalDaySelect.dataset.userSet) {
+            ordinalDaySelect.value = dayOfWeek;
+        }
     }
 };
 
@@ -1756,7 +1984,12 @@ window.toggleTaskComplete = function(calId, eventId, date, namespace, completed)
     .then(data => {
         if (data.success) {
             const [year, month] = date.split('-').map(Number);
-            reloadCalendarData(calId, year, month, namespace);
+            
+            // Get the calendar's ORIGINAL namespace setting from the container
+            const container = document.getElementById(calId);
+            const calendarNamespace = container ? (container.dataset.namespace || '') : namespace;
+            
+            reloadCalendarData(calId, year, month, calendarNamespace);
         }
     })
     .catch(err => console.error('Error toggling task:', err));
@@ -2437,19 +2670,82 @@ window.hideConflictTooltip = function() {
     }
 };
 
+// Fuzzy search helper for event filtering - normalizes text for matching
+function eventSearchNormalize(text) {
+    if (typeof text !== 'string') {
+        console.log('[eventSearchNormalize] WARNING: text is not a string:', typeof text, text);
+        return '';
+    }
+    return text
+        .toLowerCase()
+        .trim()
+        // Remove common punctuation that might differ
+        .replace(/[''\u2018\u2019]/g, '')  // Remove apostrophes/quotes
+        .replace(/["""\u201C\u201D]/g, '') // Remove smart quotes
+        .replace(/[-–—]/g, ' ')            // Dashes to spaces
+        .replace(/[.,!?;:]/g, '')          // Remove punctuation
+        .replace(/\s+/g, ' ')              // Normalize whitespace
+        .trim();
+}
+
+// Check if search term matches text for event filtering
+function eventSearchMatch(text, searchTerm) {
+    const normalizedText = eventSearchNormalize(text);
+    const normalizedSearch = eventSearchNormalize(searchTerm);
+    
+    // Direct match after normalization
+    if (normalizedText.includes(normalizedSearch)) {
+        return true;
+    }
+    
+    // Split search into words and check if all words are present
+    const searchWords = normalizedSearch.split(' ').filter(w => w.length > 0);
+    if (searchWords.length > 1) {
+        return searchWords.every(word => normalizedText.includes(word));
+    }
+    
+    return false;
+}
+
 // Filter events by search term
 window.filterEvents = function(calId, searchTerm) {
     const eventList = document.getElementById('eventlist-' + calId);
     const searchClear = document.getElementById('search-clear-' + calId);
+    const searchMode = document.getElementById('search-mode-' + calId);
     
     if (!eventList) return;
+    
+    // Check if we're in "all dates" mode
+    const isAllDatesMode = searchMode && searchMode.classList.contains('all-dates');
     
     // Show/hide clear button
     if (searchClear) {
         searchClear.style.display = searchTerm ? 'block' : 'none';
     }
     
-    searchTerm = searchTerm.toLowerCase().trim();
+    searchTerm = searchTerm.trim();
+    
+    // If all-dates mode and we have a search term, do AJAX search
+    if (isAllDatesMode && searchTerm.length >= 2) {
+        searchAllDates(calId, searchTerm);
+        return;
+    }
+    
+    // If all-dates mode but search cleared, restore normal view
+    if (isAllDatesMode && !searchTerm) {
+        // Remove search results container if exists
+        const resultsContainer = eventList.querySelector('.all-dates-results');
+        if (resultsContainer) {
+            resultsContainer.remove();
+        }
+        // Show normal event items
+        eventList.querySelectorAll('.event-compact-item').forEach(item => {
+            item.style.display = '';
+        });
+        // Show past events toggle if it exists
+        const pastToggle = eventList.querySelector('.past-events-toggle');
+        if (pastToggle) pastToggle.style.display = '';
+    }
     
     // Get all event items
     const eventItems = eventList.querySelectorAll('.event-compact-item');
@@ -2463,12 +2759,12 @@ window.filterEvents = function(calId, searchTerm) {
         
         // Build searchable text
         let searchableText = '';
-        if (title) searchableText += title.textContent.toLowerCase() + ' ';
-        if (description) searchableText += description.textContent.toLowerCase() + ' ';
-        if (dateTime) searchableText += dateTime.textContent.toLowerCase() + ' ';
+        if (title) searchableText += title.textContent + ' ';
+        if (description) searchableText += description.textContent + ' ';
+        if (dateTime) searchableText += dateTime.textContent + ' ';
         
-        // Check if matches search
-        const matches = !searchTerm || searchableText.includes(searchTerm);
+        // Check if matches search using fuzzy matching
+        const matches = !searchTerm || eventSearchMatch(searchableText, searchTerm);
         
         if (matches) {
             item.style.display = '';
@@ -2499,9 +2795,9 @@ window.filterEvents = function(calId, searchTerm) {
         }
     }
     
-    // Show "no results" message if nothing visible
+    // Show "no results" message if nothing visible (only for month mode, not all-dates mode)
     let noResultsMsg = eventList.querySelector('.no-search-results');
-    if (visibleCount === 0 && searchTerm) {
+    if (visibleCount === 0 && searchTerm && !isAllDatesMode) {
         if (!noResultsMsg) {
             noResultsMsg = document.createElement('p');
             noResultsMsg.className = 'no-search-results no-events-msg';
@@ -2511,6 +2807,205 @@ window.filterEvents = function(calId, searchTerm) {
         noResultsMsg.style.display = 'block';
     } else if (noResultsMsg) {
         noResultsMsg.style.display = 'none';
+    }
+};
+
+// Toggle search mode between "this month" and "all dates"
+window.toggleSearchMode = function(calId, namespace) {
+    const searchMode = document.getElementById('search-mode-' + calId);
+    const searchInput = document.getElementById('event-search-' + calId);
+    
+    if (!searchMode) return;
+    
+    const isAllDates = searchMode.classList.toggle('all-dates');
+    
+    // Update button icon and title
+    if (isAllDates) {
+        searchMode.innerHTML = '🌐';
+        searchMode.title = 'Searching all dates';
+        if (searchInput) {
+            searchInput.placeholder = 'Search all dates...';
+        }
+    } else {
+        searchMode.innerHTML = '📅';
+        searchMode.title = 'Search this month only';
+        if (searchInput) {
+            searchInput.placeholder = searchInput.classList.contains('panel-search-input') ? 'Search this month...' : '🔍 Search...';
+        }
+    }
+    
+    // Re-run search with current term
+    if (searchInput && searchInput.value) {
+        filterEvents(calId, searchInput.value);
+    } else {
+        // Clear any all-dates results
+        const eventList = document.getElementById('eventlist-' + calId);
+        if (eventList) {
+            const resultsContainer = eventList.querySelector('.all-dates-results');
+            if (resultsContainer) {
+                resultsContainer.remove();
+            }
+            // Show normal event items
+            eventList.querySelectorAll('.event-compact-item').forEach(item => {
+                item.style.display = '';
+            });
+            const pastToggle = eventList.querySelector('.past-events-toggle');
+            if (pastToggle) pastToggle.style.display = '';
+        }
+    }
+};
+
+// Search all dates via AJAX
+window.searchAllDates = function(calId, searchTerm) {
+    const eventList = document.getElementById('eventlist-' + calId);
+    if (!eventList) return;
+    
+    // Get namespace from container
+    const container = document.getElementById(calId);
+    const namespace = container ? (container.dataset.namespace || '') : '';
+    
+    // Hide normal event items
+    eventList.querySelectorAll('.event-compact-item').forEach(item => {
+        item.style.display = 'none';
+    });
+    const pastToggle = eventList.querySelector('.past-events-toggle');
+    if (pastToggle) pastToggle.style.display = 'none';
+    
+    // Remove old results container
+    let resultsContainer = eventList.querySelector('.all-dates-results');
+    if (resultsContainer) {
+        resultsContainer.remove();
+    }
+    
+    // Create new results container
+    resultsContainer = document.createElement('div');
+    resultsContainer.className = 'all-dates-results';
+    resultsContainer.innerHTML = '<p class="search-loading" style="text-align:center; padding:20px; color:var(--text-dim);">🔍 Searching all dates...</p>';
+    eventList.appendChild(resultsContainer);
+    
+    // Make AJAX request
+    const params = new URLSearchParams({
+        call: 'plugin_calendar',
+        action: 'search_all',
+        search: searchTerm,
+        namespace: namespace,
+        _: new Date().getTime()
+    });
+    
+    fetch(DOKU_BASE + 'lib/exe/ajax.php', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/x-www-form-urlencoded'
+        },
+        body: params.toString()
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.success && data.results) {
+            if (data.results.length === 0) {
+                resultsContainer.innerHTML = '<p class="no-search-results" style="text-align:center; padding:20px; color:var(--text-dim); font-style:italic;">No events found matching "' + escapeHtml(searchTerm) + '"</p>';
+            } else {
+                let html = '<div class="all-dates-header" style="padding:4px 8px; background:var(--cell-today-bg, #e8f5e9); font-size:10px; font-weight:600; color:var(--text-bright, #00cc07); border-bottom:1px solid var(--border-color);">Found ' + data.results.length + ' event(s) across all dates</div>';
+                
+                data.results.forEach(event => {
+                    const dateObj = new Date(event.date + 'T00:00:00');
+                    const dateDisplay = dateObj.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' });
+                    const color = event.color || 'var(--text-bright, #00cc07)';
+                    
+                    html += '<div class="event-compact-item search-result-item" style="display:flex; border-bottom:1px solid var(--border-color, #e0e0e0); padding:6px 8px; gap:6px; cursor:pointer;" onclick="jumpToDate(\'' + calId + '\', \'' + event.date + '\', \'' + namespace + '\')">';
+                    html += '<div style="width:3px; background:' + color + '; border-radius:1px; flex-shrink:0;"></div>';
+                    html += '<div style="flex:1; min-width:0;">';
+                    html += '<div class="event-title-compact" style="font-weight:600; color:var(--text-primary); font-size:11px;">' + escapeHtml(event.title) + '</div>';
+                    html += '<div class="event-date-time" style="font-size:10px; color:var(--text-dim);">' + dateDisplay;
+                    if (event.time) {
+                        html += ' • ' + formatTimeRange(event.time, event.endTime);
+                    }
+                    html += '</div>';
+                    if (event.namespace) {
+                        html += '<span style="font-size:9px; background:var(--text-bright); color:var(--background-site); padding:1px 4px; border-radius:2px; margin-top:2px; display:inline-block;">' + escapeHtml(event.namespace) + '</span>';
+                    }
+                    html += '</div></div>';
+                });
+                
+                resultsContainer.innerHTML = html;
+            }
+        } else {
+            resultsContainer.innerHTML = '<p class="no-search-results" style="text-align:center; padding:20px; color:var(--text-dim);">Search failed. Please try again.</p>';
+        }
+    })
+    .catch(err => {
+        console.error('Search error:', err);
+        resultsContainer.innerHTML = '<p class="no-search-results" style="text-align:center; padding:20px; color:var(--text-dim);">Search failed. Please try again.</p>';
+    });
+};
+
+// Jump to a specific date (used by search results)
+window.jumpToDate = function(calId, date, namespace) {
+    const parts = date.split('-');
+    const year = parseInt(parts[0]);
+    const month = parseInt(parts[1]);
+    
+    // Get container to check current month
+    const container = document.getElementById(calId);
+    const currentYear = container ? parseInt(container.dataset.year) : year;
+    const currentMonth = container ? parseInt(container.dataset.month) : month;
+    
+    // Get search elements
+    const searchInput = document.getElementById('event-search-' + calId);
+    const searchMode = document.getElementById('search-mode-' + calId);
+    const searchClear = document.getElementById('search-clear-' + calId);
+    const eventList = document.getElementById('eventlist-' + calId);
+    
+    // Remove the all-dates results container
+    if (eventList) {
+        const resultsContainer = eventList.querySelector('.all-dates-results');
+        if (resultsContainer) {
+            resultsContainer.remove();
+        }
+        // Show normal event items again
+        eventList.querySelectorAll('.event-compact-item').forEach(item => {
+            item.style.display = '';
+        });
+        const pastToggle = eventList.querySelector('.past-events-toggle');
+        if (pastToggle) pastToggle.style.display = '';
+        
+        // Hide any no-results message
+        const noResults = eventList.querySelector('.no-search-results');
+        if (noResults) noResults.style.display = 'none';
+    }
+    
+    // Clear search input
+    if (searchInput) {
+        searchInput.value = '';
+    }
+    
+    // Hide clear button
+    if (searchClear) {
+        searchClear.style.display = 'none';
+    }
+    
+    // Switch back to month mode
+    if (searchMode && searchMode.classList.contains('all-dates')) {
+        searchMode.classList.remove('all-dates');
+        searchMode.innerHTML = '📅';
+        searchMode.title = 'Search this month only';
+        if (searchInput) {
+            searchInput.placeholder = searchInput.classList.contains('panel-search-input') ? 'Search this month...' : '🔍 Search...';
+        }
+    }
+    
+    // Check if we need to navigate to a different month
+    if (year !== currentYear || month !== currentMonth) {
+        // Navigate to the target month, then show popup
+        navCalendar(calId, year, month, namespace);
+        
+        // After navigation completes, show the day popup
+        setTimeout(() => {
+            showDayPopup(calId, date, namespace);
+        }, 400);
+    } else {
+        // Same month - just show the popup
+        showDayPopup(calId, date, namespace);
     }
 };
 
@@ -2770,24 +3265,34 @@ window.clearEventSearch = function(calId) {
     }
     
     // Re-check theme if calendar is dynamically added
-    if (typeof MutationObserver !== 'undefined') {
-        const observer = new MutationObserver(function(mutations) {
-            mutations.forEach(function(mutation) {
-                if (mutation.addedNodes.length > 0) {
-                    mutation.addedNodes.forEach(function(node) {
-                        if (node.nodeType === 1 && node.classList && node.classList.contains('calendar-theme-pink')) {
-                            checkPinkTheme();
-                            initPinkParticles();
-                        }
-                    });
-                }
+    // Must wait for document.body to exist
+    function setupMutationObserver() {
+        if (typeof MutationObserver !== 'undefined' && document.body) {
+            const observer = new MutationObserver(function(mutations) {
+                mutations.forEach(function(mutation) {
+                    if (mutation.addedNodes.length > 0) {
+                        mutation.addedNodes.forEach(function(node) {
+                            if (node.nodeType === 1 && node.classList && node.classList.contains('calendar-theme-pink')) {
+                                checkPinkTheme();
+                                initPinkParticles();
+                            }
+                        });
+                    }
+                });
             });
-        });
-        
-        observer.observe(document.body, {
-            childList: true,
-            subtree: true
-        });
+            
+            observer.observe(document.body, {
+                childList: true,
+                subtree: true
+            });
+        }
+    }
+    
+    // Setup observer when DOM is ready
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', setupMutationObserver);
+    } else {
+        setupMutationObserver();
     }
 })();
 

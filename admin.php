@@ -8,6 +8,28 @@
 if(!defined('DOKU_INC')) die();
 
 class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
+    
+    /**
+     * Get the path to the sync log file (in data directory, not plugin directory)
+     */
+    private function getSyncLogPath() {
+        $dataDir = DOKU_INC . 'data/meta/calendar/';
+        if (!is_dir($dataDir)) {
+            @mkdir($dataDir, 0755, true);
+        }
+        return $dataDir . 'sync.log';
+    }
+    
+    /**
+     * Get the path to the sync state file (in data directory, not plugin directory)
+     */
+    private function getSyncStatePath() {
+        $dataDir = DOKU_INC . 'data/meta/calendar/';
+        if (!is_dir($dataDir)) {
+            mkdir($dataDir, 0755, true);
+        }
+        return $dataDir . 'sync_state.json';
+    }
 
     public function getMenuText($language) {
         return 'Calendar Management';
@@ -205,10 +227,10 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
         echo '<input type="text" name="tenant_id" value="' . hsc($config['tenant_id'] ?? '') . '" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" required style="width:100%; padding:6px; border:1px solid ' . $colors['border'] . '; border-radius:3px; font-size:13px;">';
         
         echo '<label style="display:block; font-weight:bold; margin:8px 0 3px; font-size:13px;">Client ID (Application ID)</label>';
-        echo '<input type="text" name="client_id" value="' . hsc($config['client_id'] ?? '') . '" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" required style="width:100%; padding:6px; border:1px solid ' . $colors['border'] . '; border-radius:3px; font-size:13px;">';
+        echo '<input type="text" name="client_id" value="' . hsc($config['client_id'] ?? '') . '" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" required autocomplete="off" style="width:100%; padding:6px; border:1px solid ' . $colors['border'] . '; border-radius:3px; font-size:13px;">';
         
         echo '<label style="display:block; font-weight:bold; margin:8px 0 3px; font-size:13px;">Client Secret</label>';
-        echo '<input type="password" name="client_secret" value="' . hsc($config['client_secret'] ?? '') . '" placeholder="Enter client secret" required style="width:100%; padding:6px; border:1px solid ' . $colors['border'] . '; border-radius:3px; font-size:13px;">';
+        echo '<input type="password" name="client_secret" value="' . hsc($config['client_secret'] ?? '') . '" placeholder="Enter client secret" required autocomplete="new-password" style="width:100%; padding:6px; border:1px solid ' . $colors['border'] . '; border-radius:3px; font-size:13px;">';
         echo '<p style="color:#999; font-size:0.8em; margin:3px 0 0;">⚠️ Keep this secret safe!</p>';
         echo '</div>';
         
@@ -220,7 +242,7 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
         
         echo '<div>';
         echo '<label style="display:block; font-weight:bold; margin:0 0 3px; font-size:13px;">User Email</label>';
-        echo '<input type="email" name="user_email" value="' . hsc($config['user_email'] ?? '') . '" placeholder="your.email@company.com" required style="width:100%; padding:6px; border:1px solid ' . $colors['border'] . '; border-radius:3px; font-size:13px;">';
+        echo '<input type="email" name="user_email" value="' . hsc($config['user_email'] ?? '') . '" placeholder="your.email@company.com" required autocomplete="email" style="width:100%; padding:6px; border:1px solid ' . $colors['border'] . '; border-radius:3px; font-size:13px;">';
         echo '</div>';
         
         echo '<div>';
@@ -451,7 +473,7 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
         $cronStatus = $this->getCronStatus();
         
         // Check log file permissions
-        $logFile = DOKU_PLUGIN . 'calendar/sync.log';
+        $logFile = $this->getSyncLogPath();
         $logWritable = is_writable($logFile) || is_writable(dirname($logFile));
         
         echo '<div style="display:flex; gap:10px; align-items:center; margin-bottom:10px;">';
@@ -476,6 +498,15 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
         
         // Show debug info if cron detected
         if ($cronStatus['active'] && !empty($cronStatus['full_line'])) {
+            // Check if crontab has >> redirect which will cause duplicate log entries
+            $hasRedirect = (strpos($cronStatus['full_line'], '>>') !== false || strpos($cronStatus['full_line'], '> ') !== false);
+            
+            if ($hasRedirect) {
+                echo '<div style="background:#fff3e0; border-left:3px solid #ff9800; padding:8px; margin:8px 0; border-radius:3px;">';
+                echo '<span style="color:#e65100; font-size:11px;">⚠️ <strong>Duplicate log entries:</strong> Your crontab has a <code>&gt;&gt;</code> redirect. The sync script logs internally, so this causes duplicate entries. Remove the redirect from your crontab.</span>';
+                echo '</div>';
+            }
+            
             echo '<details style="margin-top:5px;">';
             echo '<summary style="cursor:pointer; color:#999; font-size:11px;">Show cron details</summary>';
             echo '<pre style="background:#f0f0f0; padding:8px; border-radius:3px; font-size:10px; margin:5px 0; overflow-x:auto;">' . hsc($cronStatus['full_line']) . '</pre>';
@@ -484,6 +515,7 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
         
         if (!$cronStatus['active']) {
             echo '<p style="color:#999; font-size:11px; margin:5px 0;">To enable automatic syncing, add to crontab: <code style="background:#f0f0f0; padding:2px 4px; border-radius:2px;">*/30 * * * * cd ' . DOKU_PLUGIN . 'calendar && php sync_outlook.php</code></p>';
+            echo '<p style="color:#888; font-size:10px; margin:3px 0;"><em>Note: The script logs to ' . $logFile . ' automatically. Do not use &gt;&gt; redirect.</em></p>';
         }
         
         echo '</div>';
@@ -587,7 +619,7 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
         // Log Viewer Section - More Compact
         echo '<div style="background:' . $colors['bg'] . '; padding:12px; margin:15px 0 10px 0; border-left:3px solid #00cc07; border-radius:3px; max-width:900px;">';
         echo '<h3 style="margin:0 0 5px 0; color:#00cc07; font-size:16px;">📜 Live Sync Log</h3>';
-        echo '<p style="color:' . $colors['text'] . '; font-size:0.8em; margin:0 0 8px;">Updates every 2 seconds</p>';
+        echo '<p style="color:' . $colors['text'] . '; font-size:0.8em; margin:0 0 8px;">Location: <code style="font-size:10px;">' . $logFile . '</code> • Updates every 2 seconds</p>';
         
         // Log viewer container
         echo '<div style="background:#1e1e1e; border-radius:5px; overflow:hidden; box-shadow:0 2px 4px rgba(0,0,0,0.3);">';
@@ -809,14 +841,24 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
         $importantNsValue = isset($importantConfig['important_namespaces']) ? $importantConfig['important_namespaces'] : 'important';
         
         echo '<div style="background:' . $colors['bg'] . '; padding:12px; margin:10px 0; border-left:3px solid #00cc07; border-radius:3px; max-width:1200px;">';
-        echo '<h3 style="margin:0 0 8px 0; color:#00cc07; font-size:16px;">📌 Important Namespaces (Sidebar Widget)</h3>';
-        echo '<p style="color:' . $colors['text'] . '; font-size:11px; margin:0 0 8px;">Events from these namespaces will be highlighted in purple in the sidebar widget\'s "Important Events" section.</p>';
+        echo '<h3 style="margin:0 0 8px 0; color:#00cc07; font-size:16px;">⭐ Important Namespaces</h3>';
+        echo '<p style="color:' . $colors['text'] . '; font-size:11px; margin:0 0 8px;">Events from these namespaces will be visually highlighted throughout the calendar:</p>';
+        
+        // Effects description
+        echo '<div style="background:rgba(0,204,7,0.05); padding:8px 10px; margin:0 0 10px; border-radius:3px; font-size:10px; color:' . $colors['text'] . ';">';
+        echo '<strong style="color:#00cc07;">Visual Effects:</strong><br>';
+        echo '• <strong>Calendar Grid:</strong> ⭐ star icon on event bars<br>';
+        echo '• <strong>Event Sidebar:</strong> ⭐ star + highlighted background + accent border<br>';
+        echo '• <strong>Sidebar Widget:</strong> Dedicated "Important Events" section + highlighting<br>';
+        echo '• <strong>Day Popup:</strong> Events shown with full details';
+        echo '</div>';
+        
         echo '<form method="post" action="?do=admin&page=calendar&tab=manage" style="display:flex; gap:8px; align-items:center;">';
         echo '<input type="hidden" name="action" value="save_important_namespaces">';
         echo '<input type="text" name="important_namespaces" value="' . hsc($importantNsValue) . '" style="flex:1; padding:6px; border:1px solid ' . $colors['border'] . '; border-radius:3px; font-size:12px;" placeholder="important,urgent,priority">';
         echo '<button type="submit" style="background:#00cc07; color:white; padding:6px 16px; border:none; border-radius:3px; cursor:pointer; font-size:12px; font-weight:bold; white-space:nowrap;">Save</button>';
         echo '</form>';
-        echo '<p style="color:' . $colors['text'] . '; font-size:10px; margin:4px 0 0;">Comma-separated list of namespace names</p>';
+        echo '<p style="color:' . $colors['text'] . '; font-size:10px; margin:4px 0 0;">Comma-separated list of namespace names (e.g., "important,urgent,bills")</p>';
         echo '</div>';
         
         // Cleanup Events Section
@@ -1029,7 +1071,8 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
         
         foreach ($eventsByNamespace as $namespace => $data) {
             $nsId = 'ns_' . md5($namespace);
-            $eventCount = count($data['events']);
+            $events = isset($data['events']) && is_array($data['events']) ? $data['events'] : [];
+            $eventCount = count($events);
             
             echo '<div style="border-bottom:1px solid #ddd;">';
             
@@ -1049,7 +1092,7 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
             
             // Events - ultra compact
             echo '<div id="' . $nsId . '" style="display:none; max-height:150px; overflow-y:auto;">';
-            foreach ($data['events'] as $event) {
+            foreach ($events as $event) {
                 $eventId = $event['id'] . '|' . $namespace . '|' . $event['date'] . '|' . $event['month'];
                 $checkId = 'evt_' . md5($eventId);
                 
@@ -1246,7 +1289,7 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
             });
         }
         
-        function manageRecurringSeries(title, namespace, count, firstDate, pattern, hasFlag) {
+        function manageRecurringSeries(title, namespace, count, firstDate, lastDate, pattern, hasFlag) {
             var isPaused = title.indexOf("⏸") === 0;
             var cleanTitle = title.replace(/^⏸\s*/, "");
             var safeTitle = title.replace(/\x27/g, "\\\x27");
@@ -1258,7 +1301,7 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
             
             var h = "<div style=\"background:' . $colors['bg'] . '; padding:20px; border-radius:8px; min-width:520px; max-width:700px; max-height:90vh; overflow-y:auto; font-family:system-ui,sans-serif;\">";
             h += "<h3 style=\"margin:0 0 5px; color:#00cc07;\">⚙️ Manage Recurring Series</h3>";
-            h += "<p style=\"margin:0 0 15px; color:' . $colors['text'] . '; font-size:13px;\"><strong>" + cleanTitle + "</strong> — " + count + " occurrences, " + pattern + ", starts " + firstDate + "</p>";
+            h += "<p style=\"margin:0 0 15px; color:' . $colors['text'] . '; font-size:13px;\"><strong>" + cleanTitle + "</strong><br>" + count + " occurrences · " + pattern + "<br>" + firstDate + " → " + lastDate + "</p>";
             h += "<div id=\"manage-status\" style=\"font-size:12px; min-height:18px; margin-bottom:10px;\"></div>";
             
             // Extend
@@ -1745,7 +1788,7 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
             }
         }
         
-        function editRecurringSeries(title, namespace) {
+        function editRecurringSeries(title, namespace, time, color, recurrenceType, recurrenceInterval, weekDays, monthlyType, monthDay, ordinalWeek, ordinalDay) {
             // Get available namespaces from the namespace explorer
             const namespaces = new Set();
             
@@ -1770,24 +1813,47 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
             // Convert to sorted array
             const nsArray = Array.from(namespaces).sort();
             
-            // Build options - include current namespace AND all others
+            // Build namespace options
             let nsOptions = "<option value=\\"\\">(default)</option>";
-            
-            // Add current namespace if it\'s not default
             if (namespace && namespace !== "") {
                 nsOptions += "<option value=\\"" + namespace + "\\" selected>" + namespace + " (current)</option>";
             }
-            
-            // Add all other namespaces
             for (const ns of nsArray) {
                 if (ns !== namespace) {
                     nsOptions += "<option value=\\"" + ns + "\\">" + ns + "</option>";
                 }
             }
             
+            // Build weekday checkboxes - matching event editor style exactly
+            const dayNames = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+            let weekDayChecks = "";
+            for (let i = 0; i < 7; i++) {
+                const checked = weekDays && weekDays.includes(i) ? " checked" : "";
+                weekDayChecks += `<label style="display:inline-flex; align-items:center; padding:2px 6px; background:#1a1a1a; border:1px solid #333; border-radius:3px; cursor:pointer; font-size:10px;">
+                    <input type="checkbox" name="weekDays" value="${i}"${checked} style="margin-right:3px; width:12px; height:12px;">
+                    <span>${dayNames[i]}</span>
+                </label>`;
+            }
+            
+            // Build ordinal week options
+            let ordinalWeekOpts = "";
+            const ordinalLabels = [[1,"First"], [2,"Second"], [3,"Third"], [4,"Fourth"], [5,"Fifth"], [-1,"Last"]];
+            for (const [val, label] of ordinalLabels) {
+                const selected = val === ordinalWeek ? " selected" : "";
+                ordinalWeekOpts += `<option value="${val}"${selected}>${label}</option>`;
+            }
+            
+            // Build ordinal day options - full day names like event editor
+            const fullDayNames = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+            let ordinalDayOpts = "";
+            for (let i = 0; i < 7; i++) {
+                const selected = i === ordinalDay ? " selected" : "";
+                ordinalDayOpts += `<option value="${i}"${selected}>${fullDayNames[i]}</option>`;
+            }
+            
             // Show edit dialog for recurring events
             const dialog = document.createElement("div");
-            dialog.style.cssText = "position:fixed; top:0; left:0; right:0; bottom:0; background:rgba(0,0,0,0.5); display:flex; align-items:center; justify-content:center; z-index:10000;";
+            dialog.style.cssText = "position:fixed; top:0; left:0; right:0; bottom:0; background:rgba(0,0,0,0.5); display:flex; align-items:center; justify-content:center; z-index:10000; padding:20px; box-sizing:border-box;";
             
             // Close on clicking background
             dialog.addEventListener("click", function(e) {
@@ -1796,58 +1862,157 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
                 }
             });
             
+            const monthlyDayChecked = monthlyType !== "ordinalWeekday" ? "checked" : "";
+            const monthlyOrdinalChecked = monthlyType === "ordinalWeekday" ? "checked" : "";
+            const weeklyDisplay = recurrenceType === "weekly" ? "block" : "none";
+            const monthlyDisplay = recurrenceType === "monthly" ? "block" : "none";
+            
+            // Get recurrence type selection - matching event editor labels
+            const recTypes = [["daily","Day(s)"], ["weekly","Week(s)"], ["monthly","Month(s)"], ["yearly","Year(s)"]];
+            let recTypeOptions = "";
+            for (const [val, label] of recTypes) {
+                const selected = val === recurrenceType ? " selected" : "";
+                recTypeOptions += `<option value="${val}"${selected}>${label}</option>`;
+            }
+            
+            // Input/select base style matching event editor
+            const inputStyle = "width:100%; padding:6px 8px; border:2px solid #444; border-radius:4px; font-size:12px; box-sizing:border-box; background:#2a2a2a; color:#eee;";
+            const inputSmallStyle = "padding:4px 6px; border:2px solid #444; border-radius:4px; font-size:11px; background:#2a2a2a; color:#eee;";
+            const labelStyle = "display:block; font-size:10px; font-weight:500; margin-bottom:4px; color:#888;";
+            
             dialog.innerHTML = `
-                <div style="background:' . $colors['bg'] . '; padding:20px; border-radius:8px; min-width:500px; max-width:700px; max-height:90vh; overflow-y:auto;">
-                    <h3 style="margin:0 0 15px; color:#00cc07;">Edit Recurring Event</h3>
-                    <p style="margin:0 0 15px; color:' . $colors['text'] . '; font-size:13px;">Changes will apply to ALL occurrences of: <strong>${title}</strong></p>
+                <div style="background:#1e1e1e; padding:0; border-radius:8px; width:100%; max-width:450px; max-height:calc(100vh - 40px); overflow:hidden; display:flex; flex-direction:column; border:1px solid #00cc07; box-shadow:0 8px 32px rgba(0,0,0,0.4);">
                     
-                    <form id="editRecurringForm" style="display:flex; flex-direction:column; gap:12px;">
+                    <!-- Header - matching event editor -->
+                    <div style="display:flex; align-items:center; justify-content:space-between; padding:10px 14px; background:#2c3e50; color:white; flex-shrink:0;">
+                        <h3 style="margin:0; font-size:15px; font-weight:600;">✏️ Edit Recurring Event</h3>
+                        <button type="button" onclick="closeEditDialog()" style="background:rgba(255,255,255,0.2); border:none; color:white; font-size:22px; width:28px; height:28px; border-radius:50%; cursor:pointer; display:flex; align-items:center; justify-content:center; line-height:1; padding:0;">×</button>
+                    </div>
+                    
+                    <!-- Form body - matching event editor -->
+                    <form id="editRecurringForm" style="padding:10px 12px; overflow-y:auto; flex:1; display:flex; flex-direction:column; gap:8px;">
+                        
+                        <p style="margin:0 0 4px; color:#888; font-size:11px;">Changes apply to ALL occurrences of: <strong style="color:#00cc07;">${title}</strong></p>
+                        
+                        <!-- Title -->
                         <div>
-                            <label style="display:block; font-weight:bold; margin-bottom:4px; font-size:13px;">New Title:</label>
-                            <input type="text" name="new_title" value="${title}" style="width:100%; padding:8px; border:1px solid ' . $colors['border'] . '; border-radius:3px;" required>
+                            <label style="${labelStyle}">📝 TITLE</label>
+                            <input type="text" name="new_title" value="${title}" style="${inputStyle}" required>
                         </div>
                         
-                        <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">
+                        <!-- Time Row -->
+                        <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px;">
                             <div>
-                                <label style="display:block; font-weight:bold; margin-bottom:4px; font-size:13px;">Start Time:</label>
-                                <input type="time" name="start_time" style="width:100%; padding:8px; border:1px solid ' . $colors['border'] . '; border-radius:3px;">
-                                <small style="color:#999; font-size:11px;">Leave blank to keep current</small>
+                                <label style="${labelStyle}">🕐 START TIME</label>
+                                <input type="time" name="start_time" value="${time || \'\'}" style="${inputStyle}">
                             </div>
                             <div>
-                                <label style="display:block; font-weight:bold; margin-bottom:4px; font-size:13px;">End Time:</label>
-                                <input type="time" name="end_time" style="width:100%; padding:8px; border:1px solid ' . $colors['border'] . '; border-radius:3px;">
-                                <small style="color:#999; font-size:11px;">Leave blank to keep current</small>
+                                <label style="${labelStyle}">🕐 END TIME</label>
+                                <input type="time" name="end_time" style="${inputStyle}">
                             </div>
                         </div>
                         
-                        <div>
-                            <label style="display:block; font-weight:bold; margin-bottom:4px; font-size:13px;">Interval (days between occurrences):</label>
-                            <select name="interval" style="width:100%; padding:8px; border:1px solid ' . $colors['border'] . '; border-radius:3px;">
-                                <option value="">Keep current interval</option>
-                                <option value="1">Daily (1 day)</option>
-                                <option value="7">Weekly (7 days)</option>
-                                <option value="14">Bi-weekly (14 days)</option>
-                                <option value="30">Monthly (30 days)</option>
-                                <option value="365">Yearly (365 days)</option>
-                            </select>
+                        <!-- Recurrence Pattern Box - matching event editor exactly -->
+                        <div style="border:1px solid #333; border-radius:4px; padding:8px; margin:4px 0; background:rgba(0,0,0,0.2);">
+                            
+                            <!-- Repeat every [N] [period] -->
+                            <div style="display:flex; gap:8px; align-items:flex-end; margin-bottom:6px;">
+                                <div style="flex:0 0 auto;">
+                                    <label style="${labelStyle}">Repeat every</label>
+                                    <input type="number" name="recurrence_interval" value="${recurrenceInterval || 1}" min="1" max="99" style="width:50px; ${inputSmallStyle}">
+                                </div>
+                                <div style="flex:1;">
+                                    <label style="${labelStyle}">&nbsp;</label>
+                                    <select name="recurrence_type" id="editRecType" onchange="toggleEditRecOptions()" style="width:100%; ${inputSmallStyle}">
+                                        ${recTypeOptions}
+                                    </select>
+                                </div>
+                            </div>
+                            
+                            <!-- Weekly options - day checkboxes -->
+                            <div id="editWeeklyOptions" style="display:${weeklyDisplay}; margin-bottom:6px;">
+                                <label style="${labelStyle}">On these days:</label>
+                                <div style="display:flex; flex-wrap:wrap; gap:2px;">
+                                    ${weekDayChecks}
+                                </div>
+                            </div>
+                            
+                            <!-- Monthly options -->
+                            <div id="editMonthlyOptions" style="display:${monthlyDisplay}; margin-bottom:6px;">
+                                <label style="${labelStyle}">Repeat on:</label>
+                                
+                                <!-- Radio: Day of month vs Ordinal weekday -->
+                                <div style="margin-bottom:6px;">
+                                    <label style="display:inline-flex; align-items:center; margin-right:12px; cursor:pointer; font-size:11px; color:#ccc;">
+                                        <input type="radio" name="monthly_type" value="dayOfMonth" ${monthlyDayChecked} onchange="toggleEditMonthlyType()" style="margin-right:4px;">
+                                        Day of month
+                                    </label>
+                                    <label style="display:inline-flex; align-items:center; cursor:pointer; font-size:11px; color:#ccc;">
+                                        <input type="radio" name="monthly_type" value="ordinalWeekday" ${monthlyOrdinalChecked} onchange="toggleEditMonthlyType()" style="margin-right:4px;">
+                                        Weekday pattern
+                                    </label>
+                                </div>
+                                
+                                <!-- Day of month input -->
+                                <div id="editMonthlyDay" style="display:${monthlyType !== "ordinalWeekday" ? "flex" : "none"}; align-items:center; gap:6px;">
+                                    <span style="font-size:11px; color:#ccc;">Day</span>
+                                    <input type="number" name="month_day" value="${monthDay || 1}" min="1" max="31" style="width:50px; ${inputSmallStyle}">
+                                    <span style="font-size:10px; color:#666;">of each month</span>
+                                </div>
+                                
+                                <!-- Ordinal weekday -->
+                                <div id="editMonthlyOrdinal" style="display:${monthlyType === "ordinalWeekday" ? "flex" : "none"}; align-items:center; gap:4px; flex-wrap:wrap;">
+                                    <select name="ordinal_week" style="width:auto; ${inputSmallStyle}">
+                                        ${ordinalWeekOpts}
+                                    </select>
+                                    <select name="ordinal_day" style="width:auto; ${inputSmallStyle}">
+                                        ${ordinalDayOpts}
+                                    </select>
+                                    <span style="font-size:10px; color:#666;">of each month</span>
+                                </div>
+                            </div>
+                            
+                            <!-- Repeat Until -->
+                            <div>
+                                <label style="${labelStyle}">Repeat Until (optional)</label>
+                                <input type="date" name="recurrence_end" style="width:100%; ${inputSmallStyle}; box-sizing:border-box;">
+                                <div style="font-size:9px; color:#666; margin-top:2px;">Leave empty to keep existing end date</div>
+                            </div>
                         </div>
                         
+                        <!-- Namespace -->
                         <div>
-                            <label style="display:block; font-weight:bold; margin-bottom:4px; font-size:13px;">Move to Namespace:</label>
-                            <select name="new_namespace" style="width:100%; padding:8px; border:1px solid ' . $colors['border'] . '; border-radius:3px;">
+                            <label style="${labelStyle}">📁 NAMESPACE</label>
+                            <select name="new_namespace" style="${inputStyle}">
                                 ${nsOptions}
                             </select>
                         </div>
-                        
-                        <div style="display:flex; gap:10px; margin-top:10px;">
-                            <button type="submit" style="flex:1; background:#00cc07; color:white; padding:10px; border:none; border-radius:3px; cursor:pointer; font-weight:bold;">Save Changes</button>
-                            <button type="button" onclick="closeEditDialog()" style="flex:1; background:#999; color:white; padding:10px; border:none; border-radius:3px; cursor:pointer;">Cancel</button>
-                        </div>
                     </form>
+                    
+                    <!-- Footer buttons - matching event editor -->
+                    <div style="display:flex; gap:8px; padding:12px 14px; background:#252525; border-top:1px solid #333; flex-shrink:0;">
+                        <button type="button" onclick="closeEditDialog()" style="flex:1; background:#444; color:#ccc; padding:8px; border:none; border-radius:4px; cursor:pointer; font-size:12px;">Cancel</button>
+                        <button type="button" onclick="document.getElementById(\x27editRecurringForm\x27).dispatchEvent(new Event(\x27submit\x27))" style="flex:1; background:#00cc07; color:white; padding:8px; border:none; border-radius:4px; cursor:pointer; font-weight:bold; font-size:12px; box-shadow:0 2px 4px rgba(0,0,0,0.2);">💾 Save Changes</button>
+                    </div>
                 </div>
             `;
             
             document.body.appendChild(dialog);
+            
+            // Toggle functions for recurrence options
+            window.toggleEditRecOptions = function() {
+                const type = document.getElementById("editRecType").value;
+                document.getElementById("editWeeklyOptions").style.display = type === "weekly" ? "block" : "none";
+                document.getElementById("editMonthlyOptions").style.display = type === "monthly" ? "block" : "none";
+            };
+            
+            window.toggleEditMonthlyType = function() {
+                const radio = document.querySelector("input[name=monthly_type]:checked");
+                if (radio) {
+                    document.getElementById("editMonthlyDay").style.display = radio.value === "dayOfMonth" ? "flex" : "none";
+                    document.getElementById("editMonthlyOrdinal").style.display = radio.value === "ordinalWeekday" ? "flex" : "none";
+                }
+            };
             
             // Add close function to window
             window.closeEditDialog = function() {
@@ -1858,6 +2023,12 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
             dialog.querySelector("#editRecurringForm").addEventListener("submit", function(e) {
                 e.preventDefault();
                 const formData = new FormData(this);
+                
+                // Collect weekDays as comma-separated string
+                const weekDaysArr = [];
+                document.querySelectorAll("input[name=weekDays]:checked").forEach(cb => {
+                    weekDaysArr.push(cb.value);
+                });
                 
                 // Submit the edit
                 const form = document.createElement("form");
@@ -1882,8 +2053,16 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
                 oldNamespaceInput.value = namespace;
                 form.appendChild(oldNamespaceInput);
                 
+                // Add weekDays
+                const weekDaysInput = document.createElement("input");
+                weekDaysInput.type = "hidden";
+                weekDaysInput.name = "week_days";
+                weekDaysInput.value = weekDaysArr.join(",");
+                form.appendChild(weekDaysInput);
+                
                 // Add all form fields
                 for (let [key, value] of formData.entries()) {
+                    if (key === "weekDays") continue; // Skip individual checkboxes
                     const input = document.createElement("input");
                     input.type = "hidden";
                     input.name = key;
@@ -2261,12 +2440,28 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
         echo '</form>';
         echo '</div>';
         
+        // Restore instructions note
+        echo '<div style="background:#1a2d1a; border:1px solid #00cc07; border-radius:3px; padding:8px 12px; margin-bottom:10px;">';
+        echo '<p style="margin:0; color:#00cc07; font-size:12px;"><strong>💡 Restore:</strong> Click the 🔄 Restore button to reinstall from a backup. This uses DokuWiki\'s Extension Manager for safe installation. Alternatively, download the ZIP and upload via <strong>Admin → Extension Manager → Install</strong>.</p>';
+        echo '</div>';
+        
         if (!empty($backups)) {
             rsort($backups); // Newest first
+            
+            // Bulk action bar
+            echo '<div id="bulkActionBar" style="display:flex; align-items:center; gap:10px; margin-bottom:8px; padding:6px 10px; background:#333; border-radius:3px;">';
+            echo '<label style="display:flex; align-items:center; gap:5px; color:#ccc; font-size:12px; cursor:pointer;">';
+            echo '<input type="checkbox" id="selectAllBackups" onchange="toggleAllBackups(this)" style="width:16px; height:16px;">';
+            echo 'Select All</label>';
+            echo '<span id="selectedCount" style="color:#888; font-size:11px;">(0 selected)</span>';
+            echo '<button onclick="deleteSelectedBackups()" id="bulkDeleteBtn" style="background:#e74c3c; color:white; border:none; padding:4px 10px; border-radius:3px; cursor:pointer; font-size:11px; margin-left:auto; display:none;">🗑️ Delete Selected</button>';
+            echo '</div>';
+            
             echo '<div style="max-height:200px; overflow-y:auto; border:1px solid ' . $colors['border'] . '; border-radius:3px; background:' . $colors['bg'] . ';">';
             echo '<table id="backupTable" style="width:100%; border-collapse:collapse; font-size:12px;">';
             echo '<thead style="position:sticky; top:0; background:#e9e9e9;">';
             echo '<tr>';
+            echo '<th style="padding:6px; text-align:center; border-bottom:2px solid ' . $colors['border'] . '; width:30px;"></th>';
             echo '<th style="padding:6px; text-align:left; border-bottom:2px solid ' . $colors['border'] . ';">Backup File</th>';
             echo '<th style="padding:6px; text-align:left; border-bottom:2px solid ' . $colors['border'] . ';">Size</th>';
             echo '<th style="padding:6px; text-align:left; border-bottom:2px solid ' . $colors['border'] . ';">Actions</th>';
@@ -2275,14 +2470,14 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
             foreach ($backups as $backup) {
                 $filename = basename($backup);
                 $size = $this->formatBytes(filesize($backup));
-                echo '<tr style="border-bottom:1px solid #eee;">';
+                echo '<tr style="border-bottom:1px solid #eee;" data-filename="' . hsc($filename) . '">';
+                echo '<td style="padding:6px; text-align:center;"><input type="checkbox" class="backup-checkbox" value="' . hsc($filename) . '" onchange="updateSelectedCount()" style="width:16px; height:16px;"></td>';
                 echo '<td style="padding:6px;"><code style="font-size:11px;">' . hsc($filename) . '</code></td>';
                 echo '<td style="padding:6px;">' . $size . '</td>';
                 echo '<td style="padding:6px; white-space:nowrap;">';
                 echo '<a href="' . DOKU_BASE . 'lib/plugins/' . hsc($filename) . '" download style="color:#00cc07; text-decoration:none; font-size:11px; margin-right:10px;">📥 Download</a>';
-                echo '<button onclick="renameBackup(\'' . hsc(addslashes($filename)) . '\')" style="background:#f39c12; color:white; border:none; padding:2px 6px; border-radius:2px; cursor:pointer; font-size:10px; margin-right:5px;">✏️ Rename</button>';
                 echo '<button onclick="restoreBackup(\'' . hsc(addslashes($filename)) . '\')" style="background:#7b1fa2; color:white; border:none; padding:2px 6px; border-radius:2px; cursor:pointer; font-size:10px; margin-right:5px;">🔄 Restore</button>';
-                echo '<button onclick="deleteBackup(\'' . hsc(addslashes($filename)) . '\')" style="background:#e74c3c; color:white; border:none; padding:2px 6px; border-radius:2px; cursor:pointer; font-size:10px;">🗑️ Delete</button>';
+                echo '<button onclick="renameBackup(\'' . hsc(addslashes($filename)) . '\')" style="background:#f39c12; color:white; border:none; padding:2px 6px; border-radius:2px; cursor:pointer; font-size:10px;">✏️ Rename</button>';
                 echo '</td>';
                 echo '</tr>';
             }
@@ -2311,61 +2506,93 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
             return confirm("Upload and install: " + fileName + "?\\n\\nThis will replace all plugin files.\\nYour configuration and data will be preserved.\\n\\nContinue?");
         }
         
-        function deleteBackup(filename) {
-            if (!confirm("Delete backup: " + filename + "?\\n\\nThis cannot be undone!")) {
+        // Toggle all backup checkboxes
+        function toggleAllBackups(selectAllCheckbox) {
+            const checkboxes = document.querySelectorAll(\'.backup-checkbox\');
+            checkboxes.forEach(cb => cb.checked = selectAllCheckbox.checked);
+            updateSelectedCount();
+        }
+        
+        // Update the selected count display
+        function updateSelectedCount() {
+            const checkboxes = document.querySelectorAll(\'.backup-checkbox:checked\');
+            const count = checkboxes.length;
+            const countSpan = document.getElementById(\'selectedCount\');
+            const bulkDeleteBtn = document.getElementById(\'bulkDeleteBtn\');
+            const selectAllCheckbox = document.getElementById(\'selectAllBackups\');
+            const totalCheckboxes = document.querySelectorAll(\'.backup-checkbox\').length;
+            
+            if (countSpan) countSpan.textContent = \'(\' + count + \' selected)\';
+            if (bulkDeleteBtn) bulkDeleteBtn.style.display = count > 0 ? \'block\' : \'none\';
+            if (selectAllCheckbox) selectAllCheckbox.checked = (count === totalCheckboxes && count > 0);
+        }
+        
+        // Delete selected backups
+        function deleteSelectedBackups() {
+            const checkboxes = document.querySelectorAll(\'.backup-checkbox:checked\');
+            const filenames = Array.from(checkboxes).map(cb => cb.value);
+            
+            if (filenames.length === 0) {
+                alert(\'No backups selected\');
                 return;
             }
             
-            // Use AJAX to delete without page refresh
-            const formData = new FormData();
-            formData.append(\'action\', \'delete_backup\');
-            formData.append(\'backup_file\', filename);
+            if (!confirm(\'Delete \' + filenames.length + \' selected backup(s)?\\n\\n\' + filenames.join(\'\\n\') + \'\\n\\nThis cannot be undone!\')) {
+                return;
+            }
             
-            fetch(\'?do=admin&page=calendar&tab=update\', {
-                method: \'POST\',
-                body: formData
-            })
-            .then(response => response.text())
-            .then(data => {
-                // Remove the row from the table
-                const rows = document.querySelectorAll(\'tr\');
-                rows.forEach(row => {
-                    if (row.textContent.includes(filename)) {
-                        row.style.transition = \'opacity 0.3s\';
-                        row.style.opacity = \'0\';
-                        setTimeout(() => {
-                            row.remove();
-                            // Check if table is now empty
-                            const tbody = document.querySelector(\'#backupTable tbody\');
-                            if (tbody && tbody.children.length === 0) {
-                                const backupSection = document.querySelector(\'#backupSection\');
-                                if (backupSection) {
-                                    backupSection.style.transition = \'opacity 0.3s\';
-                                    backupSection.style.opacity = \'0\';
-                                    setTimeout(() => backupSection.remove(), 300);
-                                }
-                            }
-                        }, 300);
+            // Delete each backup sequentially
+            let deleted = 0;
+            let errors = [];
+            
+            function deleteNext(index) {
+                if (index >= filenames.length) {
+                    // All done
+                    if (errors.length > 0) {
+                        alert(\'Deleted \' + deleted + \' backups. Errors: \' + errors.join(\', \'));
                     }
-                });
+                    updateSelectedCount();
+                    
+                    // Check if table is now empty
+                    const tbody = document.querySelector(\'#backupTable tbody\');
+                    if (tbody && tbody.children.length === 0) {
+                        location.reload();
+                    }
+                    return;
+                }
                 
-                // Show success message
-                const msg = document.createElement(\'div\');
-                msg.style.cssText = \'padding:10px; margin:10px 0; border-left:3px solid #28a745; background:#d4edda; border-radius:3px; max-width:900px; transition:opacity 0.3s;\';
-                msg.textContent = \'✓ Backup deleted: \' + filename;
-                document.querySelector(\'h2\').after(msg);
-                setTimeout(() => {
-                    msg.style.opacity = \'0\';
-                    setTimeout(() => msg.remove(), 300);
-                }, 3000);
-            })
-            .catch(error => {
-                alert(\'Error deleting backup: \' + error);
-            });
+                const filename = filenames[index];
+                const formData = new FormData();
+                formData.append(\'action\', \'delete_backup\');
+                formData.append(\'backup_file\', filename);
+                
+                fetch(\'?do=admin&page=calendar&tab=update\', {
+                    method: \'POST\',
+                    body: formData
+                })
+                .then(response => response.text())
+                .then(data => {
+                    // Remove the row from the table
+                    const row = document.querySelector(\'tr[data-filename="\' + filename + \'"]\');
+                    if (row) {
+                        row.style.transition = \'opacity 0.2s\';
+                        row.style.opacity = \'0\';
+                        setTimeout(() => row.remove(), 200);
+                    }
+                    deleted++;
+                    deleteNext(index + 1);
+                })
+                .catch(error => {
+                    errors.push(filename);
+                    deleteNext(index + 1);
+                });
+            }
+            
+            deleteNext(0);
         }
         
         function restoreBackup(filename) {
-            if (!confirm("Restore from backup: " + filename + "?\\n\\nThis will replace all current plugin files with the backup version.\\nYour current configuration will be replaced with the backed up configuration.\\n\\nContinue?")) {
+            if (!confirm("Restore from backup: " + filename + "?\\n\\nThis will use DokuWiki\'s Extension Manager to reinstall the plugin from the backup.\\nYour current plugin files will be replaced.\\n\\nContinue?")) {
                 return;
             }
             
@@ -2552,6 +2779,9 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
                 if (!$data || !is_array($data)) continue;
                 
                 foreach ($data as $dateKey => $events) {
+                    // Skip non-date keys (like "mapping" or other metadata)
+                    if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $dateKey)) continue;
+                    
                     if (!is_array($events)) continue;
                     foreach ($events as $event) {
                         if (!isset($event['title']) || empty(trim($event['title']))) continue;
@@ -2566,7 +2796,18 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
                                     'title' => $event['title'],
                                     'namespace' => $ns,
                                     'dates' => [],
-                                    'events' => []
+                                    'events' => [],
+                                    // Capture recurrence metadata from first event
+                                    'recurrenceType' => $event['recurrenceType'] ?? null,
+                                    'recurrenceInterval' => $event['recurrenceInterval'] ?? 1,
+                                    'weekDays' => $event['weekDays'] ?? [],
+                                    'monthlyType' => $event['monthlyType'] ?? null,
+                                    'monthDay' => $event['monthDay'] ?? null,
+                                    'ordinalWeek' => $event['ordinalWeek'] ?? null,
+                                    'ordinalDay' => $event['ordinalDay'] ?? null,
+                                    'time' => $event['time'] ?? null,
+                                    'endTime' => $event['endTime'] ?? null,
+                                    'color' => $event['color'] ?? null
                                 ];
                             }
                             $flaggedSeries[$rid]['dates'][] = $dateKey;
@@ -2582,7 +2823,9 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
                                 'namespace' => $ns,
                                 'dates' => [],
                                 'events' => [],
-                                'hasFlag' => false
+                                'hasFlag' => false,
+                                'time' => $event['time'] ?? null,
+                                'color' => $event['color'] ?? null
                             ];
                         }
                         $allEvents[$groupKey]['dates'][] = $dateKey;
@@ -2614,7 +2857,11 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
             sort($series['dates']);
             $dedupDates = array_unique($series['dates']);
             
-            $pattern = $this->detectRecurrencePattern($dedupDates);
+            // Use stored recurrence metadata if available, otherwise detect pattern
+            $pattern = $this->formatRecurrencePattern($series);
+            if (!$pattern) {
+                $pattern = $this->detectRecurrencePattern($dedupDates);
+            }
             
             $recurring[] = [
                 'baseId' => $rid,
@@ -2623,7 +2870,18 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
                 'pattern' => $pattern,
                 'count' => count($dedupDates),
                 'firstDate' => $dedupDates[0],
-                'hasFlag' => true
+                'lastDate' => end($dedupDates),
+                'hasFlag' => true,
+                'time' => $series['time'],
+                'endTime' => $series['endTime'],
+                'color' => $series['color'],
+                'recurrenceType' => $series['recurrenceType'],
+                'recurrenceInterval' => $series['recurrenceInterval'],
+                'weekDays' => $series['weekDays'],
+                'monthlyType' => $series['monthlyType'],
+                'monthDay' => $series['monthDay'],
+                'ordinalWeek' => $series['ordinalWeek'],
+                'ordinalDay' => $series['ordinalDay']
             ];
             $seen[strtolower(trim($series['title'])) . '|' . $series['namespace']] = true;
         }
@@ -2650,7 +2908,17 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
                 'pattern' => $pattern,
                 'count' => count($dedupDates),
                 'firstDate' => $dedupDates[0],
-                'hasFlag' => $group['hasFlag']
+                'lastDate' => end($dedupDates),
+                'hasFlag' => $group['hasFlag'],
+                'time' => $group['time'],
+                'color' => $group['color'],
+                'recurrenceType' => null,
+                'recurrenceInterval' => null,
+                'weekDays' => null,
+                'monthlyType' => null,
+                'monthDay' => null,
+                'ordinalWeek' => null,
+                'ordinalDay' => null
             ];
         }
         
@@ -2660,6 +2928,86 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
         });
         
         return $recurring;
+    }
+    
+    /**
+     * Format a human-readable recurrence pattern from stored metadata
+     */
+    private function formatRecurrencePattern($series) {
+        $type = $series['recurrenceType'] ?? null;
+        $interval = $series['recurrenceInterval'] ?? 1;
+        
+        if (!$type) return null;
+        
+        $result = '';
+        
+        switch ($type) {
+            case 'daily':
+                if ($interval == 1) {
+                    $result = 'Daily';
+                } else {
+                    $result = "Every $interval days";
+                }
+                break;
+                
+            case 'weekly':
+                $weekDays = $series['weekDays'] ?? [];
+                $dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+                
+                if ($interval == 1) {
+                    $result = 'Weekly';
+                } elseif ($interval == 2) {
+                    $result = 'Bi-weekly';
+                } else {
+                    $result = "Every $interval weeks";
+                }
+                
+                if (!empty($weekDays) && count($weekDays) < 7) {
+                    $dayLabels = array_map(function($d) use ($dayNames) {
+                        return $dayNames[$d] ?? '';
+                    }, $weekDays);
+                    $result .= ' (' . implode(', ', $dayLabels) . ')';
+                }
+                break;
+                
+            case 'monthly':
+                $monthlyType = $series['monthlyType'] ?? 'dayOfMonth';
+                
+                if ($interval == 1) {
+                    $prefix = 'Monthly';
+                } elseif ($interval == 3) {
+                    $prefix = 'Quarterly';
+                } elseif ($interval == 6) {
+                    $prefix = 'Semi-annual';
+                } else {
+                    $prefix = "Every $interval months";
+                }
+                
+                if ($monthlyType === 'dayOfMonth') {
+                    $day = $series['monthDay'] ?? '?';
+                    $result = "$prefix (day $day)";
+                } else {
+                    $ordinalNames = [1 => '1st', 2 => '2nd', 3 => '3rd', 4 => '4th', 5 => '5th', -1 => 'Last'];
+                    $dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+                    $ordinal = $ordinalNames[$series['ordinalWeek']] ?? '';
+                    $dayName = $dayNames[$series['ordinalDay']] ?? '';
+                    $result = "$prefix ($ordinal $dayName)";
+                }
+                break;
+                
+            case 'yearly':
+                if ($interval == 1) {
+                    $result = 'Yearly';
+                } else {
+                    $result = "Every $interval years";
+                }
+                break;
+                
+            default:
+                $result = ucfirst($type);
+        }
+        
+        return $result;
     }
     
     /**
@@ -2706,6 +3054,11 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
         
         if (empty($intervals)) return 'Custom';
         
+        // Check if all intervals are the same (or very close)
+        $uniqueIntervals = array_unique($intervals);
+        $isConsistent = (count($uniqueIntervals) === 1) || 
+                        (max($intervals) - min($intervals) <= 1); // Allow 1 day variance
+        
         // Use median interval (more robust than first pair)
         sort($intervals);
         $mid = floor(count($intervals) / 2);
@@ -2713,13 +3066,48 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
             ? ($intervals[$mid - 1] + $intervals[$mid]) / 2 
             : $intervals[$mid];
         
+        // Check for specific day-based patterns first
         if ($median <= 1) return 'Daily';
+        
+        // Check for every N days (2-6 days)
+        if ($median >= 2 && $median <= 6 && $isConsistent) {
+            return 'Every ' . round($median) . ' days';
+        }
+        
+        // Weekly patterns
         if ($median >= 6 && $median <= 8) return 'Weekly';
+        
+        // Check for every N weeks
         if ($median >= 13 && $median <= 16) return 'Bi-weekly';
+        if ($median >= 20 && $median <= 23) return 'Every 3 weeks';
+        
+        // Monthly patterns
         if ($median >= 27 && $median <= 32) return 'Monthly';
+        
+        // Check for every N months by looking at month differences
+        if ($median >= 55 && $median <= 65) return 'Every 2 months';
         if ($median >= 89 && $median <= 93) return 'Quarterly';
-        if ($median >= 180 && $median <= 186) return 'Semi-annual';
+        if ($median >= 115 && $median <= 125) return 'Every 4 months';
+        if ($median >= 175 && $median <= 190) return 'Semi-annual';
+        
+        // Yearly
         if ($median >= 363 && $median <= 368) return 'Yearly';
+        
+        // For other intervals, calculate weeks if appropriate
+        if ($median >= 7 && $median < 28) {
+            $weeks = round($median / 7);
+            if (abs($median - ($weeks * 7)) <= 1) {
+                return "Every $weeks weeks";
+            }
+        }
+        
+        // For monthly-ish intervals
+        if ($median >= 28 && $median < 365) {
+            $months = round($median / 30);
+            if ($months >= 2 && abs($median - ($months * 30)) <= 3) {
+                return "Every $months months";
+            }
+        }
         
         return 'Every ~' . round($median) . ' days';
     }
@@ -2754,6 +3142,18 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
             .recurring-row-hidden {
                 display: none;
             }
+            .pattern-badge {
+                display: inline-block;
+                padding: 1px 4px;
+                border-radius: 3px;
+                font-size: 9px;
+                font-weight: bold;
+            }
+            .pattern-daily { background: #e3f2fd; color: #1565c0; }
+            .pattern-weekly { background: #e8f5e9; color: #2e7d32; }
+            .pattern-monthly { background: #fff3e0; color: #ef6c00; }
+            .pattern-yearly { background: #fce4ec; color: #c2185b; }
+            .pattern-custom { background: #f3e5f5; color: #7b1fa2; }
         </style>';
         echo '<div style="max-height:250px; overflow-y:auto; border:1px solid ' . $colors['border'] . '; border-radius:3px;">';
         echo '<table id="recurringTable" style="width:100%; border-collapse:collapse; font-size:11px;">';
@@ -2762,7 +3162,7 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
         echo '<th onclick="sortRecurringTable(0)" style="padding:4px 6px; text-align:left; border-bottom:2px solid #ddd; cursor:pointer; user-select:none;">Title <span class="sort-arrow">⇅</span></th>';
         echo '<th onclick="sortRecurringTable(1)" style="padding:4px 6px; text-align:left; border-bottom:2px solid #ddd; cursor:pointer; user-select:none;">Namespace <span class="sort-arrow">⇅</span></th>';
         echo '<th onclick="sortRecurringTable(2)" style="padding:4px 6px; text-align:left; border-bottom:2px solid #ddd; cursor:pointer; user-select:none;">Pattern <span class="sort-arrow">⇅</span></th>';
-        echo '<th onclick="sortRecurringTable(3)" style="padding:4px 6px; text-align:left; border-bottom:2px solid #ddd; cursor:pointer; user-select:none;">First <span class="sort-arrow">⇅</span></th>';
+        echo '<th onclick="sortRecurringTable(3)" style="padding:4px 6px; text-align:left; border-bottom:2px solid #ddd; cursor:pointer; user-select:none;">Range <span class="sort-arrow">⇅</span></th>';
         echo '<th onclick="sortRecurringTable(4)" style="padding:4px 6px; text-align:left; border-bottom:2px solid #ddd; cursor:pointer; user-select:none;">Count <span class="sort-arrow">⇅</span></th>';
         echo '<th onclick="sortRecurringTable(5)" style="padding:4px 6px; text-align:left; border-bottom:2px solid #ddd; cursor:pointer; user-select:none;">Source <span class="sort-arrow">⇅</span></th>';
         echo '<th style="padding:4px 6px; text-align:left; border-bottom:2px solid #ddd;">Actions</th>';
@@ -2771,22 +3171,59 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
         foreach ($recurringEvents as $series) {
             $sourceLabel = $series['hasFlag'] ? '🏷️ Flagged' : '🔍 Detected';
             $sourceColor = $series['hasFlag'] ? '#00cc07' : '#ff9800';
+            
+            // Determine pattern badge class
+            $pattern = strtolower($series['pattern']);
+            if (strpos($pattern, 'daily') !== false || strpos($pattern, 'day') !== false) {
+                $patternClass = 'pattern-daily';
+            } elseif (strpos($pattern, 'weekly') !== false || strpos($pattern, 'week') !== false) {
+                $patternClass = 'pattern-weekly';
+            } elseif (strpos($pattern, 'monthly') !== false || strpos($pattern, 'month') !== false || 
+                      strpos($pattern, 'quarterly') !== false || strpos($pattern, 'semi') !== false) {
+                $patternClass = 'pattern-monthly';
+            } elseif (strpos($pattern, 'yearly') !== false || strpos($pattern, 'year') !== false) {
+                $patternClass = 'pattern-yearly';
+            } else {
+                $patternClass = 'pattern-custom';
+            }
+            
+            // Format date range
+            $firstDate = date('M j, Y', strtotime($series['firstDate']));
+            $lastDate = isset($series['lastDate']) ? date('M j, Y', strtotime($series['lastDate'])) : $firstDate;
+            $dateRange = ($firstDate === $lastDate) ? $firstDate : "$firstDate → $lastDate";
+            
             echo '<tr style="border-bottom:1px solid #eee;">';
             echo '<td style="padding:4px 6px;">' . hsc($series['title']) . '</td>';
             echo '<td style="padding:4px 6px;"><code style="background:#f0f0f0; padding:1px 3px; border-radius:2px; font-size:10px;">' . hsc($series['namespace'] ?: '(default)') . '</code></td>';
-            echo '<td style="padding:4px 6px;">' . hsc($series['pattern']) . '</td>';
-            echo '<td style="padding:4px 6px;">' . hsc($series['firstDate']) . '</td>';
+            echo '<td style="padding:4px 6px;"><span class="pattern-badge ' . $patternClass . '">' . hsc($series['pattern']) . '</span></td>';
+            echo '<td style="padding:4px 6px; font-size:10px;">' . $dateRange . '</td>';
             echo '<td style="padding:4px 6px;"><strong>' . $series['count'] . '</strong></td>';
             echo '<td style="padding:4px 6px;"><span style="color:' . $sourceColor . '; font-size:10px;">' . $sourceLabel . '</span></td>';
             echo '<td style="padding:4px 6px; white-space:nowrap;">';
+            
+            // Prepare JS data - include recurrence metadata
             $jsTitle = hsc(addslashes($series['title']));
             $jsNs = hsc($series['namespace']);
             $jsCount = $series['count'];
             $jsFirst = hsc($series['firstDate']);
+            $jsLast = hsc($series['lastDate'] ?? $series['firstDate']);
             $jsPattern = hsc($series['pattern']);
             $jsHasFlag = $series['hasFlag'] ? 'true' : 'false';
-            echo '<button onclick="editRecurringSeries(\'' . $jsTitle . '\', \'' . $jsNs . '\')" style="background:#00cc07; color:white; border:none; padding:2px 6px; border-radius:2px; cursor:pointer; font-size:10px; margin-right:2px;" title="Edit title, time, namespace, interval">Edit</button>';
-            echo '<button onclick="manageRecurringSeries(\'' . $jsTitle . '\', \'' . $jsNs . '\', ' . $jsCount . ', \'' . $jsFirst . '\', \'' . $jsPattern . '\', ' . $jsHasFlag . ')" style="background:#ff9800; color:white; border:none; padding:2px 6px; border-radius:2px; cursor:pointer; font-size:10px; margin-right:2px;" title="Extend, trim, pause, change start">Manage</button>';
+            $jsTime = hsc($series['time'] ?? '');
+            $jsEndTime = hsc($series['endTime'] ?? '');
+            $jsColor = hsc($series['color'] ?? '');
+            
+            // Recurrence metadata for edit dialog
+            $jsRecurrenceType = hsc($series['recurrenceType'] ?? '');
+            $jsRecurrenceInterval = intval($series['recurrenceInterval'] ?? 1);
+            $jsWeekDays = json_encode($series['weekDays'] ?? []);
+            $jsMonthlyType = hsc($series['monthlyType'] ?? '');
+            $jsMonthDay = intval($series['monthDay'] ?? 0);
+            $jsOrdinalWeek = intval($series['ordinalWeek'] ?? 1);
+            $jsOrdinalDay = intval($series['ordinalDay'] ?? 0);
+            
+            echo '<button onclick="editRecurringSeries(\'' . $jsTitle . '\', \'' . $jsNs . '\', \'' . $jsTime . '\', \'' . $jsColor . '\', \'' . $jsRecurrenceType . '\', ' . $jsRecurrenceInterval . ', ' . $jsWeekDays . ', \'' . $jsMonthlyType . '\', ' . $jsMonthDay . ', ' . $jsOrdinalWeek . ', ' . $jsOrdinalDay . ')" style="background:#00cc07; color:white; border:none; padding:2px 6px; border-radius:2px; cursor:pointer; font-size:10px; margin-right:2px;" title="Edit title, time, namespace, pattern">Edit</button>';
+            echo '<button onclick="manageRecurringSeries(\'' . $jsTitle . '\', \'' . $jsNs . '\', ' . $jsCount . ', \'' . $jsFirst . '\', \'' . $jsLast . '\', \'' . $jsPattern . '\', ' . $jsHasFlag . ')" style="background:#ff9800; color:white; border:none; padding:2px 6px; border-radius:2px; cursor:pointer; font-size:10px; margin-right:2px;" title="Extend, trim, pause, change dates">Manage</button>';
             echo '<button onclick="deleteRecurringSeries(\'' . $jsTitle . '\', \'' . $jsNs . '\')" style="background:#e74c3c; color:white; border:none; padding:2px 6px; border-radius:2px; cursor:pointer; font-size:10px;" title="Delete all occurrences">Del</button>';
             echo '</td>';
             echo '</tr>';
@@ -2932,6 +3369,9 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
                 
                 $modified = false;
                 foreach ($data as $dateKey => &$dayEvents) {
+                    // Skip non-date keys (like "mapping" or other metadata)
+                    if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $dateKey)) continue;
+                    
                     if ($dateKey >= $today) continue;
                     if (!is_array($dayEvents)) continue;
                     
@@ -2999,8 +3439,12 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
             if (!$data || !is_array($data)) continue;
             
             foreach ($data as $dateKey => $dayEvents) {
+                // Skip non-date keys (like "mapping" or other metadata)
+                if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $dateKey)) continue;
+                
                 if (!is_array($dayEvents)) continue;
                 foreach ($dayEvents as $idx => $event) {
+                    if (!isset($event['title'])) continue;
                     if (strtolower(trim($event['title'])) === strtolower(trim($title))) {
                         $events[] = [
                             'date' => $dateKey,
@@ -3195,7 +3639,12 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
             
             $modified = false;
             foreach ($data as $dateKey => &$dayEvents) {
+                // Skip non-date keys (like "mapping" or other metadata)
+                if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $dateKey)) continue;
+                if (!is_array($dayEvents)) continue;
+                
                 foreach ($dayEvents as $k => &$evt) {
+                    if (!isset($evt['title'])) continue;
                     $evtCleanTitle = preg_replace('/^⏸\s*/', '', $evt['title']);
                     if (strtolower(trim($evtCleanTitle)) === strtolower(trim($cleanTitle)) && 
                         (!empty($evt['paused']) || strpos($evt['title'], '⏸') === 0)) {
@@ -3425,7 +3874,20 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
                 if (!$data) continue;
                 
                 foreach ($data as $dateKey => $eventList) {
+                    // Skip non-date keys (like "mapping" or other metadata)
+                    // Date keys should be in YYYY-MM-DD format
+                    if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $dateKey)) continue;
+                    
+                    // Skip if eventList is not an array (corrupted data)
+                    if (!is_array($eventList)) continue;
+                    
                     foreach ($eventList as $event) {
+                        // Skip if event is not an array
+                        if (!is_array($event)) continue;
+                        
+                        // Skip if event doesn't have required fields
+                        if (empty($event['id']) || empty($event['title'])) continue;
+                        
                         $events[] = [
                             'id' => $event['id'],
                             'title' => $event['title'],
@@ -3480,7 +3942,20 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
                     if (!$data) continue;
                     
                     foreach ($data as $dateKey => $eventList) {
+                        // Skip non-date keys (like "mapping" or other metadata)
+                        // Date keys should be in YYYY-MM-DD format
+                        if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $dateKey)) continue;
+                        
+                        // Skip if eventList is not an array (corrupted data)
+                        if (!is_array($eventList)) continue;
+                        
                         foreach ($eventList as $event) {
+                            // Skip if event is not an array
+                            if (!is_array($event)) continue;
+                            
+                            // Skip if event doesn't have required fields
+                            if (empty($event['id']) || empty($event['title'])) continue;
+                            
                             $events[] = [
                                 'id' => $event['id'],
                                 'title' => $event['title'],
@@ -3548,7 +4023,12 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
                 if (!$data) continue;
                 
                 foreach ($data as $dateKey => $events) {
+                    // Skip non-date keys (like "mapping" or other metadata)
+                    if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $dateKey)) continue;
+                    if (!is_array($events)) continue;
+                    
                     foreach ($events as $event) {
+                        if (!isset($event['title']) || !isset($event['id'])) continue;
                         if ($search === '' || strpos(strtolower($event['title']), $search) !== false) {
                             $results[] = [
                                 'id' => $event['id'],
@@ -3590,8 +4070,16 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
                 
                 $modified = false;
                 foreach ($data as $dateKey => $events) {
+                    // Skip non-date keys (like "mapping" or other metadata)
+                    if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $dateKey)) continue;
+                    if (!is_array($events)) continue;
+                    
                     $filtered = [];
                     foreach ($events as $event) {
+                        if (!isset($event['title'])) {
+                            $filtered[] = $event;
+                            continue;
+                        }
                         $eventNs = isset($event['namespace']) ? $event['namespace'] : '';
                         // Match by title AND namespace field
                         if (strtolower(trim($event['title'])) === strtolower(trim($eventTitle)) &&
@@ -3631,8 +4119,17 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
         $newTitle = $INPUT->str('new_title');
         $startTime = $INPUT->str('start_time');
         $endTime = $INPUT->str('end_time');
-        $interval = $INPUT->int('interval', 0);
         $newNamespace = $INPUT->str('new_namespace');
+        
+        // New recurrence parameters
+        $recurrenceType = $INPUT->str('recurrence_type', '');
+        $recurrenceInterval = $INPUT->int('recurrence_interval', 0);
+        $weekDaysStr = $INPUT->str('week_days', '');
+        $weekDays = $weekDaysStr ? array_map('intval', explode(',', $weekDaysStr)) : [];
+        $monthlyType = $INPUT->str('monthly_type', '');
+        $monthDay = $INPUT->int('month_day', 0);
+        $ordinalWeek = $INPUT->int('ordinal_week', 0);
+        $ordinalDay = $INPUT->int('ordinal_day', 0);
         
         // Use old namespace if new namespace is empty (keep current)
         if (empty($newNamespace) && !isset($_POST['new_namespace'])) {
@@ -3653,7 +4150,7 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
         
         $count = 0;
         
-        // Pass 1: Rename title, update time, update namespace field in ALL matching events
+        // Pass 1: Rename title, update time, update namespace field and recurrence metadata in ALL matching events
         foreach ($calendarDirs as $calDir) {
             if (is_string($calDir)) {
                 $dir = $calDir;
@@ -3667,8 +4164,12 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
                 
                 $modified = false;
                 foreach ($data as $dateKey => &$dayEvents) {
+                    // Skip non-date keys (like "mapping" or other metadata)
+                    if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $dateKey)) continue;
                     if (!is_array($dayEvents)) continue;
+                    
                     foreach ($dayEvents as $key => &$event) {
+                        if (!isset($event['title'])) continue;
                         // Match by old title (case-insensitive) AND namespace field
                         $eventNs = isset($event['namespace']) ? $event['namespace'] : '';
                         if (strtolower(trim($event['title'])) !== strtolower(trim($oldTitle))) continue;
@@ -3690,6 +4191,29 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
                         // Update namespace field
                         $event['namespace'] = $newNamespace;
                         
+                        // Update recurrence metadata if provided
+                        if (!empty($recurrenceType)) {
+                            $event['recurrenceType'] = $recurrenceType;
+                        }
+                        if ($recurrenceInterval > 0) {
+                            $event['recurrenceInterval'] = $recurrenceInterval;
+                        }
+                        if (!empty($weekDays)) {
+                            $event['weekDays'] = $weekDays;
+                        }
+                        if (!empty($monthlyType)) {
+                            $event['monthlyType'] = $monthlyType;
+                            if ($monthlyType === 'dayOfMonth' && $monthDay > 0) {
+                                $event['monthDay'] = $monthDay;
+                                unset($event['ordinalWeek']);
+                                unset($event['ordinalDay']);
+                            } elseif ($monthlyType === 'ordinalWeekday') {
+                                $event['ordinalWeek'] = $ordinalWeek;
+                                $event['ordinalDay'] = $ordinalDay;
+                                unset($event['monthDay']);
+                            }
+                        }
+                        
                         $count++;
                         $modified = true;
                     }
@@ -3703,16 +4227,40 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
             }
         }
         
-        // Pass 2: Handle interval changes (respace events from first date)
-        if ($interval > 0 && $count > 0) {
-            // Use getRecurringSeriesEvents to find all events with the NEW title
+        // Pass 2: Handle recurrence pattern changes - reschedule future events
+        $needsReschedule = !empty($recurrenceType) && $recurrenceInterval > 0;
+        
+        if ($needsReschedule && $count > 0) {
+            // Get all events with the NEW title
             $allEvents = $this->getRecurringSeriesEvents($newTitle, $newNamespace);
             
             if (count($allEvents) > 1) {
-                $firstDate = new DateTime($allEvents[0]['date']);
+                // Sort by date
+                usort($allEvents, function($a, $b) {
+                    return strcmp($a['date'], $b['date']);
+                });
                 
-                // Remove all except first, then re-create with new spacing
-                for ($i = 1; $i < count($allEvents); $i++) {
+                $firstDate = new DateTime($allEvents[0]['date']);
+                $today = new DateTime();
+                $today->setTime(0, 0, 0);
+                
+                // Find the anchor date - either first date or first future date
+                $anchorDate = $firstDate;
+                $anchorIndex = 0;
+                for ($i = 0; $i < count($allEvents); $i++) {
+                    $eventDate = new DateTime($allEvents[$i]['date']);
+                    if ($eventDate >= $today) {
+                        $anchorDate = $eventDate;
+                        $anchorIndex = $i;
+                        break;
+                    }
+                }
+                
+                // Get template from anchor event
+                $template = $allEvents[$anchorIndex]['event'];
+                
+                // Remove all future events (we'll recreate them)
+                for ($i = $anchorIndex + 1; $i < count($allEvents); $i++) {
                     $entry = $allEvents[$i];
                     $data = json_decode(file_get_contents($entry['file']), true);
                     if (!$data || !isset($data[$entry['date']])) continue;
@@ -3732,8 +4280,7 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
                     }
                 }
                 
-                // Re-create with new interval
-                $template = $allEvents[0]['event'];
+                // Recreate with new pattern
                 $targetDir = ($newNamespace === '') 
                     ? DOKU_INC . 'data/meta/calendar' 
                     : DOKU_INC . 'data/meta/' . str_replace(':', '/', $newNamespace) . '/calendar';
@@ -3741,10 +4288,26 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
                 
                 $baseId = isset($template['recurringId']) ? $template['recurringId'] : md5($newTitle . $newNamespace);
                 
-                for ($i = 1; $i < count($allEvents); $i++) {
-                    $newDate = clone $firstDate;
-                    $newDate->modify('+' . ($i * $interval) . ' days');
-                    $dateKey = $newDate->format('Y-m-d');
+                // Calculate how many future events we need (use same count as before)
+                $futureCount = count($allEvents) - $anchorIndex - 1;
+                if ($futureCount < 1) $futureCount = 12; // Default to 12 future occurrences
+                
+                // Generate new dates based on recurrence pattern
+                $newDates = $this->generateRecurrenceDates(
+                    $anchorDate->format('Y-m-d'),
+                    $recurrenceType,
+                    $recurrenceInterval,
+                    $weekDays,
+                    $monthlyType,
+                    $monthDay,
+                    $ordinalWeek,
+                    $ordinalDay,
+                    $futureCount
+                );
+                
+                // Create events for new dates (skip first since it's the anchor)
+                for ($i = 1; $i < count($newDates); $i++) {
+                    $dateKey = $newDates[$i];
                     list($year, $month) = explode('-', $dateKey);
                     
                     $file = $targetDir . '/' . sprintf('%04d-%02d.json', $year, $month);
@@ -3754,6 +4317,16 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
                     
                     $newEvent = $template;
                     $newEvent['id'] = $baseId . '-respace-' . $i;
+                    $newEvent['recurrenceType'] = $recurrenceType;
+                    $newEvent['recurrenceInterval'] = $recurrenceInterval;
+                    if (!empty($weekDays)) $newEvent['weekDays'] = $weekDays;
+                    if (!empty($monthlyType)) $newEvent['monthlyType'] = $monthlyType;
+                    if ($monthlyType === 'dayOfMonth' && $monthDay > 0) $newEvent['monthDay'] = $monthDay;
+                    if ($monthlyType === 'ordinalWeekday') {
+                        $newEvent['ordinalWeek'] = $ordinalWeek;
+                        $newEvent['ordinalDay'] = $ordinalDay;
+                    }
+                    
                     $fileData[$dateKey][] = $newEvent;
                     file_put_contents($file, json_encode($fileData, JSON_PRETTY_PRINT));
                 }
@@ -3763,12 +4336,96 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
         $changes = [];
         if ($oldTitle !== $newTitle) $changes[] = "title";
         if (!empty($startTime) || !empty($endTime)) $changes[] = "time";
-        if ($interval > 0) $changes[] = "interval";
+        if (!empty($recurrenceType)) $changes[] = "pattern";
         if ($newNamespace !== $oldNamespace) $changes[] = "namespace";
         
         $changeStr = !empty($changes) ? " (" . implode(", ", $changes) . ")" : "";
         $this->clearStatsCache();
         $this->redirect("Updated $count occurrences of recurring event$changeStr", 'success', 'manage');
+    }
+    
+    /**
+     * Generate dates for a recurrence pattern
+     */
+    private function generateRecurrenceDates($startDate, $type, $interval, $weekDays, $monthlyType, $monthDay, $ordinalWeek, $ordinalDay, $count) {
+        $dates = [$startDate];
+        $currentDate = new DateTime($startDate);
+        $maxIterations = $count * 100; // Safety limit
+        $iterations = 0;
+        
+        while (count($dates) < $count + 1 && $iterations < $maxIterations) {
+            $iterations++;
+            $currentDate->modify('+1 day');
+            $shouldInclude = false;
+            
+            switch ($type) {
+                case 'daily':
+                    $daysSinceStart = (new DateTime($startDate))->diff($currentDate)->days;
+                    $shouldInclude = ($daysSinceStart % $interval === 0);
+                    break;
+                    
+                case 'weekly':
+                    $daysSinceStart = (new DateTime($startDate))->diff($currentDate)->days;
+                    $weeksSinceStart = floor($daysSinceStart / 7);
+                    $isCorrectWeek = ($weeksSinceStart % $interval === 0);
+                    $currentDayOfWeek = (int)$currentDate->format('w');
+                    $isDaySelected = empty($weekDays) || in_array($currentDayOfWeek, $weekDays);
+                    $shouldInclude = $isCorrectWeek && $isDaySelected;
+                    break;
+                    
+                case 'monthly':
+                    $startDT = new DateTime($startDate);
+                    $monthsSinceStart = (($currentDate->format('Y') - $startDT->format('Y')) * 12) + 
+                                        ($currentDate->format('n') - $startDT->format('n'));
+                    $isCorrectMonth = ($monthsSinceStart > 0 && $monthsSinceStart % $interval === 0);
+                    
+                    if (!$isCorrectMonth) break;
+                    
+                    if ($monthlyType === 'dayOfMonth' || empty($monthlyType)) {
+                        $targetDay = $monthDay ?: (int)$startDT->format('j');
+                        $currentDay = (int)$currentDate->format('j');
+                        $daysInMonth = (int)$currentDate->format('t');
+                        $effectiveTargetDay = min($targetDay, $daysInMonth);
+                        $shouldInclude = ($currentDay === $effectiveTargetDay);
+                    } else {
+                        $shouldInclude = $this->isOrdinalWeekdayAdmin($currentDate, $ordinalWeek, $ordinalDay);
+                    }
+                    break;
+                    
+                case 'yearly':
+                    $startDT = new DateTime($startDate);
+                    $yearsSinceStart = (int)$currentDate->format('Y') - (int)$startDT->format('Y');
+                    $isCorrectYear = ($yearsSinceStart > 0 && $yearsSinceStart % $interval === 0);
+                    $sameMonthDay = ($currentDate->format('m-d') === $startDT->format('m-d'));
+                    $shouldInclude = $isCorrectYear && $sameMonthDay;
+                    break;
+            }
+            
+            if ($shouldInclude) {
+                $dates[] = $currentDate->format('Y-m-d');
+            }
+        }
+        
+        return $dates;
+    }
+    
+    /**
+     * Check if a date is the Nth occurrence of a weekday in its month (admin version)
+     */
+    private function isOrdinalWeekdayAdmin($date, $ordinalWeek, $targetDayOfWeek) {
+        $currentDayOfWeek = (int)$date->format('w');
+        if ($currentDayOfWeek !== $targetDayOfWeek) return false;
+        
+        $dayOfMonth = (int)$date->format('j');
+        $daysInMonth = (int)$date->format('t');
+        
+        if ($ordinalWeek === -1) {
+            $daysRemaining = $daysInMonth - $dayOfMonth;
+            return $daysRemaining < 7;
+        } else {
+            $weekNumber = ceil($dayOfMonth / 7);
+            return $weekNumber === $ordinalWeek;
+        }
     }
     
     /**
@@ -4051,7 +4708,9 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
             $data = json_decode(file_get_contents($file), true);
             if ($data) {
                 foreach ($data as $events) {
-                    $eventsDeleted += count($events);
+                    if (is_array($events)) {
+                        $eventsDeleted += count($events);
+                    }
                 }
             }
             unlink($file);
@@ -4413,65 +5072,79 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
                 exit;
             }
             
-            // Change to plugin directory
-            $pluginDir = DOKU_PLUGIN . 'calendar';
-            $logFile = $pluginDir . '/sync.log';
+            // Get log file from data directory (writable)
+            $logFile = $this->getSyncLogPath();
+            $logDir = dirname($logFile);
+            
+            // Ensure log directory exists
+            if (!is_dir($logDir)) {
+                if (!@mkdir($logDir, 0755, true)) {
+                    echo json_encode(['success' => false, 'message' => 'Cannot create log directory: ' . $logDir]);
+                    exit;
+                }
+            }
             
             // Ensure log file exists and is writable
             if (!file_exists($logFile)) {
-                @touch($logFile);
+                if (!@touch($logFile)) {
+                    echo json_encode(['success' => false, 'message' => 'Cannot create log file: ' . $logFile]);
+                    exit;
+                }
                 @chmod($logFile, 0666);
             }
             
-            // Try to log the execution (but don't fail if we can't)
-            if (is_writable($logFile)) {
-                $tz = new DateTimeZone('America/Los_Angeles');
-                $now = new DateTime('now', $tz);
-                $timestamp = $now->format('Y-m-d H:i:s');
-                @file_put_contents($logFile, "[$timestamp] [ADMIN] Manual sync triggered via admin panel\n", FILE_APPEND);
+            // Check if we can write to the log
+            if (!is_writable($logFile)) {
+                echo json_encode(['success' => false, 'message' => 'Log file not writable: ' . $logFile . ' - Run: chmod 666 ' . $logFile]);
+                exit;
             }
             
-            // Find PHP binary - try multiple methods
+            // Find PHP binary
             $phpPath = $this->findPhpBinary();
+            if (!$phpPath) {
+                echo json_encode(['success' => false, 'message' => 'Cannot find PHP binary']);
+                exit;
+            }
             
-            // Build command
+            // Get plugin directory for cd command
+            $pluginDir = DOKU_PLUGIN . 'calendar';
+            
+            // Build command - NO --verbose flag because the script logs internally
+            // The script writes directly to the log file, so we don't need to capture stdout
             $command = sprintf(
-                'cd %s && %s %s 2>&1',
+                'cd %s && %s sync_outlook.php 2>&1',
                 escapeshellarg($pluginDir),
-                $phpPath,
-                escapeshellarg(basename($syncScript))
+                $phpPath
             );
             
-            // Execute and capture output
+            // Log that we're starting
+            $tz = new DateTimeZone('America/Los_Angeles');
+            $now = new DateTime('now', $tz);
+            $timestamp = $now->format('Y-m-d H:i:s');
+            @file_put_contents($logFile, "[$timestamp] [ADMIN] Manual sync triggered via admin panel\n", FILE_APPEND);
+            @file_put_contents($logFile, "[$timestamp] [ADMIN] Command: $command\n", FILE_APPEND);
+            
+            // Execute sync
             $output = [];
             $returnCode = 0;
             exec($command, $output, $returnCode);
             
-            // Check if sync completed
-            $lastLines = array_slice($output, -5);
-            $completed = false;
-            foreach ($lastLines as $line) {
-                if (strpos($line, 'Sync Complete') !== false || strpos($line, 'Created:') !== false) {
-                    $completed = true;
-                    break;
-                }
+            // Only log output if there was an error (the script logs its own progress)
+            if ($returnCode !== 0 && !empty($output)) {
+                @file_put_contents($logFile, "[$timestamp] [ADMIN] Error output:\n" . implode("\n", $output) . "\n", FILE_APPEND);
             }
             
-            if ($returnCode === 0 && $completed) {
+            // Check results
+            if ($returnCode === 0) {
                 echo json_encode([
                     'success' => true,
-                    'message' => 'Sync completed successfully! Check log below.'
-                ]);
-            } elseif ($returnCode === 0) {
-                echo json_encode([
-                    'success' => true,
-                    'message' => 'Sync started. Check log below for progress.'
+                    'message' => 'Sync completed! Check log for details.'
                 ]);
             } else {
-                // Include output for debugging
-                $errorMsg = 'Sync failed with error code: ' . $returnCode;
+                $errorMsg = 'Sync failed (exit code: ' . $returnCode . ')';
                 if (!empty($output)) {
-                    $errorMsg .= ' | ' . implode(' | ', array_slice($output, -3));
+                    $lastLines = array_slice($output, -3);
+                    $errorMsg .= ' - ' . implode(' | ', $lastLines);
                 }
                 echo json_encode([
                     'success' => false,
@@ -4622,8 +5295,8 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
             $sourceDir = $tempDir;
         }
         
-        // Preserve configuration files
-        $preserveFiles = ['sync_config.php', 'sync_state.json', 'sync.log'];
+        // Preserve configuration files (sync_state.json and sync.log are now in data/meta/calendar/)
+        $preserveFiles = ['sync_config.php'];
         $preserved = [];
         foreach ($preserveFiles as $file) {
             $oldFile = $pluginDir . $file;
@@ -4739,6 +5412,10 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
         }
     }
     
+    /**
+     * Restore a backup using DokuWiki's extension manager
+     * This ensures proper permissions and follows DokuWiki's standard installation process
+     */
     private function restoreBackup() {
         global $INPUT;
         
@@ -4756,54 +5433,40 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
         }
         
         $backupPath = DOKU_PLUGIN . $filename;
-        $pluginDir = DOKU_PLUGIN . 'calendar/';
         
         if (!file_exists($backupPath)) {
             $this->redirect('Backup file not found', 'error', 'update');
             return;
         }
         
-        // Check if plugin directory is writable
-        if (!is_writable($pluginDir)) {
-            $this->redirect('Plugin directory is not writable. Please check permissions.', 'error', 'update');
+        // Try to use DokuWiki's extension manager helper
+        $extensionHelper = plugin_load('helper', 'extension_extension');
+        
+        if (!$extensionHelper) {
+            // Extension manager not available - provide manual instructions
+            $this->redirect('DokuWiki Extension Manager not available. Please install manually: Download the backup, go to Admin → Extension Manager → Install, and upload the ZIP file.', 'error', 'update');
             return;
         }
         
-        // Extract backup to temp directory
-        $tempDir = DOKU_PLUGIN . 'calendar_restore_temp/';
-        if (is_dir($tempDir)) {
-            $this->deleteDirectory($tempDir);
+        try {
+            // Set the extension we're working with
+            $extensionHelper->setExtension('calendar');
+            
+            // Use DokuWiki's extension manager to install from the local file
+            // This handles all permissions and file operations properly
+            $installed = $extensionHelper->installFromLocal($backupPath, true); // true = overwrite
+            
+            if ($installed) {
+                $this->redirect('Plugin restored from backup: ' . $filename . ' (via Extension Manager)', 'success', 'update');
+            } else {
+                // Get any error message from the extension helper
+                $errors = $extensionHelper->getErrors();
+                $errorMsg = !empty($errors) ? implode(', ', $errors) : 'Unknown error';
+                $this->redirect('Restore failed: ' . $errorMsg, 'error', 'update');
+            }
+        } catch (Exception $e) {
+            $this->redirect('Restore failed: ' . $e->getMessage(), 'error', 'update');
         }
-        mkdir($tempDir);
-        
-        $zip = new ZipArchive();
-        if ($zip->open($backupPath) !== TRUE) {
-            $this->redirect('Failed to open backup ZIP file', 'error', 'update');
-            return;
-        }
-        
-        $zip->extractTo($tempDir);
-        $zip->close();
-        
-        // The backup contains a "calendar/" folder
-        $sourceDir = $tempDir . 'calendar/';
-        
-        if (!is_dir($sourceDir)) {
-            $this->deleteDirectory($tempDir);
-            $this->redirect('Invalid backup structure', 'error', 'update');
-            return;
-        }
-        
-        // Delete current plugin directory contents
-        $this->deleteDirectoryContents($pluginDir, []);
-        
-        // Copy backup files to plugin directory
-        $this->recursiveCopy($sourceDir, $pluginDir);
-        
-        // Cleanup temp directory
-        $this->deleteDirectory($tempDir);
-        
-        $this->redirect('Plugin restored from backup: ' . $filename, 'success', 'update');
     }
     
     private function createManualBackup() {
@@ -5037,7 +5700,7 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
     private function findPhpBinary() {
         // Try PHP_BINARY constant first (most reliable if available)
         if (defined('PHP_BINARY') && !empty(PHP_BINARY) && is_executable(PHP_BINARY)) {
-            return escapeshellarg(PHP_BINARY);
+            return PHP_BINARY;
         }
         
         // Try common PHP binary locations
@@ -5048,18 +5711,18 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
             '/usr/bin/php8.3',
             '/usr/bin/php7.4',
             '/usr/local/bin/php',
-            'php' // Last resort - rely on PATH
         ];
         
         foreach ($possiblePaths as $path) {
-            // Test if this PHP binary works
-            $testOutput = [];
-            $testReturn = 0;
-            exec($path . ' -v 2>&1', $testOutput, $testReturn);
-            
-            if ($testReturn === 0) {
-                return ($path === 'php') ? 'php' : escapeshellarg($path);
+            if (is_executable($path)) {
+                return $path;
             }
+        }
+        
+        // Try using 'which' to find php
+        $which = trim(shell_exec('which php 2>/dev/null') ?? '');
+        if (!empty($which) && is_executable($which)) {
+            return $which;
         }
         
         // Fallback to 'php' and hope it's in PATH
@@ -5082,7 +5745,7 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
         if ($INPUT->str('call') === 'ajax') {
             header('Content-Type: application/json');
             
-            $logFile = DOKU_PLUGIN . 'calendar/sync.log';
+            $logFile = $this->getSyncLogPath();
             $log = '';
             
             if (file_exists($logFile)) {
@@ -5290,23 +5953,38 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
         if ($INPUT->str('call') === 'ajax') {
             header('Content-Type: application/json');
             
-            $logFile = DOKU_PLUGIN . 'calendar/sync.log';
+            $logFile = $this->getSyncLogPath();
             
-            if (file_exists($logFile)) {
-                if (file_put_contents($logFile, '')) {
-                    echo json_encode(['success' => true]);
+            // Check if file exists
+            if (!file_exists($logFile)) {
+                // Try to create empty file
+                if (@touch($logFile)) {
+                    echo json_encode(['success' => true, 'message' => 'Log file created']);
                 } else {
-                    echo json_encode(['success' => false, 'message' => 'Could not clear log file']);
+                    echo json_encode(['success' => false, 'message' => 'Log file does not exist and cannot be created: ' . $logFile]);
                 }
+                exit;
+            }
+            
+            // Check if writable
+            if (!is_writable($logFile)) {
+                echo json_encode(['success' => false, 'message' => 'Log file not writable. Run: sudo chmod 666 ' . $logFile]);
+                exit;
+            }
+            
+            // Try to clear it
+            $result = file_put_contents($logFile, '');
+            if ($result !== false) {
+                echo json_encode(['success' => true]);
             } else {
-                echo json_encode(['success' => true, 'message' => 'No log file to clear']);
+                echo json_encode(['success' => false, 'message' => 'file_put_contents failed on: ' . $logFile]);
             }
             exit;
         }
     }
     
     private function downloadLog() {
-        $logFile = DOKU_PLUGIN . 'calendar/sync.log';
+        $logFile = $this->getSyncLogPath();
         
         if (file_exists($logFile)) {
             header('Content-Type: text/plain');
@@ -5377,8 +6055,18 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
                     $stats['total_files']++;
                     $data = json_decode(file_get_contents($file), true);
                     if ($data) {
-                        foreach ($data as $dateEvents) {
-                            $eventCount += count($dateEvents);
+                        foreach ($data as $dateKey => $dateEvents) {
+                            // Skip non-date keys (like "mapping" or other metadata)
+                            if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $dateKey)) continue;
+                            
+                            if (is_array($dateEvents)) {
+                                // Only count events that have id and title
+                                foreach ($dateEvents as $event) {
+                                    if (is_array($event) && !empty($event['id']) && !empty($event['title'])) {
+                                        $eventCount++;
+                                    }
+                                }
+                            }
                         }
                     }
                 }
@@ -5439,7 +6127,9 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
             foreach ($files as $filename => $events) {
                 $exportData['namespaces'][$namespace][$filename] = $events;
                 foreach ($events as $dateEvents) {
-                    $exportData['total_events'] += count($dateEvents);
+                    if (is_array($dateEvents)) {
+                        $exportData['total_events'] += count($dateEvents);
+                    }
                 }
             }
         }
@@ -5559,7 +6249,9 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
                     // New file
                     file_put_contents($targetFile, json_encode($events, JSON_PRETTY_PRINT));
                     foreach ($events as $dateEvents) {
-                        $importedCount += count($dateEvents);
+                        if (is_array($dateEvents)) {
+                            $importedCount += count($dateEvents);
+                        }
                     }
                 }
             }
@@ -5830,8 +6522,10 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
         if ($INPUT->str('action') === 'save_theme') {
             $theme = $INPUT->str('theme', 'matrix');
             $weekStart = $INPUT->str('week_start', 'monday');
+            $itineraryCollapsed = $INPUT->str('itinerary_collapsed', 'no');
             $this->saveSidebarTheme($theme);
             $this->saveWeekStartDay($weekStart);
+            $this->saveItineraryCollapsed($itineraryCollapsed === 'yes');
             echo '<div style="background:#d4edda; border:1px solid #c3e6cb; color:#155724; padding:12px; border-radius:4px; margin-bottom:20px;">';
             echo '✓ Theme and settings saved successfully! Refresh any page with the sidebar to see changes.';
             echo '</div>';
@@ -5839,6 +6533,7 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
         
         $currentTheme = $this->getSidebarTheme();
         $currentWeekStart = $this->getWeekStartDay();
+        $currentItineraryCollapsed = $this->getItineraryCollapsed();
         
         echo '<h2 style="margin:0 0 20px 0; color:' . $colors['text'] . ';">🎨 Sidebar Widget Settings</h2>';
         echo '<p style="color:' . $colors['text'] . '; margin-bottom:20px;">Customize the appearance and behavior of the sidebar calendar widget.</p>';
@@ -5865,6 +6560,30 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
         echo '<div>';
         echo '<div style="font-weight:bold; color:' . $colors['text'] . '; margin-bottom:3px;">Sunday</div>';
         echo '<div style="font-size:11px; color:' . $colors['text'] . ';">Week starts on Sunday (US/Canada standard)</div>';
+        echo '</div>';
+        echo '</label>';
+        echo '</div>';
+        echo '</div>';
+        
+        // Itinerary Default State Section
+        echo '<div style="background:' . $colors['bg'] . '; border:1px solid ' . $colors['border'] . '; border-radius:6px; padding:20px; margin-bottom:30px;">';
+        echo '<h3 style="margin:0 0 15px 0; color:' . $colors['text'] . '; font-size:16px;">📋 Itinerary Section</h3>';
+        echo '<p style="color:' . $colors['text'] . '; margin-bottom:15px; font-size:13px;">Choose whether the Today/Tomorrow/Important Events sections are expanded or collapsed by default:</p>';
+        
+        echo '<div style="display:flex; gap:15px;">';
+        echo '<label style="flex:1; padding:12px; border:2px solid ' . (!$currentItineraryCollapsed ? '#00cc07' : $colors['border']) . '; border-radius:4px; background:' . (!$currentItineraryCollapsed ? 'rgba(0, 204, 7, 0.05)' : $colors['bg']) . '; cursor:pointer; display:flex; align-items:center;">';
+        echo '<input type="radio" name="itinerary_collapsed" value="no" ' . (!$currentItineraryCollapsed ? 'checked' : '') . ' style="margin-right:10px; width:18px; height:18px;">';
+        echo '<div>';
+        echo '<div style="font-weight:bold; color:' . $colors['text'] . '; margin-bottom:3px;">Expanded</div>';
+        echo '<div style="font-size:11px; color:' . $colors['text'] . ';">Show itinerary sections by default</div>';
+        echo '</div>';
+        echo '</label>';
+        
+        echo '<label style="flex:1; padding:12px; border:2px solid ' . ($currentItineraryCollapsed ? '#00cc07' : $colors['border']) . '; border-radius:4px; background:' . ($currentItineraryCollapsed ? 'rgba(0, 204, 7, 0.05)' : $colors['bg']) . '; cursor:pointer; display:flex; align-items:center;">';
+        echo '<input type="radio" name="itinerary_collapsed" value="yes" ' . ($currentItineraryCollapsed ? 'checked' : '') . ' style="margin-right:10px; width:18px; height:18px;">';
+        echo '<div>';
+        echo '<div style="font-weight:bold; color:' . $colors['text'] . '; margin-bottom:3px;">Collapsed</div>';
+        echo '<div style="font-size:11px; color:' . $colors['text'] . ';">Hide itinerary sections by default (click bar to expand)</div>';
         echo '</div>';
         echo '</label>';
         echo '</div>';
@@ -5988,6 +6707,26 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
             return true;
         }
         return false;
+    }
+    
+    /**
+     * Get itinerary collapsed default state
+     */
+    private function getItineraryCollapsed() {
+        $configFile = DOKU_INC . 'data/meta/calendar_itinerary_collapsed.txt';
+        if (file_exists($configFile)) {
+            return trim(file_get_contents($configFile)) === 'yes';
+        }
+        return false; // Default to expanded
+    }
+    
+    /**
+     * Save itinerary collapsed default state
+     */
+    private function saveItineraryCollapsed($collapsed) {
+        $configFile = DOKU_INC . 'data/meta/calendar_itinerary_collapsed.txt';
+        file_put_contents($configFile, $collapsed ? 'yes' : 'no');
+        return true;
     }
     
     /**

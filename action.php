@@ -89,6 +89,9 @@ class action_plugin_calendar extends DokuWiki_Action_Plugin {
             case 'load_month':
                 $this->loadMonth();
                 break;
+            case 'search_all':
+                $this->searchAllDates();
+                break;
             case 'toggle_task':
                 $this->toggleTaskComplete();
                 break;
@@ -138,6 +141,23 @@ class action_plugin_calendar extends DokuWiki_Action_Plugin {
         $isRecurring = $INPUT->bool('isRecurring', false);
         $recurrenceType = $INPUT->str('recurrenceType', 'weekly');
         $recurrenceEnd = $INPUT->str('recurrenceEnd', '');
+        
+        // New recurrence options
+        $recurrenceInterval = $INPUT->int('recurrenceInterval', 1);
+        if ($recurrenceInterval < 1) $recurrenceInterval = 1;
+        if ($recurrenceInterval > 99) $recurrenceInterval = 99;
+        
+        $weekDaysStr = $INPUT->str('weekDays', '');
+        $weekDays = $weekDaysStr ? array_map('intval', explode(',', $weekDaysStr)) : [];
+        
+        $monthlyType = $INPUT->str('monthlyType', 'dayOfMonth');
+        $monthDay = $INPUT->int('monthDay', 0);
+        $ordinalWeek = $INPUT->int('ordinalWeek', 1);
+        $ordinalDay = $INPUT->int('ordinalDay', 0);
+        
+        $this->debugLog("=== Calendar saveEvent START ===");
+        $this->debugLog("Calendar saveEvent: INPUT namespace='$namespace', eventId='$eventId', date='$date', oldDate='$oldDate', title='$title'");
+        $this->debugLog("Calendar saveEvent: Recurrence - type='$recurrenceType', interval=$recurrenceInterval, weekDays=" . implode(',', $weekDays) . ", monthlyType='$monthlyType'");
         
         if (!$date || !$title) {
             echo json_encode(['success' => false, 'error' => 'Missing required fields']);
@@ -203,18 +223,21 @@ class action_plugin_calendar extends DokuWiki_Action_Plugin {
         // Sanitize description length
         $description = substr($description, 0, 10000);
         
-        // If editing, find the event's stored namespace (for finding/deleting old event)
-        $storedNamespace = '';
-        $oldNamespace = '';
+        // If editing, find the event's ACTUAL namespace (for finding/deleting old event)
+        // We need to search ALL namespaces because user may be changing namespace
+        $oldNamespace = null;  // null means "not found yet"
         if ($eventId) {
             // Use oldDate if available (date was changed), otherwise use current date
             $searchDate = ($oldDate && $oldDate !== $date) ? $oldDate : $date;
-            $storedNamespace = $this->findEventNamespace($eventId, $searchDate, $namespace);
             
-            // Store the old namespace for deletion purposes
-            if ($storedNamespace !== null) {
-                $oldNamespace = $storedNamespace;
+            // Search using wildcard to find event in ANY namespace
+            $foundNamespace = $this->findEventNamespace($eventId, $searchDate, '*');
+            
+            if ($foundNamespace !== null) {
+                $oldNamespace = $foundNamespace;  // Could be '' for default namespace
                 $this->debugLog("Calendar saveEvent: Found existing event in namespace '$oldNamespace'");
+            } else {
+                $this->debugLog("Calendar saveEvent: Event $eventId not found in any namespace");
             }
         }
         
@@ -240,7 +263,8 @@ class action_plugin_calendar extends DokuWiki_Action_Plugin {
         $existingEventData = null;
         if ($eventId && $isRecurring) {
             $searchDate = ($oldDate && $oldDate !== $date) ? $oldDate : $date;
-            $existingEventData = $this->getExistingEventData($eventId, $searchDate, $oldNamespace ?: $namespace);
+            // Use null coalescing: if oldNamespace is null (not found), use new namespace; if '' (default), use ''
+            $existingEventData = $this->getExistingEventData($eventId, $searchDate, $oldNamespace ?? $namespace);
             if ($existingEventData) {
                 $this->debugLog("Calendar saveEvent recurring: Loaded existing data - namespace='" . ($existingEventData['namespace'] ?? 'NOT SET') . "'");
             }
@@ -278,8 +302,9 @@ class action_plugin_calendar extends DokuWiki_Action_Plugin {
                 $this->debugLog("Calendar saveEvent recurring: No existing data found, using namespace='$namespace'");
             }
             
-            $this->createRecurringEvents($namespace, $date, $endDate, $title, $time, $description, 
-                                        $color, $isTask, $recurrenceType, $recurrenceEnd, $generatedId);
+            $this->createRecurringEvents($namespace, $date, $endDate, $title, $time, $endTime, $description, 
+                                        $color, $isTask, $recurrenceType, $recurrenceInterval, $recurrenceEnd, 
+                                        $weekDays, $monthlyType, $monthDay, $ordinalWeek, $ordinalDay, $generatedId);
             echo json_encode(['success' => true]);
             return;
         }
@@ -299,14 +324,22 @@ class action_plugin_calendar extends DokuWiki_Action_Plugin {
         
         $eventFile = $dataDir . sprintf('%04d-%02d.json', $year, $month);
         
+        $this->debugLog("Calendar saveEvent: NEW eventFile='$eventFile'");
+        
         $events = [];
         if (file_exists($eventFile)) {
             $events = json_decode(file_get_contents($eventFile), true);
+            $this->debugLog("Calendar saveEvent: Loaded " . count($events) . " dates from new location");
+        } else {
+            $this->debugLog("Calendar saveEvent: New location file does not exist yet");
         }
         
         // If editing and (date changed OR namespace changed), remove from old location first
-        $namespaceChanged = ($eventId && $oldNamespace !== '' && $oldNamespace !== $namespace);
+        // $oldNamespace is null if event not found, '' for default namespace, or 'name' for named namespace
+        $namespaceChanged = ($eventId && $oldNamespace !== null && $oldNamespace !== $namespace);
         $dateChanged = ($eventId && $oldDate && $oldDate !== $date);
+        
+        $this->debugLog("Calendar saveEvent: eventId='$eventId', oldNamespace=" . var_export($oldNamespace, true) . ", newNamespace='$namespace', namespaceChanged=" . ($namespaceChanged ? 'YES' : 'NO') . ", dateChanged=" . ($dateChanged ? 'YES' : 'NO'));
         
         if ($namespaceChanged || $dateChanged) {
             // Construct OLD data directory using OLD namespace
@@ -320,21 +353,35 @@ class action_plugin_calendar extends DokuWiki_Action_Plugin {
             list($oldYear, $oldMonth, $oldDay) = explode('-', $deleteDate);
             $oldEventFile = $oldDataDir . sprintf('%04d-%02d.json', $oldYear, $oldMonth);
             
+            $this->debugLog("Calendar saveEvent: Attempting to delete from OLD eventFile='$oldEventFile', deleteDate='$deleteDate'");
+            
             if (file_exists($oldEventFile)) {
                 $oldEvents = json_decode(file_get_contents($oldEventFile), true);
+                $this->debugLog("Calendar saveEvent: OLD file exists, has " . count($oldEvents) . " dates");
+                
                 if (isset($oldEvents[$deleteDate])) {
+                    $countBefore = count($oldEvents[$deleteDate]);
                     $oldEvents[$deleteDate] = array_values(array_filter($oldEvents[$deleteDate], function($evt) use ($eventId) {
                         return $evt['id'] !== $eventId;
                     }));
+                    $countAfter = count($oldEvents[$deleteDate]);
+                    
+                    $this->debugLog("Calendar saveEvent: Events on date before=$countBefore, after=$countAfter");
                     
                     if (empty($oldEvents[$deleteDate])) {
                         unset($oldEvents[$deleteDate]);
                     }
                     
                     file_put_contents($oldEventFile, json_encode($oldEvents, JSON_PRETTY_PRINT));
-                    $this->debugLog("Calendar saveEvent: Deleted event from old location - namespace:'$oldNamespace', date:'$deleteDate'");
+                    $this->debugLog("Calendar saveEvent: DELETED event from old location - namespace:'$oldNamespace', date:'$deleteDate'");
+                } else {
+                    $this->debugLog("Calendar saveEvent: No events found on deleteDate='$deleteDate' in old file");
                 }
+            } else {
+                $this->debugLog("Calendar saveEvent: OLD file does NOT exist: $oldEventFile");
             }
+        } else {
+            $this->debugLog("Calendar saveEvent: No namespace/date change detected, skipping deletion from old location");
         }
         
         if (!isset($events[$date])) {
@@ -773,6 +820,159 @@ class action_plugin_calendar extends DokuWiki_Action_Plugin {
         }
     }
 
+    /**
+     * Search all dates for events matching the search term
+     */
+    private function searchAllDates() {
+        global $INPUT;
+        
+        $searchTerm = strtolower(trim($INPUT->str('search', '')));
+        $namespace = $INPUT->str('namespace', '');
+        
+        if (strlen($searchTerm) < 2) {
+            echo json_encode(['success' => false, 'error' => 'Search term too short']);
+            return;
+        }
+        
+        // Normalize search term for fuzzy matching
+        $normalizedSearch = $this->normalizeForSearch($searchTerm);
+        
+        $results = [];
+        $dataDir = DOKU_INC . 'data/meta/';
+        
+        // Helper to search calendar directory
+        $searchCalendarDir = function($calDir, $eventNamespace) use ($normalizedSearch, &$results) {
+            if (!is_dir($calDir)) return;
+            
+            foreach (glob($calDir . '/*.json') as $file) {
+                $data = @json_decode(file_get_contents($file), true);
+                if (!$data || !is_array($data)) continue;
+                
+                foreach ($data as $dateKey => $dayEvents) {
+                    // Skip non-date keys
+                    if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $dateKey)) continue;
+                    if (!is_array($dayEvents)) continue;
+                    
+                    foreach ($dayEvents as $event) {
+                        if (!isset($event['title'])) continue;
+                        
+                        // Build searchable text
+                        $searchableText = strtolower($event['title']);
+                        if (isset($event['description'])) {
+                            $searchableText .= ' ' . strtolower($event['description']);
+                        }
+                        
+                        // Normalize for fuzzy matching
+                        $normalizedText = $this->normalizeForSearch($searchableText);
+                        
+                        // Check if matches using fuzzy match
+                        if ($this->fuzzyMatchText($normalizedText, $normalizedSearch)) {
+                            $results[] = [
+                                'date' => $dateKey,
+                                'title' => $event['title'],
+                                'time' => isset($event['time']) ? $event['time'] : '',
+                                'endTime' => isset($event['endTime']) ? $event['endTime'] : '',
+                                'color' => isset($event['color']) ? $event['color'] : '',
+                                'namespace' => isset($event['namespace']) ? $event['namespace'] : $eventNamespace,
+                                'id' => isset($event['id']) ? $event['id'] : ''
+                            ];
+                        }
+                    }
+                }
+            }
+        };
+        
+        // Search root calendar directory
+        $searchCalendarDir($dataDir . 'calendar', '');
+        
+        // Search namespace directories
+        $this->searchNamespaceDirs($dataDir, $searchCalendarDir);
+        
+        // Sort results by date (newest first for past, oldest first for future)
+        usort($results, function($a, $b) {
+            return strcmp($a['date'], $b['date']);
+        });
+        
+        // Limit results
+        $results = array_slice($results, 0, 50);
+        
+        echo json_encode([
+            'success' => true,
+            'results' => $results,
+            'total' => count($results)
+        ]);
+    }
+    
+    /**
+     * Check if normalized text matches normalized search term
+     * Supports multi-word search where all words must be present
+     */
+    private function fuzzyMatchText($normalizedText, $normalizedSearch) {
+        // Direct substring match
+        if (strpos($normalizedText, $normalizedSearch) !== false) {
+            return true;
+        }
+        
+        // Multi-word search: all words must be present
+        $searchWords = array_filter(explode(' ', $normalizedSearch));
+        if (count($searchWords) > 1) {
+            foreach ($searchWords as $word) {
+                if (strlen($word) > 0 && strpos($normalizedText, $word) === false) {
+                    return false;
+                }
+            }
+            return true;
+        }
+        
+        return false;
+    }
+    
+    /**
+     * Normalize text for fuzzy search matching
+     * Removes apostrophes, extra spaces, and common variations
+     */
+    private function normalizeForSearch($text) {
+        // Convert to lowercase
+        $text = strtolower($text);
+        
+        // Remove apostrophes and quotes (father's -> fathers)
+        $text = preg_replace('/[\x27\x60\x22\xE2\x80\x98\xE2\x80\x99\xE2\x80\x9C\xE2\x80\x9D]/u', '', $text);
+        
+        // Normalize dashes and underscores to spaces
+        $text = preg_replace('/[-_\x{2013}\x{2014}]/u', ' ', $text);
+        
+        // Remove other punctuation but keep letters, numbers, spaces
+        $text = preg_replace('/[^\p{L}\p{N}\s]/u', '', $text);
+        
+        // Normalize multiple spaces to single space
+        $text = preg_replace('/\s+/', ' ', $text);
+        
+        // Trim
+        $text = trim($text);
+        
+        return $text;
+    }
+    
+    /**
+     * Recursively search namespace directories for calendar data
+     */
+    private function searchNamespaceDirs($baseDir, $callback) {
+        foreach (glob($baseDir . '*', GLOB_ONLYDIR) as $nsDir) {
+            $name = basename($nsDir);
+            if ($name === 'calendar') continue;
+            
+            $calDir = $nsDir . '/calendar';
+            if (is_dir($calDir)) {
+                $relPath = str_replace(DOKU_INC . 'data/meta/', '', $nsDir);
+                $namespace = str_replace('/', ':', $relPath);
+                $callback($calDir, $namespace);
+            }
+            
+            // Recurse
+            $this->searchNamespaceDirs($nsDir . '/', $callback);
+        }
+    }
+
     private function toggleTaskComplete() {
         global $INPUT;
         
@@ -822,9 +1022,10 @@ class action_plugin_calendar extends DokuWiki_Action_Plugin {
         echo json_encode(['success' => false, 'error' => 'Event not found']);
     }
     
-    private function createRecurringEvents($namespace, $startDate, $endDate, $title, $time, 
-                                          $description, $color, $isTask, $recurrenceType, 
-                                          $recurrenceEnd, $baseId) {
+    private function createRecurringEvents($namespace, $startDate, $endDate, $title, $time, $endTime,
+                                          $description, $color, $isTask, $recurrenceType, $recurrenceInterval,
+                                          $recurrenceEnd, $weekDays, $monthlyType, $monthDay, 
+                                          $ordinalWeek, $ordinalDay, $baseId) {
         $dataDir = DOKU_INC . 'data/meta/';
         if ($namespace) {
             $dataDir .= str_replace(':', '/', $namespace) . '/';
@@ -835,15 +1036,8 @@ class action_plugin_calendar extends DokuWiki_Action_Plugin {
             mkdir($dataDir, 0755, true);
         }
         
-        // Calculate recurrence interval
-        $interval = '';
-        switch ($recurrenceType) {
-            case 'daily': $interval = '+1 day'; break;
-            case 'weekly': $interval = '+1 week'; break;
-            case 'monthly': $interval = '+1 month'; break;
-            case 'yearly': $interval = '+1 year'; break;
-            default: $interval = '+1 week';
-        }
+        // Ensure interval is at least 1
+        if ($recurrenceInterval < 1) $recurrenceInterval = 1;
         
         // Set maximum end date if not specified (1 year from start)
         $maxEnd = $recurrenceEnd ?: date('Y-m-d', strtotime($startDate . ' +1 year'));
@@ -860,54 +1054,185 @@ class action_plugin_calendar extends DokuWiki_Action_Plugin {
         $currentDate = new DateTime($startDate);
         $endLimit = new DateTime($maxEnd);
         $counter = 0;
-        $maxOccurrences = 100; // Prevent infinite loops
+        $maxOccurrences = 365; // Allow up to 365 occurrences (e.g., daily for 1 year)
+        
+        // For weekly with specific days, we need to track the interval counter differently
+        $weekCounter = 0;
+        $startWeekNumber = (int)$currentDate->format('W');
+        $startYear = (int)$currentDate->format('Y');
         
         while ($currentDate <= $endLimit && $counter < $maxOccurrences) {
-            $dateKey = $currentDate->format('Y-m-d');
-            list($year, $month, $day) = explode('-', $dateKey);
+            $shouldCreateEvent = false;
             
-            // Calculate end date for this occurrence if multi-day
-            $occurrenceEndDate = '';
-            if ($eventDuration > 0) {
-                $occurrenceEnd = clone $currentDate;
-                $occurrenceEnd->modify('+' . $eventDuration . ' days');
-                $occurrenceEndDate = $occurrenceEnd->format('Y-m-d');
+            switch ($recurrenceType) {
+                case 'daily':
+                    // Every N days from start
+                    $daysSinceStart = $currentDate->diff(new DateTime($startDate))->days;
+                    $shouldCreateEvent = ($daysSinceStart % $recurrenceInterval === 0);
+                    break;
+                    
+                case 'weekly':
+                    // Every N weeks, on specified days
+                    $currentDayOfWeek = (int)$currentDate->format('w'); // 0=Sun, 6=Sat
+                    
+                    // Calculate weeks since start
+                    $daysSinceStart = $currentDate->diff(new DateTime($startDate))->days;
+                    $weeksSinceStart = floor($daysSinceStart / 7);
+                    
+                    // Check if we're in the right week (every N weeks)
+                    $isCorrectWeek = ($weeksSinceStart % $recurrenceInterval === 0);
+                    
+                    // Check if this day is selected
+                    $isDaySelected = empty($weekDays) || in_array($currentDayOfWeek, $weekDays);
+                    
+                    // For the first week, only include days on or after the start date
+                    $isOnOrAfterStart = ($currentDate >= new DateTime($startDate));
+                    
+                    $shouldCreateEvent = $isCorrectWeek && $isDaySelected && $isOnOrAfterStart;
+                    break;
+                    
+                case 'monthly':
+                    // Calculate months since start
+                    $startDT = new DateTime($startDate);
+                    $monthsSinceStart = (($currentDate->format('Y') - $startDT->format('Y')) * 12) + 
+                                        ($currentDate->format('n') - $startDT->format('n'));
+                    
+                    // Check if we're in the right month (every N months)
+                    $isCorrectMonth = ($monthsSinceStart >= 0 && $monthsSinceStart % $recurrenceInterval === 0);
+                    
+                    if (!$isCorrectMonth) {
+                        // Skip to first day of next potential month
+                        $currentDate->modify('first day of next month');
+                        continue 2;
+                    }
+                    
+                    if ($monthlyType === 'dayOfMonth') {
+                        // Specific day of month (e.g., 15th)
+                        $targetDay = $monthDay ?: (int)(new DateTime($startDate))->format('j');
+                        $currentDay = (int)$currentDate->format('j');
+                        $daysInMonth = (int)$currentDate->format('t');
+                        
+                        // If target day exceeds days in month, use last day
+                        $effectiveTargetDay = min($targetDay, $daysInMonth);
+                        $shouldCreateEvent = ($currentDay === $effectiveTargetDay);
+                    } else {
+                        // Ordinal weekday (e.g., 2nd Wednesday, last Friday)
+                        $shouldCreateEvent = $this->isOrdinalWeekday($currentDate, $ordinalWeek, $ordinalDay);
+                    }
+                    break;
+                    
+                case 'yearly':
+                    // Every N years on same month/day
+                    $startDT = new DateTime($startDate);
+                    $yearsSinceStart = (int)$currentDate->format('Y') - (int)$startDT->format('Y');
+                    
+                    // Check if we're in the right year
+                    $isCorrectYear = ($yearsSinceStart >= 0 && $yearsSinceStart % $recurrenceInterval === 0);
+                    
+                    // Check if it's the same month and day
+                    $sameMonthDay = ($currentDate->format('m-d') === $startDT->format('m-d'));
+                    
+                    $shouldCreateEvent = $isCorrectYear && $sameMonthDay;
+                    break;
+                    
+                default:
+                    $shouldCreateEvent = false;
             }
             
-            // Load month file
-            $eventFile = $dataDir . sprintf('%04d-%02d.json', $year, $month);
-            $events = [];
-            if (file_exists($eventFile)) {
-                $events = json_decode(file_get_contents($eventFile), true);
+            if ($shouldCreateEvent) {
+                $dateKey = $currentDate->format('Y-m-d');
+                list($year, $month, $day) = explode('-', $dateKey);
+                
+                // Calculate end date for this occurrence if multi-day
+                $occurrenceEndDate = '';
+                if ($eventDuration > 0) {
+                    $occurrenceEnd = clone $currentDate;
+                    $occurrenceEnd->modify('+' . $eventDuration . ' days');
+                    $occurrenceEndDate = $occurrenceEnd->format('Y-m-d');
+                }
+                
+                // Load month file
+                $eventFile = $dataDir . sprintf('%04d-%02d.json', $year, $month);
+                $events = [];
+                if (file_exists($eventFile)) {
+                    $events = json_decode(file_get_contents($eventFile), true);
+                    if (!is_array($events)) $events = [];
+                }
+                
+                if (!isset($events[$dateKey])) {
+                    $events[$dateKey] = [];
+                }
+                
+                // Create event for this occurrence
+                $eventData = [
+                    'id' => $baseId . '-' . $counter,
+                    'title' => $title,
+                    'time' => $time,
+                    'endTime' => $endTime,
+                    'description' => $description,
+                    'color' => $color,
+                    'isTask' => $isTask,
+                    'completed' => false,
+                    'endDate' => $occurrenceEndDate,
+                    'recurring' => true,
+                    'recurringId' => $baseId,
+                    'recurrenceType' => $recurrenceType,
+                    'recurrenceInterval' => $recurrenceInterval,
+                    'namespace' => $namespace,
+                    'created' => date('Y-m-d H:i:s')
+                ];
+                
+                // Store additional recurrence info for reference
+                if ($recurrenceType === 'weekly' && !empty($weekDays)) {
+                    $eventData['weekDays'] = $weekDays;
+                }
+                if ($recurrenceType === 'monthly') {
+                    $eventData['monthlyType'] = $monthlyType;
+                    if ($monthlyType === 'dayOfMonth') {
+                        $eventData['monthDay'] = $monthDay;
+                    } else {
+                        $eventData['ordinalWeek'] = $ordinalWeek;
+                        $eventData['ordinalDay'] = $ordinalDay;
+                    }
+                }
+                
+                $events[$dateKey][] = $eventData;
+                file_put_contents($eventFile, json_encode($events, JSON_PRETTY_PRINT));
+                
+                $counter++;
             }
             
-            if (!isset($events[$dateKey])) {
-                $events[$dateKey] = [];
-            }
-            
-            // Create event for this occurrence
-            $eventData = [
-                'id' => $baseId . '-' . $counter,
-                'title' => $title,
-                'time' => $time,
-                'endTime' => $endTime,
-                'description' => $description,
-                'color' => $color,
-                'isTask' => $isTask,
-                'completed' => false,
-                'endDate' => $occurrenceEndDate,
-                'recurring' => true,
-                'recurringId' => $baseId,
-                'namespace' => $namespace,  // Add namespace!
-                'created' => date('Y-m-d H:i:s')
-            ];
-            
-            $events[$dateKey][] = $eventData;
-            file_put_contents($eventFile, json_encode($events, JSON_PRETTY_PRINT));
-            
-            // Move to next occurrence
-            $currentDate->modify($interval);
-            $counter++;
+            // Move to next day (we check each day individually for complex patterns)
+            $currentDate->modify('+1 day');
+        }
+    }
+    
+    /**
+     * Check if a date is the Nth occurrence of a weekday in its month
+     * @param DateTime $date The date to check
+     * @param int $ordinalWeek 1-5 for first-fifth, -1 for last
+     * @param int $targetDayOfWeek 0=Sunday through 6=Saturday
+     * @return bool
+     */
+    private function isOrdinalWeekday($date, $ordinalWeek, $targetDayOfWeek) {
+        $currentDayOfWeek = (int)$date->format('w');
+        
+        // First, check if it's the right day of week
+        if ($currentDayOfWeek !== $targetDayOfWeek) {
+            return false;
+        }
+        
+        $dayOfMonth = (int)$date->format('j');
+        $daysInMonth = (int)$date->format('t');
+        
+        if ($ordinalWeek === -1) {
+            // Last occurrence: check if there's no more of this weekday in the month
+            $daysRemaining = $daysInMonth - $dayOfMonth;
+            return $daysRemaining < 7;
+        } else {
+            // Nth occurrence: check which occurrence this is
+            $weekNumber = ceil($dayOfMonth / 7);
+            return $weekNumber === $ordinalWeek;
         }
     }
 
@@ -918,9 +1243,12 @@ class action_plugin_calendar extends DokuWiki_Action_Plugin {
             'href' => DOKU_BASE . 'lib/plugins/calendar/style.css'
         );
         
+        // Load the main calendar JavaScript
+        // Note: script.js is intentionally empty to avoid DokuWiki's auto-concatenation issues
+        // The actual code is in calendar-main.js
         $event->data['script'][] = array(
             'type' => 'text/javascript',
-            'src' => DOKU_BASE . 'lib/plugins/calendar/script.js'
+            'src' => DOKU_BASE . 'lib/plugins/calendar/calendar-main.js'
         );
     }
     // Helper function to find an event's stored namespace
@@ -947,6 +1275,8 @@ class action_plugin_calendar extends DokuWiki_Action_Plugin {
             }
         }
         
+        $this->debugLog("findEventNamespace: Looking for eventId='$eventId' on date='$date' in namespaces: " . implode(', ', array_map(function($n) { return $n === '' ? '(default)' : $n; }, $namespacesToCheck)));
+        
         // Search for the event in all possible namespaces
         foreach ($namespacesToCheck as $ns) {
             $dataDir = DOKU_INC . 'data/meta/';
@@ -962,14 +1292,17 @@ class action_plugin_calendar extends DokuWiki_Action_Plugin {
                 if (isset($events[$date])) {
                     foreach ($events[$date] as $evt) {
                         if ($evt['id'] === $eventId) {
-                            // Found the event! Return its stored namespace
-                            return isset($evt['namespace']) ? $evt['namespace'] : $ns;
+                            // IMPORTANT: Return the DIRECTORY namespace ($ns), not the stored namespace
+                            // The directory is what matters for deletion - that's where the file actually is
+                            $this->debugLog("findEventNamespace: FOUND event in file=$eventFile (dir namespace='$ns', stored namespace='" . ($evt['namespace'] ?? 'NOT SET') . "')");
+                            return $ns;
                         }
                     }
                 }
             }
         }
         
+        $this->debugLog("findEventNamespace: Event NOT FOUND in any namespace");
         return null; // Event not found
     }
     
@@ -986,6 +1319,8 @@ class action_plugin_calendar extends DokuWiki_Action_Plugin {
         }
         
         $this->scanForNamespaces($dataDir, $baseNamespace, $namespaces);
+        
+        $this->debugLog("findAllNamespaces: baseNamespace='$baseNamespace', found " . count($namespaces) . " namespaces: " . implode(', ', array_map(function($n) { return $n === '' ? '(default)' : $n; }, $namespaces)));
         
         return $namespaces;
     }

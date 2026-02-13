@@ -53,9 +53,13 @@ if (empty($config['tenant_id']) || strpos($config['tenant_id'], 'YOUR_') !== fal
     die("ERROR: Please configure your Azure credentials in sync_config.php\n");
 }
 
-// Files
-$stateFile = $scriptDir . '/sync_state.json';
-$logFile = $scriptDir . '/sync.log';
+// Files - store in DokuWiki data directory (writable), not plugin directory
+$dataDir = $dokuwikiRoot . '/data/meta/calendar/';
+if (!is_dir($dataDir)) {
+    mkdir($dataDir, 0755, true);
+}
+$stateFile = $dataDir . 'sync_state.json';
+$logFile = $dataDir . 'sync.log';
 
 // Initialize
 $stats = [
