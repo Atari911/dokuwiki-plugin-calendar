@@ -33,65 +33,6 @@ if (typeof DOKU_BASE === 'undefined') {
 // Shorthand for convenience  
 var DOKU_BASE = window.DOKU_BASE || '/';
 
-// Helper: Get localized language strings for a calendar instance
-// Falls back to English defaults if not found
-function getCalendarLang(calId) {
-    // Try to find lang data for this specific calendar
-    let langEl = document.getElementById('calendar-lang-' + calId);
-    
-    // If not found, try to find any calendar lang data on page
-    if (!langEl) {
-        langEl = document.querySelector('[id^="calendar-lang-"]');
-    }
-    
-    if (langEl) {
-        try {
-            return JSON.parse(langEl.textContent);
-        } catch (e) {
-            console.error('Failed to parse calendar language data:', e);
-        }
-    }
-    
-    // Return English defaults as fallback
-    return {
-        month_january: 'January', month_february: 'February', month_march: 'March',
-        month_april: 'April', month_may: 'May', month_june: 'June',
-        month_july: 'July', month_august: 'August', month_september: 'September',
-        month_october: 'October', month_november: 'November', month_december: 'December',
-        month_jan: 'Jan', month_feb: 'Feb', month_mar: 'Mar', month_apr: 'Apr',
-        month_may_short: 'May', month_jun: 'Jun', month_jul: 'Jul', month_aug: 'Aug',
-        month_sep: 'Sep', month_oct: 'Oct', month_nov: 'Nov', month_dec: 'Dec',
-        day_sun: 'Sun', day_mon: 'Mon', day_tue: 'Tue', day_wed: 'Wed',
-        day_thu: 'Thu', day_fri: 'Fri', day_sat: 'Sat',
-        events_header: 'Events', events_for_date: 'Events - %s',
-        past_events: 'Past Events (%d)', no_events_day: 'No events on this day',
-        add_btn: '+ Add', add_event_btn: '+ Add Event',
-        dialog_add_event: 'Add Event', dialog_edit_event: 'Edit Event',
-        delete_event_confirm: 'Delete this event?',
-        important_tooltip: 'Important', default_event: 'Event'
-    };
-}
-
-// Helper: Get month names array from lang strings
-function getMonthNames(lang) {
-    return [
-        lang.month_january, lang.month_february, lang.month_march,
-        lang.month_april, lang.month_may, lang.month_june,
-        lang.month_july, lang.month_august, lang.month_september,
-        lang.month_october, lang.month_november, lang.month_december
-    ];
-}
-
-// Helper: Get short month names array from lang strings
-function getMonthNamesShort(lang) {
-    return [
-        lang.month_jan, lang.month_feb, lang.month_mar,
-        lang.month_apr, lang.month_may_short, lang.month_jun,
-        lang.month_jul, lang.month_aug, lang.month_sep,
-        lang.month_oct, lang.month_nov, lang.month_dec
-    ];
-}
-
 // Helper: propagate CSS variables from a calendar container to a target element
 // This is needed for dialogs/popups that use position:fixed (they inherit CSS vars
 // from DOM parents per spec, but some DokuWiki templates break this inheritance)
@@ -244,8 +185,8 @@ window.jumpToSelectedMonth = function(calId, namespace) {
 window.rebuildCalendar = function(calId, year, month, events, namespace) {
     
     const container = document.getElementById(calId);
-    const lang = getCalendarLang(calId);
-    const monthNames = getMonthNames(lang);
+    const monthNames = ['January', 'February', 'March', 'April', 'May', 'June',
+                       'July', 'August', 'September', 'October', 'November', 'December'];
     
     // Get theme data from container
     const theme = container.dataset.theme || 'matrix';
@@ -533,15 +474,13 @@ window.rebuildCalendar = function(calId, year, month, events, namespace) {
     
     // Update title
     const title = container.querySelector('#eventlist-title-' + calId);
-    title.textContent = lang.events_header;
+    title.textContent = 'Events';
 };
 
 // Render event list from data
 window.renderEventListFromData = function(events, calId, namespace, year, month) {
-    const lang = getCalendarLang(calId);
-    
     if (!events || Object.keys(events).length === 0) {
-        return '<p class="no-events-msg">' + (lang.no_events_month || 'No events this month') + '</p>';
+        return '<p class="no-events-msg">No events this month</p>';
     }
     
     // Get theme data from container
@@ -655,11 +594,10 @@ window.renderEventListFromData = function(events, calId, namespace, year, month)
     
     // Add collapsible past events section if any exist
     if (pastCount > 0) {
-        const pastEventsText = lang.past_events ? lang.past_events.replace('%d', pastCount) : 'Past Events (' + pastCount + ')';
         html += '<div class="past-events-section">';
         html += '<div class="past-events-toggle" onclick="togglePastEvents(\'' + calId + '\')">';
         html += '<span class="past-events-arrow" id="past-arrow-' + calId + '">▶</span> ';
-        html += '<span class="past-events-label">' + pastEventsText + '</span>';
+        html += '<span class="past-events-label">Past Events (' + pastCount + ')</span>';
         html += '</div>';
         html += '<div class="past-events-content" id="past-events-' + calId + '" style="display:none;">';
         html += pastHtml;
@@ -673,7 +611,7 @@ window.renderEventListFromData = function(events, calId, namespace, year, month)
     
     
     if (!html) {
-        return '<p class="no-events-msg">' + (lang.no_events_month || 'No events this month') + '</p>';
+        return '<p class="no-events-msg">No events this month</p>';
     }
     
     return html;
@@ -681,8 +619,6 @@ window.renderEventListFromData = function(events, calId, namespace, year, month)
 
 // Show day popup with events when clicking a date
 window.showDayPopup = function(calId, date, namespace) {
-    const lang = getCalendarLang(calId);
-    
     // Get events for this calendar
     const eventsDataEl = document.getElementById('events-data-' + calId);
     let events = {};
@@ -733,10 +669,20 @@ window.showDayPopup = function(calId, date, namespace) {
         document.body.appendChild(popup);
     }
     
-    // Get theme styles
+    // Get theme styles and important namespaces
     const container = document.getElementById(calId);
     const themeStyles = container ? JSON.parse(container.dataset.themeStyles || '{}') : {};
     const theme = container ? container.dataset.theme : 'matrix';
+    
+    // Get important namespaces
+    let importantNamespaces = ['important'];
+    if (container && container.dataset.importantNamespaces) {
+        try {
+            importantNamespaces = JSON.parse(container.dataset.importantNamespaces);
+        } catch (e) {
+            importantNamespaces = ['important'];
+        }
+    }
     
     let html = '<div class="day-popup-overlay" onclick="closeDayPopup(\'' + calId + '\')"></div>';
     html += '<div class="day-popup-content">';
@@ -756,6 +702,17 @@ window.showDayPopup = function(calId, date, namespace) {
             
             // Use individual event namespace if available (for multi-namespace support)
             const eventNamespace = event._namespace !== undefined ? event._namespace : namespace;
+            
+            // Check if this is an important namespace event
+            let isImportant = false;
+            if (eventNamespace) {
+                for (const impNs of importantNamespaces) {
+                    if (eventNamespace === impNs || eventNamespace.startsWith(impNs + ':')) {
+                        isImportant = true;
+                        break;
+                    }
+                }
+            }
             
             // Check if this is a continuation (event started before this date)
             const originalStartDate = event.originalStartDate || event._dateKey || date;
@@ -788,13 +745,20 @@ window.showDayPopup = function(calId, date, namespace) {
                 html += '<div class="popup-continuation-notice">↪ Continues from ' + startDisplay + '</div>';
             }
             
-            html += '<div class="popup-event-item">';
+            const importantClass = isImportant ? ' popup-event-important' : '';
+            html += '<div class="popup-event-item' + importantClass + '">';
             html += '<div class="event-color-bar" style="background: ' + color + ';"></div>';
             html += '<div class="popup-event-content">';
             
             // Single line with title, time, date range, namespace, and actions
             html += '<div class="popup-event-main-row">';
             html += '<div class="popup-event-info-inline">';
+            
+            // Add star for important events
+            if (isImportant) {
+                html += '<span class="popup-event-star">⭐</span>';
+            }
+            
             html += '<span class="popup-event-title">' + escapeHtml(event.title) + '</span>';
             if (displayTime) {
                 html += '<span class="popup-event-time">🕐 ' + displayTime + '</span>';
@@ -823,8 +787,8 @@ window.showDayPopup = function(calId, date, namespace) {
             
             html += '</div>';
             html += '<div class="popup-event-actions">';
-            html += '<button class="event-edit-btn" onclick="editEvent(\'' + calId + '\', \'' + event.id + '\', \'' + date + '\', \'' + eventNamespace + '\'); closeDayPopup(\'' + calId + '\')">✏️</button>';
-            html += '<button class="event-delete-btn" onclick="deleteEvent(\'' + calId + '\', \'' + event.id + '\', \'' + date + '\', \'' + eventNamespace + '\'); closeDayPopup(\'' + calId + '\')">🗑️</button>';
+            html += '<button type="button" class="event-edit-btn" onclick="editEvent(\'' + calId + '\', \'' + event.id + '\', \'' + date + '\', \'' + eventNamespace + '\'); closeDayPopup(\'' + calId + '\')">✏️</button>';
+            html += '<button type="button" class="event-delete-btn" onclick="deleteEvent(\'' + calId + '\', \'' + event.id + '\', \'' + date + '\', \'' + eventNamespace + '\'); closeDayPopup(\'' + calId + '\')">🗑️</button>';
             html += '</div>';
             html += '</div>';
             
@@ -841,7 +805,7 @@ window.showDayPopup = function(calId, date, namespace) {
     html += '</div>';
     
     html += '<div class="day-popup-footer">';
-    html += '<button class="btn-add-event" onclick="openAddEvent(\'' + calId + '\', \'' + namespace + '\', \'' + date + '\'); closeDayPopup(\'' + calId + '\')">' + lang.add_event_btn + '</button>';
+    html += '<button class="btn-add-event" onclick="openAddEvent(\'' + calId + '\', \'' + namespace + '\', \'' + date + '\'); closeDayPopup(\'' + calId + '\')">+ Add Event</button>';
     html += '</div>';
     
     html += '</div>';
@@ -920,8 +884,6 @@ window.closeDayPopup = function(calId) {
 
 // Show events for a specific day (for event list panel)
 window.showDayEvents = function(calId, date, namespace) {
-    const lang = getCalendarLang(calId);
-    
     const params = new URLSearchParams({
         call: 'plugin_calendar',
         action: 'load_month',
@@ -948,19 +910,19 @@ window.showDayEvents = function(calId, date, namespace) {
             const title = document.getElementById('eventlist-title-' + calId);
             
             const dateObj = new Date(date + 'T00:00:00');
-            const displayDate = dateObj.toLocaleDateString(undefined, { 
+            const displayDate = dateObj.toLocaleDateString('en-US', { 
                 weekday: 'short', 
                 month: 'short', 
                 day: 'numeric' 
             });
             
-            title.textContent = lang.events_for_date ? lang.events_for_date.replace('%s', displayDate) : 'Events - ' + displayDate;
+            title.textContent = 'Events - ' + displayDate;
             
             // Filter events for this day
             const dayEvents = events[date] || [];
             
             if (dayEvents.length === 0) {
-                eventList.innerHTML = '<p class="no-events-msg">' + lang.no_events_day + '<br><button class="add-event-compact" onclick="openAddEvent(\'' + calId + '\', \'' + namespace + '\', \'' + date + '\')">' + lang.add_event_btn + '</button></p>';
+                eventList.innerHTML = '<p class="no-events-msg">No events on this day<br><button class="add-event-compact" onclick="openAddEvent(\'' + calId + '\', \'' + namespace + '\', \'' + date + '\')">+ Add Event</button></p>';
             } else {
                 let html = '';
                 dayEvents.forEach(event => {
@@ -975,8 +937,6 @@ window.showDayEvents = function(calId, date, namespace) {
 
 // Render a single event item
 window.renderEventItem = function(event, date, calId, namespace) {
-    const lang = getCalendarLang(calId);
-    
     // Get theme data from container
     const container = document.getElementById(calId);
     let themeStyles = {};
@@ -1084,7 +1044,7 @@ window.renderEventItem = function(event, date, calId, namespace) {
     html += '<div class="event-title-row">';
     // Add star for important namespace events
     if (isImportantNs) {
-        html += '<span class="event-important-star" title="' + lang.important_tooltip + '">⭐</span> ';
+        html += '<span class="event-important-star" title="Important">⭐</span> ';
     }
     html += '<span class="event-title-compact">' + escapeHtml(event.title) + '</span>';
     html += '</div>';
@@ -1098,9 +1058,9 @@ window.renderEventItem = function(event, date, calId, namespace) {
         }
         // Add PAST DUE or TODAY badge
         if (isPastDue) {
-            html += ' <span class="event-pastdue-badge" style="background:var(--pastdue-color, #e74c3c) !important; color:white !important; -webkit-text-fill-color:white !important;">' + (lang.badge_past_due || 'PAST DUE') + '</span>';
+            html += ' <span class="event-pastdue-badge" style="background:var(--pastdue-color, #e74c3c) !important; color:white !important; -webkit-text-fill-color:white !important;">PAST DUE</span>';
         } else if (isToday) {
-            html += ' <span class="event-today-badge" style="background:var(--border-main, #9b59b6) !important; color:var(--background-site, white) !important; -webkit-text-fill-color:var(--background-site, white) !important;">' + (lang.badge_today || 'TODAY') + '</span>';
+            html += ' <span class="event-today-badge" style="background:var(--border-main, #9b59b6) !important; color:var(--background-site, white) !important; -webkit-text-fill-color:var(--background-site, white) !important;">TODAY</span>';
         }
         // Add namespace badge
         if (eventNamespace) {
@@ -1314,7 +1274,6 @@ window.renderDescription = function(description) {
 
 // Open add event dialog
 window.openAddEvent = function(calId, namespace, date) {
-    const lang = getCalendarLang(calId);
     const dialog = document.getElementById('dialog-' + calId);
     const form = document.getElementById('eventform-' + calId);
     const title = document.getElementById('dialog-title-' + calId);
@@ -1403,13 +1362,16 @@ window.openAddEvent = function(calId, namespace, date) {
     initNamespaceSearch(calId);
     
     // Set title
-    title.textContent = lang.dialog_add_event;
+    title.textContent = 'Add Event';
     
     // Show dialog
     dialog.style.display = 'flex';
     
     // Propagate CSS vars to dialog (position:fixed can break inheritance in some templates)
     propagateThemeVars(calId, dialog);
+    
+    // Make dialog draggable
+    setTimeout(() => makeDialogDraggable(calId), 50);
     
     // Focus title field
     setTimeout(() => {
@@ -1420,8 +1382,6 @@ window.openAddEvent = function(calId, namespace, date) {
 
 // Edit event
 window.editEvent = function(calId, eventId, date, namespace) {
-    const lang = getCalendarLang(calId);
-    
     const params = new URLSearchParams({
         call: 'plugin_calendar',
         action: 'get_event',
@@ -1499,11 +1459,14 @@ window.editEvent = function(calId, eventId, date, namespace) {
                 }
             }
             
-            title.textContent = lang.dialog_edit_event;
+            title.textContent = 'Edit Event';
             dialog.style.display = 'flex';
             
             // Propagate CSS vars to dialog
             propagateThemeVars(calId, dialog);
+            
+            // Make dialog draggable
+            setTimeout(() => makeDialogDraggable(calId), 50);
         }
     })
     .catch(err => console.error('Error editing event:', err));
@@ -1511,8 +1474,7 @@ window.editEvent = function(calId, eventId, date, namespace) {
 
 // Delete event
 window.deleteEvent = function(calId, eventId, date, namespace) {
-    const lang = getCalendarLang(calId);
-    if (!confirm(lang.delete_event_confirm)) return;
+    if (!confirm('Delete this event?')) return;
     
     const params = new URLSearchParams({
         call: 'plugin_calendar',
@@ -1967,21 +1929,21 @@ window.navEventPanel = function(calId, year, month, namespace) {
 // Rebuild event panel only
 window.rebuildEventPanel = function(calId, year, month, events, namespace) {
     const container = document.getElementById(calId);
-    const lang = getCalendarLang(calId);
-    const monthNames = getMonthNamesShort(lang);
+    const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+                       'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
     
     // Update month title in new compact header
     const monthTitle = container.querySelector('.panel-month-title');
     if (monthTitle) {
         monthTitle.textContent = monthNames[month - 1] + ' ' + year;
         monthTitle.setAttribute('onclick', `openMonthPickerPanel('${calId}', ${year}, ${month}, '${namespace}')`);
-        monthTitle.setAttribute('title', lang.click_to_jump || 'Click to jump to month');
+        monthTitle.setAttribute('title', 'Click to jump to month');
     }
     
     // Fallback: Update old header format if exists
     const oldHeader = container.querySelector('.panel-standalone-header h3, .calendar-month-picker');
     if (oldHeader && !monthTitle) {
-        oldHeader.textContent = monthNames[month - 1] + ' ' + year + ' ' + lang.events_header;
+        oldHeader.textContent = monthNames[month - 1] + ' ' + year + ' Events';
         oldHeader.setAttribute('onclick', `openMonthPickerPanel('${calId}', ${year}, ${month}, '${namespace}')`);
     }
     
@@ -2074,22 +2036,30 @@ window.makeDialogDraggable = function(calId) {
     
     if (!dialog || !handle) return;
     
+    // Remove any existing drag setup to prevent duplicate listeners
+    if (handle._dragCleanup) {
+        handle._dragCleanup();
+    }
+    
+    // Reset position when dialog opens
+    dialog.style.transform = '';
+    
     let isDragging = false;
-    let currentX;
-    let currentY;
+    let currentX = 0;
+    let currentY = 0;
     let initialX;
     let initialY;
     let xOffset = 0;
     let yOffset = 0;
     
-    handle.addEventListener('mousedown', dragStart);
-    document.addEventListener('mousemove', drag);
-    document.addEventListener('mouseup', dragEnd);
-    
     function dragStart(e) {
+        // Only start drag if clicking on the handle itself, not buttons inside it
+        if (e.target.tagName === 'BUTTON') return;
+        
         initialX = e.clientX - xOffset;
         initialY = e.clientY - yOffset;
         isDragging = true;
+        handle.style.cursor = 'grabbing';
     }
     
     function drag(e) {
@@ -2099,37 +2069,31 @@ window.makeDialogDraggable = function(calId) {
             currentY = e.clientY - initialY;
             xOffset = currentX;
             yOffset = currentY;
-            setTranslate(currentX, currentY, dialog);
+            dialog.style.transform = `translate(${currentX}px, ${currentY}px)`;
         }
     }
     
     function dragEnd(e) {
-        initialX = currentX;
-        initialY = currentY;
-        isDragging = false;
+        if (isDragging) {
+            initialX = currentX;
+            initialY = currentY;
+            isDragging = false;
+            handle.style.cursor = 'move';
+        }
     }
     
-    function setTranslate(xPos, yPos, el) {
-        el.style.transform = `translate(${xPos}px, ${yPos}px)`;
-    }
+    // Add listeners
+    handle.addEventListener('mousedown', dragStart);
+    document.addEventListener('mousemove', drag);
+    document.addEventListener('mouseup', dragEnd);
+    
+    // Store cleanup function to remove listeners later
+    handle._dragCleanup = function() {
+        handle.removeEventListener('mousedown', dragStart);
+        document.removeEventListener('mousemove', drag);
+        document.removeEventListener('mouseup', dragEnd);
+    };
 };
-
-// Initialize dialog draggability when opened (avoid duplicate declaration)
-if (!window.calendarDraggabilityPatched) {
-    window.calendarDraggabilityPatched = true;
-    
-    const originalOpenAddEvent = openAddEvent;
-    openAddEvent = function(calId, namespace, date) {
-        originalOpenAddEvent(calId, namespace, date);
-        setTimeout(() => makeDialogDraggable(calId), 100);
-    };
-
-    const originalEditEvent = editEvent;
-    editEvent = function(calId, eventId, date, namespace) {
-        originalEditEvent(calId, eventId, date, namespace);
-        setTimeout(() => makeDialogDraggable(calId), 100);
-    };
-}
 
 // Toggle expand/collapse for past events
 window.togglePastEventExpand = function(element) {
@@ -2474,64 +2438,84 @@ window.initNamespaceSearch = function(calId) {
 window.updateEndTimeOptions = function(calId) {
     const startTimeSelect = document.getElementById('event-time-' + calId);
     const endTimeSelect = document.getElementById('event-end-time-' + calId);
+    const startDateField = document.getElementById('event-date-' + calId);
+    const endDateField = document.getElementById('event-end-date-' + calId);
     
     if (!startTimeSelect || !endTimeSelect) return;
     
     const startTime = startTimeSelect.value;
+    const startDate = startDateField ? startDateField.value : '';
+    const endDate = endDateField ? endDateField.value : '';
     
-    // If start time is empty (all day), disable end time
+    // Check if end date is different from start date (multi-day event)
+    const isMultiDay = endDate && endDate !== startDate;
+    
+    // If start time is empty (all day), disable end time and reset
     if (!startTime) {
         endTimeSelect.disabled = true;
         endTimeSelect.value = '';
+        // Show all options again
+        Array.from(endTimeSelect.options).forEach(opt => {
+            opt.disabled = false;
+            opt.style.display = '';
+        });
         return;
     }
     
     // Enable end time select
     endTimeSelect.disabled = false;
     
-    // Convert start time to minutes
-    const startMinutes = timeToMinutes(startTime);
-    
-    // Get current end time value (to preserve if valid)
-    const currentEndTime = endTimeSelect.value;
-    const currentEndMinutes = currentEndTime ? timeToMinutes(currentEndTime) : 0;
-    
-    // Filter options - show only times after start time
-    const options = endTimeSelect.options;
-    let firstValidOption = null;
-    let currentStillValid = false;
-    
-    for (let i = 0; i < options.length; i++) {
-        const option = options[i];
-        const optionValue = option.value;
-        
-        if (optionValue === '') {
-            // Keep "Same as start" option visible
-            option.style.display = '';
-            continue;
-        }
-        
-        const optionMinutes = timeToMinutes(optionValue);
-        
-        if (optionMinutes > startMinutes) {
-            // Show options after start time
-            option.style.display = '';
-            if (!firstValidOption) {
-                firstValidOption = optionValue;
-            }
-            if (optionValue === currentEndTime) {
-                currentStillValid = true;
-            }
-        } else {
-            // Hide options before or equal to start time
-            option.style.display = 'none';
-        }
+    // If multi-day event, allow all end times (event can end at any time on the end date)
+    if (isMultiDay) {
+        Array.from(endTimeSelect.options).forEach(opt => {
+            opt.disabled = false;
+            opt.style.display = '';
+        });
+        return;
     }
     
+    // Same-day event: Convert start time to minutes and filter options
+    const [startHour, startMinute] = startTime.split(':').map(Number);
+    const startMinutes = startHour * 60 + startMinute;
+    
+    // Get current end time value
+    const currentEndTime = endTimeSelect.value;
+    let currentEndMinutes = 0;
+    if (currentEndTime) {
+        const [h, m] = currentEndTime.split(':').map(Number);
+        currentEndMinutes = h * 60 + m;
+    }
+    
+    // Disable/hide options before or equal to start time
+    let firstValidOption = null;
+    Array.from(endTimeSelect.options).forEach(opt => {
+        if (opt.value === '') {
+            // Keep "Same as start" option enabled
+            opt.disabled = false;
+            opt.style.display = '';
+            return;
+        }
+        
+        const [h, m] = opt.value.split(':').map(Number);
+        const optMinutes = h * 60 + m;
+        
+        if (optMinutes <= startMinutes) {
+            // Disable and hide times at or before start
+            opt.disabled = true;
+            opt.style.display = 'none';
+        } else {
+            // Enable and show times after start
+            opt.disabled = false;
+            opt.style.display = '';
+            if (!firstValidOption) {
+                firstValidOption = opt.value;
+            }
+        }
+    });
+    
     // If current end time is now invalid, set a new one
-    if (!currentStillValid || currentEndMinutes <= startMinutes) {
+    if (currentEndTime && currentEndMinutes <= startMinutes) {
         // Try to set to 1 hour after start
-        const [startHour, startMinute] = startTime.split(':').map(Number);
         let endHour = startHour + 1;
         let endMinute = startMinute;
         
@@ -2542,16 +2526,14 @@ window.updateEndTimeOptions = function(calId) {
         
         const suggestedEndTime = String(endHour).padStart(2, '0') + ':' + String(endMinute).padStart(2, '0');
         
-        // Check if suggested time is in the list
-        const suggestedExists = Array.from(options).some(opt => opt.value === suggestedEndTime);
+        // Check if suggested time exists and is valid
+        const suggestedOpt = Array.from(endTimeSelect.options).find(opt => opt.value === suggestedEndTime && !opt.disabled);
         
-        if (suggestedExists) {
+        if (suggestedOpt) {
             endTimeSelect.value = suggestedEndTime;
         } else if (firstValidOption) {
-            // Use first valid option
             endTimeSelect.value = firstValidOption;
         } else {
-            // No valid options (shouldn't happen, but just in case)
             endTimeSelect.value = '';
         }
     }
@@ -3367,5 +3349,125 @@ window.clearEventSearch = function(calId) {
         setupMutationObserver();
     }
 })();
+
+// Mobile touch event delegation for edit/delete buttons
+// This ensures buttons work on mobile where onclick may not fire reliably
+(function() {
+    function handleButtonTouch(e) {
+        const btn = e.target.closest('.event-edit-btn, .event-delete-btn, .event-action-btn');
+        if (!btn) return;
+        
+        // Prevent double-firing with onclick
+        e.preventDefault();
+        
+        // Small delay to show visual feedback
+        setTimeout(function() {
+            btn.click();
+        }, 10);
+    }
+    
+    // Use touchend for more reliable mobile handling
+    document.addEventListener('touchend', handleButtonTouch, { passive: false });
+})();
+
+// Static calendar navigation
+window.navStaticCalendar = function(calId, direction) {
+    const container = document.getElementById(calId);
+    if (!container) return;
+    
+    let year = parseInt(container.dataset.year);
+    let month = parseInt(container.dataset.month);
+    const namespace = container.dataset.namespace || '';
+    
+    // Calculate new month
+    month += direction;
+    if (month < 1) {
+        month = 12;
+        year--;
+    } else if (month > 12) {
+        month = 1;
+        year++;
+    }
+    
+    // Fetch new calendar content via AJAX
+    const params = new URLSearchParams({
+        call: 'plugin_calendar',
+        action: 'get_static_calendar',
+        year: year,
+        month: month,
+        namespace: namespace
+    });
+    
+    fetch(DOKU_BASE + 'lib/exe/ajax.php', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+        body: params.toString()
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.success && data.html) {
+            // Replace the container content
+            container.outerHTML = data.html;
+        }
+    })
+    .catch(err => console.error('Static calendar navigation error:', err));
+};
+
+// Print static calendar - opens print dialog with only calendar content
+window.printStaticCalendar = function(calId) {
+    const container = document.getElementById(calId);
+    if (!container) return;
+    
+    // Get the print view content
+    const printView = container.querySelector('.static-print-view');
+    if (!printView) return;
+    
+    // Create a new window for printing
+    const printWindow = window.open('', '_blank', 'width=800,height=600');
+    
+    // Build print document with inline margins for maximum compatibility
+    const printContent = `
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Calendar - ${container.dataset.year}-${String(container.dataset.month).padStart(2, '0')}</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: Arial, sans-serif; color: #333; background: white; }
+        table { border-collapse: collapse; font-size: 12px; }
+        th { background: #2c3e50; color: white; padding: 8px; text-align: left; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+        td { padding: 6px 8px; border-bottom: 1px solid #ccc; vertical-align: top; }
+        tr:nth-child(even) { background: #f0f0f0; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+        .static-itinerary-important { background: #fffde7 !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+        .static-itinerary-date { font-weight: bold; white-space: nowrap; }
+        .static-itinerary-time { white-space: nowrap; color: #555; }
+        .static-itinerary-title { font-weight: 500; }
+        .static-itinerary-desc { color: #555; font-size: 11px; }
+        thead { display: table-header-group; }
+        tr { page-break-inside: avoid; }
+        h2 { font-size: 16px; margin-bottom: 10px; padding-bottom: 8px; border-bottom: 2px solid #333; }
+        p { font-size: 12px; color: #666; margin-bottom: 15px; }
+    </style>
+</head>
+<body style="margin: 0; padding: 0;">
+    <div style="padding: 50px 60px; margin: 0 auto; max-width: 800px;">
+        ${printView.innerHTML}
+    </div>
+    <script>
+        window.onload = function() {
+            setTimeout(function() {
+                window.print();
+            }, 300);
+            window.onafterprint = function() {
+                window.close();
+            };
+        };
+    </script>
+</body>
+</html>`;
+    
+    printWindow.document.write(printContent);
+    printWindow.document.close();
+};
 
 // End of calendar plugin JavaScript

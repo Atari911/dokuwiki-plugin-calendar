@@ -89,6 +89,9 @@ class action_plugin_calendar extends DokuWiki_Action_Plugin {
             case 'load_month':
                 $this->loadMonth();
                 break;
+            case 'get_static_calendar':
+                $this->getStaticCalendar();
+                break;
             case 'search_all':
                 $this->searchAllDates();
                 break;
@@ -701,6 +704,51 @@ class action_plugin_calendar extends DokuWiki_Action_Plugin {
             'year' => $year,
             'month' => $month,
             'events' => $events
+        ]);
+    }
+    
+    /**
+     * Get static calendar HTML via AJAX for navigation
+     */
+    private function getStaticCalendar() {
+        global $INPUT;
+        
+        $namespace = $INPUT->str('namespace', '');
+        $year = $INPUT->int('year');
+        $month = $INPUT->int('month');
+        
+        // Validate
+        if ($year < 1970 || $year > 2100) {
+            $year = (int)date('Y');
+        }
+        if ($month < 1 || $month > 12) {
+            $month = (int)date('n');
+        }
+        
+        // Get syntax plugin to render the static calendar
+        $syntax = plugin_load('syntax', 'calendar');
+        if (!$syntax) {
+            echo json_encode(['success' => false, 'error' => 'Syntax plugin not found']);
+            return;
+        }
+        
+        // Build data array for render
+        $data = [
+            'year' => $year,
+            'month' => $month,
+            'namespace' => $namespace,
+            'static' => true
+        ];
+        
+        // Call the render method via reflection (since renderStaticCalendar is private)
+        $reflector = new \ReflectionClass($syntax);
+        $method = $reflector->getMethod('renderStaticCalendar');
+        $method->setAccessible(true);
+        $html = $method->invoke($syntax, $data);
+        
+        echo json_encode([
+            'success' => true,
+            'html' => $html
         ]);
     }
     

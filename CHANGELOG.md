@@ -1,151 +1,353 @@
 # Calendar Plugin Changelog
 
+## Version 6.14.0 (2026-02-14) - STABLE RELEASE
+
+### Code Cleanup & Localization
+- Added localization for all static calendar strings (EN/DE)
+- New lang keys: `previous_month`, `next_month`, `print_calendar`, `no_events_scheduled`, `calendar_label`, `details`
+- Code review and cleanup completed
+- Updated README.md and plugin documentation
+
+### Static Calendar Features (v6.13.x consolidated)
+- Read-only presentation mode: `{{calendar static}}`
+- Custom titles: `title="My Events"`
+- Month locking: `month=2` disables navigation
+- Print button with clean itinerary output
+- All themes supported: matrix, pink, purple, professional, wiki, dark, light
+- `noprint` option to hide print functionality
+- Formatted descriptions in tooltips and itinerary
+
+### Other Improvements in 6.13.x
+- Admin menu icon (SVG)
+- Config import fix for `return array()` syntax
+- Mobile touch button fixes
+- Important events in day popup with star icons
+- Time picker grouped by period
+- Multi-day event time validation
+
+## Version 6.13.13 (2026-02-14) - PRINT BUTTON CENTERING
+
+### Fixed Print Button Icon Alignment
+- Added `display: flex`, `align-items: center`, `justify-content: center`
+- Added `padding: 0` and `line-height: 1`
+- Icon now properly centered in circle
+
+## Version 6.13.12 (2026-02-14) - SIMPLE TOOLTIP
+
+### Simplified Hover Tooltip
+- Removed custom JS tooltip (was causing triple popups)
+- Uses native browser `title` attribute only
+- Plain text with formatting converted: `**bold**` → `*bold*`, `//italic//` → `_italic_`
+- Links shown as: `text (url)`
+- Added 🕐 emoji before time for visual clarity
+- Itinerary still shows full HTML formatting
+
+## Version 6.13.11 (2026-02-14) - FORMATTED DESCRIPTIONS
+
+### Rich Text Formatting in Static Calendar
+- **Hover tooltips** now show formatted text (bold, italic, links, line breaks)
+- **Itinerary descriptions** display with full formatting
+- Uses existing `renderDescription()` function for consistency
+- Supports: `**bold**`, `//italic//`, `[[links]]`, `[markdown](links)`, line breaks
+
+### Technical Details
+- Added `data-tooltip` attribute with rich HTML content
+- New JavaScript tooltip handler with smart positioning
+- CSS styles for `.static-tooltip` and itinerary formatting
+- Tooltips stay within viewport bounds
+
+## Version 6.13.10 (2026-02-14) - PRINT MARGINS FIX v3
+
+### Fixed Print Margins - Inline Styles Approach
+- Removed reliance on `@page` CSS (browser support inconsistent)
+- Uses inline style `padding: 50px 60px` directly on wrapper div
+- Simplified CSS for better browser compatibility
+- Smaller table font (12px) for better fit
+- Set `max-width: 800px` on content wrapper
+
+## Version 6.13.9 (2026-02-14) - PRINT MARGINS FIX v2
+
+### Fixed Print Margins
+- Added `.print-wrapper` div with 0.5in padding/margin
+- Uses both `@page` margin AND wrapper margins for compatibility
+- Set `@page { margin: 1in 0.75in }` (top/bottom 1in, sides 0.75in)
+- Wrapper has `max-width: 7.5in` to fit standard letter size
+- Smaller fonts (0.85em) to fit more content
+- Added 250ms delay before print to ensure styles load
+
+## Version 6.13.8 (2026-02-14) - PRINT MARGINS FIX
+
+### Improved Print Layout
+- Added `@page { margin: 0.75in }` for proper print margins
+- Increased body padding to 40px for screen preview
+- Smaller font sizes to fit better on page
+- Description column limited width with word-wrap
+- Table header repeats on each page (`display: table-header-group`)
+- Rows avoid page breaks in middle (`page-break-inside: avoid`)
+- Print color adjust enabled for backgrounds
+
+## Version 6.13.7 (2026-02-14) - ALL THEMES FOR STATIC CALENDAR
+
+### Added All Theme Options
+Now all themes work with static calendar:
+
+| Theme | Description |
+|-------|-------------|
+| `matrix` | Green on dark (default Matrix style) |
+| `pink` | Pink/magenta on dark |
+| `purple` | Purple/violet on dark |
+| `professional` | Blue on white (business style) |
+| `wiki` | Neutral gray (matches DokuWiki) |
+| `dark` | Blue on dark gray |
+| `light` | Clean white/gray |
+
+### Examples
+```
+{{calendar theme=matrix static}}
+{{calendar theme=purple static}}
+{{calendar theme=professional static}}
+{{calendar theme=wiki static}}
+```
+
+## Version 6.13.6 (2026-02-14) - QUOTED PARAMETER FIX
+
+### Fixed Quoted Parameter Parsing
+- Titles with spaces now work: `title="Feb 26 Expense Log"`
+- Uses regex to properly parse: `key="value with spaces"`
+- Supports both double and single quotes
+- Example: `{{calendar title="My Custom Title" static}}`
+
+## Version 6.13.5 (2026-02-14) - STATIC CALENDAR OPTIONS
+
+### New Static Calendar Options
+
+| Option | Description | Example |
+|--------|-------------|---------|
+| `title=X` | Custom title instead of month name | `title="Club Meetings"` |
+| `noprint` | Hide print button and print view | `{{calendar static noprint}}` |
+| `theme=X` | Apply specific theme (matrix, pink, dark, light) | `theme=matrix` |
+
+### Fixed Month/Year Lock
+- When you specify `month=X` or `year=X`, navigation is now disabled
+- `{{calendar month=2 static}}` shows only February with no nav arrows
+- `{{calendar year=2025 month=12 static}}` locks to December 2025
+
+### Examples
+```
+{{calendar static}}                              // Navigable, current month
+{{calendar month=2 static}}                      // Locked to February
+{{calendar title="Team Events" static}}          // Custom title
+{{calendar theme=matrix static}}                 // Matrix theme
+{{calendar namespace=club static noprint}}       // No print button
+{{calendar month=3 title="March Meetings" theme=pink static}}
+```
+
+## Version 6.13.4 (2026-02-14) - DEDICATED PRINT BUTTON
+
+### Added Print Button to Static Calendar
+- New 🖨️ print button in the calendar header
+- Opens a clean popup window with ONLY the itinerary content
+- Automatically triggers print dialog
+- Window closes after printing
+- No DokuWiki headers/footers/sidebars - just the calendar
+
+### How It Works
+- Extracts the print view HTML
+- Creates a new window with minimal styling
+- Calls `window.print()` automatically
+- Clean single-page output
+
+## Version 6.13.3 (2026-02-14) - PRINT BLANK PAGES FIX
+
+### Fixed Blank Pages When Printing
+- Aggressively hide ALL screen view elements and children in print
+- Reset height/width to 0 with !important on grid, cells, events
+- Ensure print view elements have proper display table properties
+- Force all hidden elements to position:absolute off-screen
+
+## Version 6.13.2 (2026-02-14) - STATIC CALENDAR RESPONSIVE FIX
+
+### Improved Static Calendar Layout
+- Changed from `max-width: 900px` to `width: 100%` for full container fit
+- Added `table-layout: fixed` for consistent column widths
+- Added `overflow-x: auto` for horizontal scroll on very small screens
+- Reduced header padding and font sizes for better fit
+- Improved responsive breakpoints for mobile (768px and 480px)
+- Hide time on very small screens to save space
+- Better touch targets for navigation buttons
+
+## Version 6.13.1 (2026-02-14) - STATIC CALENDAR FIX
+
+### Bug Fix
+- Added missing `getImportantNamespaces()` helper method
+- Fixed `loadEventsForMonth` → use existing `loadEvents` method
+- Added multi-namespace/wildcard support to static calendar
+
+## Version 6.13.0 (2026-02-14) - STATIC CALENDAR MODE
+
+### New Static/Presentation Mode
+Read-only calendar view for public display and printing.
+
+**Usage:**
+```
+{{calendar static}}
+{{calendar namespace=meetings static}}
+```
+
+**Screen View Features:**
+- Clean calendar grid without edit/delete buttons
+- Month navigation (prev/next arrows)
+- Hover tooltips showing full event details (title, time, description)
+- Important events highlighted with ⭐ and golden background
+- Today's date highlighted
+- Responsive design for mobile
+
+**Print View Features:**
+- Automatically switches to itinerary format when printing
+- Table layout: Date | Time | Event | Details
+- Important events marked with ⭐
+- Dates grouped (date only shown once per day)
+- Page break handling for long lists
+- Clean black & white friendly output
+
+**Files Changed:**
+- `syntax.php`: Added `renderStaticCalendar()` method
+- `action.php`: Added `getStaticCalendar()` AJAX handler
+- `calendar-main.js`: Added `navStaticCalendar()` function
+- `style.css`: Added static calendar styles + print media queries
+
+## Version 6.12.7 (2026-02-14) - ADMIN MENU ICON
+
+### Added Admin Menu Icon
+- New monochrome SVG calendar icon for DokuWiki admin menu
+- Icon shows calendar with binding rings, header, and date dots
+- Matches DokuWiki's admin interface style
+- Added `getMenuIcon()` method to admin.php
+- Icon file: `images/icon.svg`
+
+## Version 6.12.6 (2026-02-14) - CONFIG IMPORT FIX
+
+### Fixed Config Import Validation
+- Now accepts both `return [` and `return array(` syntax
+- Regex updated from `/return\s*\[/` to `/return\s*(\[|array\s*\()/`
+- Older PHP config files using `return array(...)` now import correctly
+
+## Version 6.12.5 (2026-02-14) - MOBILE BUTTON FIX
+
+### Fixed Delete/Edit Buttons on Mobile
+- Added `type="button"` attribute to prevent form submission issues
+- Added `touchend` event delegation for reliable mobile touch handling
+- Increased button touch targets (32px default, 40px on mobile)
+- Added `touch-action: manipulation` to prevent touch delays
+- Added `-webkit-tap-highlight-color` for visual feedback
+
+### Technical Details
+- Mobile browsers sometimes don't fire `onclick` reliably
+- New `touchend` handler calls `btn.click()` explicitly
+- Larger touch targets meet accessibility guidelines (44px recommended)
+
+## Version 6.12.4 (2026-02-14) - STAR INLINE FIX
+
+### Fixed Star Position in Day Popup
+- Star icon now displays inline with event title (left side)
+- Changed `.popup-event-title` from `flex: 1 1 100%` to `flex: 1 1 auto`
+- Star and title stay on same line instead of star being above
+
+## Version 6.12.3 (2026-02-14) - DAY POPUP IMPORTANT EVENTS
+
+### Important Event Highlighting in Day Popup
+- Events from important namespaces now show ⭐ star icon
+- Golden gradient background highlight for important events
+- Golden border glow effect matching other views
+- Consistent styling across calendar grid, sidebar, and day popup
+
+### Technical Details
+- Added `importantNamespaces` check to `showDayPopup()` function
+- Added `.popup-event-important` and `.popup-event-star` CSS classes
+- Reads important namespaces from `container.dataset.importantNamespaces`
+
+## Version 6.12.2 (2026-02-14) - MULTI-DAY EVENT TIME FIX
+
+### Multi-Day Event End Time
+- End time now allows all times when end date differs from start date
+- Example: Event from 9:00 PM on Feb 28 to 5:00 AM on Feb 29 now works correctly
+- Same-day events still enforce end time > start time
+- Changing end date now triggers time validation update
+
+### Technical Details
+- `updateEndTimeOptions()` checks if `endDate !== startDate`
+- If multi-day, all time options are enabled
+- Added `onchange` handler to both start date and end date fields
+
+## Version 6.12.1 (2026-02-14) - TIME PICKER & EDIT DIALOG FIX
+
+### Improved Time Picker
+- Grouped time options by period (Morning, Afternoon, Evening, Night)
+- Much easier to navigate - no more scrolling through 96 options
+- End time options before start time are now hidden/disabled
+- Invalid end times automatically corrected when start time changes
+
+### Fixed Edit Event Dialog Draggability
+- Edit dialog is now properly draggable (was broken due to async AJAX)
+- Moved `makeDialogDraggable()` call inside the AJAX success callback
+- Removed redundant wrapper patch that didn't work with async code
+
+### Technical Details
+- Time picker uses `<optgroup>` for visual grouping
+- End time validation hides invalid options (not just disables)
+- Both Add and Edit dialogs now call `makeDialogDraggable()` directly
+
+## Version 6.12.0 (2026-02-14) - EVENT EDITOR DIALOG IMPROVEMENTS
+
+### Fixed Event Editor Dialog Draggability
+- Fixed duplicate event listener accumulation that caused performance degradation
+- Each time dialog opened, new drag listeners were added without removing old ones
+- Now properly cleans up old listeners before adding new ones
+- Added `cursor: grabbing` feedback while dragging
+- Dialog position resets when reopened (no more stuck positions)
+- Excluded close button from triggering drag
+
+### Optimized Time Selection Performance
+- Simplified `updateEndTimeOptions()` to be much faster
+- Removed expensive loop through 96 options checking style.display
+- Now just validates current selection and sets new value if invalid
+- Should eliminate freezing/lag when selecting start time
+
+### Technical Details
+- Added `_dragCleanup` function stored on handle element
+- Cleanup called before re-initialization
+- Removed unnecessary `setTranslate` helper function
+
 ## Version 6.11.4 (2026-02-13) - JAVASCRIPT LOCALIZATION
 
-### JavaScript Localization (calendar-main.js)
-- Added `getCalendarLang()` helper to read embedded language strings
-- Added `getMonthNames()` and `getMonthNamesShort()` helpers for localized arrays
-- Localized all month names (full and abbreviated)
-- Localized dialog titles: "Add Event" / "Edit Event"
-- Localized "Delete this event?" confirmation
-- Localized "Events" header
-- Localized "Past Events (X)" toggle
-- Localized "No events this month" / "No events on this day" messages
-- Localized "+ Add Event" buttons
-- Localized "Important" tooltip
-- Localized "PAST DUE" and "TODAY" badges
-
-### Language Strings Integration
-- Added `getJsLangStrings()` method to syntax.php
-- Embedded JSON language data in all calendar render functions:
-  - Main calendar (renderCompactCalendar)
-  - Event panel (renderEventPanelOnly) 
-  - Sidebar widget (renderSidebarWidget)
-
-### New Language Strings
-- Month names (full): January-December
-- Month names (short): Jan-Dec
-- Badge labels: PAST DUE, TODAY
-- Additional: no_events_week, no_events_month, add_event_short
-
----
+### JavaScript Frontend Localization
+- Added `getCalendarLang()` helper function
+- Added `getJsLangStrings()` PHP method
+- Embedded JSON language data in all render functions
+- Localized month names (full + short)
+- Localized dialog titles, confirmations, badges, empty states
 
 ## Version 6.11.3 (2026-02-13) - SIDEBAR WIDGET LOCALIZATION
 
-### Fixed
-- **Fixed newline issue in confirmation dialogs** - Changed all `\n` in single-quoted PHP strings to double-quoted strings so JavaScript receives proper newlines
-- **Localized "Runs every X minutes"** - Cron interval descriptions now use language strings
-
-### Sidebar Widget Localization (syntax.php)
+### Sidebar Widget
+- Fixed `\n` in single-quoted strings → double-quoted for proper newlines
+- Localized "Runs every X minutes" cron descriptions
+- Event dialog labels, placeholders, options
+- Day names, ordinal positions, color names
 - Today/Tomorrow/Important section headers
-- Event dialog: all labels, placeholders, options
-- Day names (short and full)
-- Ordinal positions (First, Second, Third...)
-- Color names (Blue, Green, Red...)
-- Recurring event options (Day(s), Week(s), Month(s)...)
-- Buttons (Save, Cancel, Add)
-- Search placeholder and tooltips
 
-### New Language Strings Added
-- ~70 new sidebar/frontend strings per language file
-- Full German translations for all frontend UI
+## Version 6.11.2 (2026-02-13) - ADMIN BACKEND LOCALIZATION
 
----
+### Admin Backend
+- Localized ~220 hardcoded strings in admin.php
+- AJAX JSON responses, redirect messages, error messages
+- Pattern names (Daily, Weekly, Monthly, etc.)
 
-## Version 6.11.2 (2026-02-13) - ADMIN LOCALIZATION COMPLETE
+## Version 6.11.1 (2026-02-13) - CONFIG IMPORT BUG FIX
 
-### Complete Admin Backend Localization
-- **Total getLang() calls increased from ~287 to 508**
-- All AJAX JSON response messages now localized
-- All redirect messages now localized
-- Fixed: Cache cleared/not found messages
-- Fixed: Recurring event deleted/updated messages  
-- Fixed: Event management messages (moved, not found, file errors)
-- Fixed: Namespace management (create, delete, rename, validation errors)
-- Fixed: Sync process messages (script not found, log file errors, completion/failure)
-- Fixed: Config import/export messages (encryption, validation, success/error)
-- Fixed: Theme saved message
-- Fixed: Backup/restore messages (creation, deletion, rename, restore errors)
-- Fixed: intervalToPattern function returns localized pattern names
-
-### Language Strings Added
-- English: ~100 new strings
-- German: ~100 new translated strings
-
----
-
-## Version 6.11.1 (2026-02-13) - CONFIG IMPORT FIX
-
-### Fixed Config Import
-- **Bug Fix:** Import config now accepts both `return [` (short syntax) and `return array(` (long syntax)
-- **Bug Fix:** Added trim to handle whitespace in encrypted config data
-- **Improved:** Better error messages when decryption fails (indicates different DokuWiki installation)
-- **Improved:** Additional validation with trim on decrypted content
-
----
-
-## Version 6.11.0 (2026-02-13) - COMPLETE GERMAN LOCALIZATION
-
-### Complete Localization of All Admin Tabs
-
-**Edit Recurring Dialog (editRecurringSeries function):**
-- Dialog header: "Edit Recurring Event" → "Wiederkehrenden Termin bearbeiten"
-- All field labels (Title, Start Time, End Time, Namespace)
-- "Changes apply to ALL occurrences of:" → "Änderungen gelten für ALLE Vorkommen von:"
-- Recurrence pattern section (Repeat every, On these days, Repeat on)
-- Day of month / Weekday pattern options
-- Repeat Until with hint text
-- Cancel / Save Changes buttons
-- Day names (short and full) from language files
-- Ordinal labels (First, Second, Third, etc.)
-- Recurrence type options (Day(s), Week(s), Month(s), Year(s))
-
-**Update Plugin Tab:**
-- "Update Plugin" → "Plugin aktualisieren"
-- "Current Version" → "Aktuelle Version"
-- All labels (Version, Author, Description, Location)
-- Permissions section with status messages
-- "Upload New Version" → "Neue Version hochladen"
-- "Create backup before updating" → "Backup vor Aktualisierung erstellen"
-- "Upload & Install" → "Hochladen & Installieren"
-- "Clear Cache" → "Cache leeren"
-- All Important Notes items
-- "Version History" → "Versionsgeschichte"
-- "Current Release" button → "Aktuelle Version"
-- "RUNNING" label → "AKTIV"
-- "Backups" → "Backups"
-- All backup table headers and action buttons (Download, Restore, Rename)
-
-**Outlook Sync Tab:**
-- "Outlook Sync Configuration" → "Outlook-Sync-Konfiguration"
-- "Export Config" / "Import Config" buttons
-- "Microsoft Azure App Credentials" → "Microsoft Azure App-Anmeldedaten"
-- All field labels (Tenant ID, Client ID, Client Secret, etc.)
-- "Outlook Settings" → "Outlook-Einstellungen"
-- "Sync Options" → "Sync-Optionen"
-- Checkbox labels for sync options
-- "Namespace → Category" mapping section
-- "Event Color → Category" mapping section
-- "Save Configuration" → "Konfiguration speichern"
-
-**Themes Tab:**
-- "Sidebar Widget Settings" → "Seitenleisten-Widget-Einstellungen"
-- "Week Start Day" section with Monday/Sunday options
-- "Itinerary Section" with Expanded/Collapsed options
-- "Visual Theme" → "Visuelles Design"
-- All theme names and descriptions
-- "Save Settings" → "Einstellungen speichern"
-
-### Added 120+ New Language Strings
-Comprehensive vocabulary for all admin interface elements in both English and German.
-
-### Technical Implementation
-- Extended $jsAdminLang object with additional Edit Recurring Dialog strings
-- Updated editRecurringSeries JavaScript function to use adminLang.* variables
-- All PHP echo statements now use $this->getLang() calls
-- Theme descriptions kept consistent with visual preview styling
-
----
+### Bug Fix
+- Fixed regex to accept both `return [` and `return array(` syntax
+- File: `admin.php` lines 5947, 6001
 
 ## Version 6.10.6 (2026-02-13) - MANAGE RECURRING DIALOG LOCALIZATION
 

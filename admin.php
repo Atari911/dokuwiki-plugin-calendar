@@ -39,6 +39,14 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
         return 100;
     }
     
+    /**
+     * Return the path to the icon for the admin menu
+     * @return string path to SVG icon
+     */
+    public function getMenuIcon() {
+        return DOKU_PLUGIN . 'calendar/images/icon.svg';
+    }
+    
     public function forAdminOnly() {
         return true;
     }
@@ -49,7 +57,7 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
     public function handleAjaxAction($action) {
         // Verify admin privileges for all admin AJAX actions
         if (!auth_isadmin()) {
-            echo json_encode(['success' => false, 'error' => $this->getLang('admin_access_required')]);
+            echo json_encode(['success' => false, 'error' => 'Admin access required']);
             return;
         }
         
@@ -64,7 +72,7 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
             case 'change_start_recurring': $this->handleChangeStartRecurring(); break;
             case 'change_pattern_recurring': $this->handleChangePatternRecurring(); break;
             default:
-                echo json_encode(['success' => false, 'error' => $this->getLang('unknown_admin_action')]);
+                echo json_encode(['success' => false, 'error' => 'Unknown admin action']);
         }
     }
 
@@ -205,12 +213,12 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
             echo "</div>";
         }
         
-        echo '<h2 style="margin:10px 0; font-size:20px;">' . $this->getLang('outlook_sync_config') . '</h2>';
+        echo '<h2 style="margin:10px 0; font-size:20px;">Outlook Sync Configuration</h2>';
         
         // Import/Export buttons
         echo '<div style="display:flex; gap:10px; margin-bottom:15px;">';
-        echo '<button type="button" onclick="exportConfig()" style="background:#00cc07; color:white; padding:8px 16px; border:none; border-radius:3px; cursor:pointer; font-size:13px; font-weight:bold;">📤 ' . $this->getLang('export_config') . '</button>';
-        echo '<button type="button" onclick="document.getElementById(\'importFileInput\').click()" style="background:#7b1fa2; color:white; padding:8px 16px; border:none; border-radius:3px; cursor:pointer; font-size:13px; font-weight:bold;">📥 ' . $this->getLang('import_config') . '</button>';
+        echo '<button type="button" onclick="exportConfig()" style="background:#00cc07; color:white; padding:8px 16px; border:none; border-radius:3px; cursor:pointer; font-size:13px; font-weight:bold;">📤 Export Config</button>';
+        echo '<button type="button" onclick="document.getElementById(\'importFileInput\').click()" style="background:#7b1fa2; color:white; padding:8px 16px; border:none; border-radius:3px; cursor:pointer; font-size:13px; font-weight:bold;">📥 Import Config</button>';
         echo '<input type="file" id="importFileInput" accept=".enc" style="display:none;" onchange="importConfig(this)">';
         echo '<span id="importStatus" style="margin-left:10px; font-size:12px;"></span>';
         echo '</div>';
@@ -220,43 +228,43 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
         
         // Azure Credentials
         echo '<div style="background:' . $colors['bg'] . '; padding:12px; margin:10px 0; border-left:3px solid #00cc07; border-radius:3px;">';
-        echo '<h3 style="margin:0 0 8px 0; color:#00cc07; font-size:16px;">' . $this->getLang('azure_credentials') . '</h3>';
-        echo '<p style="color:' . $colors['text'] . '; font-size:0.85em; margin:0 0 10px 0;">' . $this->getLang('azure_register_hint') . ' - <a href="https://portal.azure.com" target="_blank" style="color:#00cc07;">Azure Portal</a></p>';
+        echo '<h3 style="margin:0 0 8px 0; color:#00cc07; font-size:16px;">Microsoft Azure App Credentials</h3>';
+        echo '<p style="color:' . $colors['text'] . '; font-size:0.85em; margin:0 0 10px 0;">Register at <a href="https://portal.azure.com" target="_blank" style="color:#00cc07;">Azure Portal</a> → App registrations</p>';
         
-        echo '<label style="display:block; font-weight:bold; margin:8px 0 3px; font-size:13px;">' . $this->getLang('tenant_id') . '</label>';
+        echo '<label style="display:block; font-weight:bold; margin:8px 0 3px; font-size:13px;">Tenant ID</label>';
         echo '<input type="text" name="tenant_id" value="' . hsc($config['tenant_id'] ?? '') . '" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" required style="width:100%; padding:6px; border:1px solid ' . $colors['border'] . '; border-radius:3px; font-size:13px;">';
         
-        echo '<label style="display:block; font-weight:bold; margin:8px 0 3px; font-size:13px;">' . $this->getLang('client_id') . '</label>';
+        echo '<label style="display:block; font-weight:bold; margin:8px 0 3px; font-size:13px;">Client ID (Application ID)</label>';
         echo '<input type="text" name="client_id" value="' . hsc($config['client_id'] ?? '') . '" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" required autocomplete="off" style="width:100%; padding:6px; border:1px solid ' . $colors['border'] . '; border-radius:3px; font-size:13px;">';
         
-        echo '<label style="display:block; font-weight:bold; margin:8px 0 3px; font-size:13px;">' . $this->getLang('client_secret') . '</label>';
-        echo '<input type="password" name="client_secret" value="' . hsc($config['client_secret'] ?? '') . '" placeholder="' . $this->getLang('enter_client_secret') . '" required autocomplete="new-password" style="width:100%; padding:6px; border:1px solid ' . $colors['border'] . '; border-radius:3px; font-size:13px;">';
-        echo '<p style="color:#999; font-size:0.8em; margin:3px 0 0;">⚠️ ' . $this->getLang('keep_secret_safe') . '</p>';
+        echo '<label style="display:block; font-weight:bold; margin:8px 0 3px; font-size:13px;">Client Secret</label>';
+        echo '<input type="password" name="client_secret" value="' . hsc($config['client_secret'] ?? '') . '" placeholder="Enter client secret" required autocomplete="new-password" style="width:100%; padding:6px; border:1px solid ' . $colors['border'] . '; border-radius:3px; font-size:13px;">';
+        echo '<p style="color:#999; font-size:0.8em; margin:3px 0 0;">⚠️ Keep this secret safe!</p>';
         echo '</div>';
         
         // Outlook Settings
         echo '<div style="background:' . $colors['bg'] . '; padding:12px; margin:10px 0; border-left:3px solid #00cc07; border-radius:3px;">';
-        echo '<h3 style="margin:0 0 8px 0; color:#00cc07; font-size:16px;">' . $this->getLang('outlook_settings') . '</h3>';
+        echo '<h3 style="margin:0 0 8px 0; color:#00cc07; font-size:16px;">Outlook Settings</h3>';
         
         echo '<div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">';
         
         echo '<div>';
-        echo '<label style="display:block; font-weight:bold; margin:0 0 3px; font-size:13px;">' . $this->getLang('user_email') . '</label>';
+        echo '<label style="display:block; font-weight:bold; margin:0 0 3px; font-size:13px;">User Email</label>';
         echo '<input type="email" name="user_email" value="' . hsc($config['user_email'] ?? '') . '" placeholder="your.email@company.com" required autocomplete="email" style="width:100%; padding:6px; border:1px solid ' . $colors['border'] . '; border-radius:3px; font-size:13px;">';
         echo '</div>';
         
         echo '<div>';
-        echo '<label style="display:block; font-weight:bold; margin:0 0 3px; font-size:13px;">' . $this->getLang('timezone') . '</label>';
+        echo '<label style="display:block; font-weight:bold; margin:0 0 3px; font-size:13px;">Timezone</label>';
         echo '<input type="text" name="timezone" value="' . hsc($config['timezone'] ?? 'America/Los_Angeles') . '" placeholder="America/Los_Angeles" style="width:100%; padding:6px; border:1px solid ' . $colors['border'] . '; border-radius:3px; font-size:13px;">';
         echo '</div>';
         
         echo '<div>';
-        echo '<label style="display:block; font-weight:bold; margin:0 0 3px; font-size:13px;">' . $this->getLang('default_category') . '</label>';
+        echo '<label style="display:block; font-weight:bold; margin:0 0 3px; font-size:13px;">Default Category</label>';
         echo '<input type="text" name="default_category" value="' . hsc($config['default_category'] ?? 'Blue category') . '" placeholder="Blue category" style="width:100%; padding:6px; border:1px solid ' . $colors['border'] . '; border-radius:3px; font-size:13px;">';
         echo '</div>';
         
         echo '<div>';
-        echo '<label style="display:block; font-weight:bold; margin:0 0 3px; font-size:13px;">' . $this->getLang('reminder_minutes') . '</label>';
+        echo '<label style="display:block; font-weight:bold; margin:0 0 3px; font-size:13px;">Reminder (minutes)</label>';
         echo '<input type="number" name="reminder_minutes" value="' . hsc($config['reminder_minutes'] ?? 15) . '" placeholder="15" style="width:100%; padding:6px; border:1px solid ' . $colors['border'] . '; border-radius:3px; font-size:13px;">';
         echo '</div>';
         
@@ -265,20 +273,20 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
         
         // Sync Options
         echo '<div style="background:' . $colors['bg'] . '; padding:12px; margin:10px 0; border-left:3px solid #00cc07; border-radius:3px;">';
-        echo '<h3 style="margin:0 0 8px 0; color:#00cc07; font-size:16px;">' . $this->getLang('sync_options') . '</h3>';
+        echo '<h3 style="margin:0 0 8px 0; color:#00cc07; font-size:16px;">Sync Options</h3>';
         
         $syncCompleted = isset($config['sync_completed_tasks']) ? $config['sync_completed_tasks'] : false;
-        echo '<label style="display:inline-block; margin:5px 15px 5px 0; font-size:13px;"><input type="checkbox" name="sync_completed_tasks" value="1" ' . ($syncCompleted ? 'checked' : '') . '> ' . $this->getLang('sync_completed_tasks') . '</label>';
+        echo '<label style="display:inline-block; margin:5px 15px 5px 0; font-size:13px;"><input type="checkbox" name="sync_completed_tasks" value="1" ' . ($syncCompleted ? 'checked' : '') . '> Sync completed tasks</label>';
         
         $deleteOutlook = isset($config['delete_outlook_events']) ? $config['delete_outlook_events'] : true;
-        echo '<label style="display:inline-block; margin:5px 15px 5px 0; font-size:13px;"><input type="checkbox" name="delete_outlook_events" value="1" ' . ($deleteOutlook ? 'checked' : '') . '> ' . $this->getLang('delete_from_outlook') . '</label>';
+        echo '<label style="display:inline-block; margin:5px 15px 5px 0; font-size:13px;"><input type="checkbox" name="delete_outlook_events" value="1" ' . ($deleteOutlook ? 'checked' : '') . '> Delete from Outlook when removed</label>';
         
         $syncAll = isset($config['sync_all_namespaces']) ? $config['sync_all_namespaces'] : true;
-        echo '<label style="display:inline-block; margin:5px 0; font-size:13px;"><input type="checkbox" name="sync_all_namespaces" value="1" onclick="toggleNamespaceSelection(this)" ' . ($syncAll ? 'checked' : '') . '> ' . $this->getLang('sync_all_namespaces') . '</label>';
+        echo '<label style="display:inline-block; margin:5px 0; font-size:13px;"><input type="checkbox" name="sync_all_namespaces" value="1" onclick="toggleNamespaceSelection(this)" ' . ($syncAll ? 'checked' : '') . '> Sync all namespaces</label>';
         
         // Namespace selection (shown when sync_all is unchecked)
         echo '<div id="namespace_selection" style="margin-top:10px; ' . ($syncAll ? 'display:none;' : '') . '">';
-        echo '<label style="display:block; font-weight:bold; margin-bottom:5px; font-size:13px;">' . $this->getLang('select_namespaces_to_sync') . '</label>';
+        echo '<label style="display:block; font-weight:bold; margin-bottom:5px; font-size:13px;">Select namespaces to sync:</label>';
         
         // Get available namespaces
         $availableNamespaces = $this->getAllNamespaces();
@@ -308,8 +316,8 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
         
         // Namespace Mapping
         echo '<div style="background:' . $colors['bg'] . '; padding:12px; border-left:3px solid #00cc07; border-radius:3px;">';
-        echo '<h3 style="margin:0 0 8px 0; color:#00cc07; font-size:16px;">' . $this->getLang('namespace_to_category') . '</h3>';
-        echo '<p style="color:' . $colors['text'] . '; font-size:0.8em; margin:0 0 5px;">' . $this->getLang('ns_mapping_hint') . '</p>';
+        echo '<h3 style="margin:0 0 8px 0; color:#00cc07; font-size:16px;">Namespace → Category</h3>';
+        echo '<p style="color:' . $colors['text'] . '; font-size:0.8em; margin:0 0 5px;">One per line: namespace=Category</p>';
         echo '<textarea name="category_mapping" rows="6" style="width:100%; padding:6px; border:1px solid ' . $colors['border'] . '; border-radius:3px; font-family:monospace; font-size:12px; resize:vertical;" placeholder="work=Blue category&#10;personal=Green category">';
         if (isset($config['category_mapping']) && is_array($config['category_mapping'])) {
             foreach ($config['category_mapping'] as $ns => $cat) {
@@ -321,21 +329,19 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
         
         // Color Mapping with Color Picker
         echo '<div style="background:' . $colors['bg'] . '; padding:12px; border-left:3px solid #00cc07; border-radius:3px;">';
-        echo '<h3 style="margin:0 0 8px 0; color:#00cc07; font-size:16px;">🎨 ' . $this->getLang('color_to_category') . '</h3>';
-        echo '<p style="color:' . $colors['text'] . '; font-size:0.8em; margin:0 0 8px;">' . $this->getLang('color_mapping_hint') . '</p>';
+        echo '<h3 style="margin:0 0 8px 0; color:#00cc07; font-size:16px;">🎨 Event Color → Category</h3>';
+        echo '<p style="color:' . $colors['text'] . '; font-size:0.8em; margin:0 0 8px;">Map calendar colors to Outlook categories</p>';
         
         // Define calendar colors and Outlook categories (only the main 6 colors)
-        // Color names for display use getLang, but Outlook category values stay as-is (API values)
         $calendarColors = [
-            '#3498db' => $this->getLang('color_blue'),
-            '#2ecc71' => $this->getLang('color_green'),
-            '#e74c3c' => $this->getLang('color_red'),
-            '#f39c12' => $this->getLang('color_orange'),
-            '#9b59b6' => $this->getLang('color_purple'),
-            '#1abc9c' => $this->getLang('color_teal')
+            '#3498db' => 'Blue',
+            '#2ecc71' => 'Green',
+            '#e74c3c' => 'Red',
+            '#f39c12' => 'Orange',
+            '#9b59b6' => 'Purple',
+            '#1abc9c' => 'Teal'
         ];
         
-        // Outlook category values (these are API values, not translated)
         $outlookCategories = [
             'Blue category',
             'Green category',
@@ -370,7 +376,7 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
             
             // Outlook category dropdown
             echo '<select name="color_map_' . $rowIndex . '" style="flex:1; padding:4px; border:1px solid ' . $colors['border'] . '; border-radius:3px; font-size:12px;">';
-            echo '<option value="">' . $this->getLang('none') . '</option>';
+            echo '<option value="">-- None --</option>';
             foreach ($outlookCategories as $category) {
                 $selected = ($selectedCategory === $category) ? 'selected' : '';
                 echo '<option value="' . hsc($category) . '" ' . $selected . '>' . hsc($category) . '</option>';
@@ -394,21 +400,11 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
         echo '</div>'; // end grid
         
         // Submit button
-        echo '<button type="submit" style="background:#00cc07; color:white; padding:10px 20px; border:none; border-radius:3px; cursor:pointer; font-size:14px; font-weight:bold; margin:10px 0;">💾 ' . $this->getLang('save_configuration') . '</button>';
+        echo '<button type="submit" style="background:#00cc07; color:white; padding:10px 20px; border:none; border-radius:3px; cursor:pointer; font-size:14px; font-weight:bold; margin:10px 0;">💾 Save Configuration</button>';
         echo '</form>';
         
-        // JavaScript for Import/Export - with localized strings
-        $importExportLang = json_encode([
-            'export_success' => $this->getLang('export_success'),
-            'export_failed' => $this->getLang('export_failed'),
-            'importing' => $this->getLang('importing'),
-            'import_successful' => $this->getLang('import_successful'),
-            'import_failed' => $this->getLang('import_failed'),
-            'error' => $this->getLang('error'),
-        ]);
+        // JavaScript for Import/Export
         echo '<script>
-        var importExportLang = ' . $importExportLang . ';
-        
         async function exportConfig() {
             try {
                 const response = await fetch("?do=admin&page=calendar&action=export_config&call=ajax", {
@@ -428,12 +424,12 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
                     document.body.removeChild(a);
                     URL.revokeObjectURL(url);
                     
-                    alert("✅ " + importExportLang.export_success);
+                    alert("✅ Config exported successfully!\\n\\n⚠️ This file contains encrypted credentials.\\nKeep it secure!");
                 } else {
-                    alert("❌ " + importExportLang.export_failed + ": " + data.message);
+                    alert("❌ Export failed: " + data.message);
                 }
             } catch (error) {
-                alert("❌ " + importExportLang.error + ": " + error.message);
+                alert("❌ Error: " + error.message);
             }
         }
         
@@ -442,7 +438,7 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
             if (!file) return;
             
             const status = document.getElementById("importStatus");
-            status.textContent = "⏳ " + importExportLang.importing;
+            status.textContent = "⏳ Importing...";
             status.style.color = "#00cc07";
             
             try {
@@ -458,13 +454,13 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
                 const data = await response.json();
                 
                 if (data.success) {
-                    status.textContent = "✅ " + importExportLang.import_successful;
+                    status.textContent = "✅ Import successful! Reloading...";
                     status.style.color = "#28a745";
                     setTimeout(() => {
                         window.location.reload();
                     }, 1500);
                 } else {
-                    status.textContent = "❌ " + importExportLang.import_failed + ": " + data.message;
+                    status.textContent = "❌ Import failed: " + data.message;
                     status.style.color = "#dc3545";
                 }
             } catch (error) {
@@ -479,7 +475,7 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
         
         // Sync Controls Section
         echo '<div style="background:' . $colors['bg'] . '; padding:12px; margin:15px 0; border-left:3px solid #00cc07; border-radius:3px; max-width:900px;">';
-        echo '<h3 style="margin:0 0 8px 0; color:#00cc07; font-size:16px;">🔄 ' . $this->getLang('sync_controls') . '</h3>';
+        echo '<h3 style="margin:0 0 8px 0; color:#00cc07; font-size:16px;">🔄 Sync Controls</h3>';
         
         // Check cron job status
         $cronStatus = $this->getCronStatus();
@@ -489,13 +485,13 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
         $logWritable = is_writable($logFile) || is_writable(dirname($logFile));
         
         echo '<div style="display:flex; gap:10px; align-items:center; margin-bottom:10px;">';
-        echo '<button onclick="runSyncNow()" id="syncBtn" style="background:#00cc07; color:white; padding:8px 16px; border:none; border-radius:3px; cursor:pointer; font-size:13px; font-weight:bold;">▶️ ' . $this->getLang('run_sync_now') . '</button>';
-        echo '<button onclick="stopSyncNow()" id="stopBtn" style="background:#e74c3c; color:white; padding:8px 16px; border:none; border-radius:3px; cursor:pointer; font-size:13px; font-weight:bold; display:none;">⏹️ ' . $this->getLang('stop_sync') . '</button>';
+        echo '<button onclick="runSyncNow()" id="syncBtn" style="background:#00cc07; color:white; padding:8px 16px; border:none; border-radius:3px; cursor:pointer; font-size:13px; font-weight:bold;">▶️ Run Sync Now</button>';
+        echo '<button onclick="stopSyncNow()" id="stopBtn" style="background:#e74c3c; color:white; padding:8px 16px; border:none; border-radius:3px; cursor:pointer; font-size:13px; font-weight:bold; display:none;">⏹️ Stop Sync</button>';
         
         if ($cronStatus['active']) {
             echo '<span style="color:' . $colors['text'] . '; font-size:12px;">⏰ ' . hsc($cronStatus['frequency']) . '</span>';
         } else {
-            echo '<span style="color:#999; font-size:12px;">⚠️ ' . $this->getLang('no_cron_detected') . '</span>';
+            echo '<span style="color:#999; font-size:12px;">⚠️ No cron job detected</span>';
         }
         
         echo '<span id="syncStatus" style="color:' . $colors['text'] . '; font-size:12px; margin-left:auto;"></span>';
@@ -504,7 +500,7 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
         // Show permission warning if log not writable
         if (!$logWritable) {
             echo '<div style="background:#fff3e0; border-left:3px solid #ff9800; padding:8px; margin:8px 0; border-radius:3px;">';
-            echo '<span style="color:#e65100; font-size:11px;">⚠️ ' . $this->getLang('log_not_writable') . ' <code style="background:#f0f0f0; padding:2px 4px; border-radius:2px;">chmod 666 ' . $logFile . '</code></span>';
+            echo '<span style="color:#e65100; font-size:11px;">⚠️ Log file not writable. Run: <code style="background:#f0f0f0; padding:2px 4px; border-radius:2px;">chmod 666 ' . $logFile . '</code></span>';
             echo '</div>';
         }
         
@@ -515,34 +511,25 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
             
             if ($hasRedirect) {
                 echo '<div style="background:#fff3e0; border-left:3px solid #ff9800; padding:8px; margin:8px 0; border-radius:3px;">';
-                echo '<span style="color:#e65100; font-size:11px;">⚠️ <strong>' . $this->getLang('duplicate_log_warning') . '</strong></span>';
+                echo '<span style="color:#e65100; font-size:11px;">⚠️ <strong>Duplicate log entries:</strong> Your crontab has a <code>&gt;&gt;</code> redirect. The sync script logs internally, so this causes duplicate entries. Remove the redirect from your crontab.</span>';
                 echo '</div>';
             }
             
             echo '<details style="margin-top:5px;">';
-            echo '<summary style="cursor:pointer; color:#999; font-size:11px;">' . $this->getLang('show_cron_details') . '</summary>';
+            echo '<summary style="cursor:pointer; color:#999; font-size:11px;">Show cron details</summary>';
             echo '<pre style="background:#f0f0f0; padding:8px; border-radius:3px; font-size:10px; margin:5px 0; overflow-x:auto;">' . hsc($cronStatus['full_line']) . '</pre>';
             echo '</details>';
         }
         
         if (!$cronStatus['active']) {
-            echo '<p style="color:#999; font-size:11px; margin:5px 0;">' . $this->getLang('cron_setup_hint') . ' <code style="background:#f0f0f0; padding:2px 4px; border-radius:2px;">*/30 * * * * cd ' . DOKU_PLUGIN . 'calendar && php sync_outlook.php</code></p>';
-            echo '<p style="color:#888; font-size:10px; margin:3px 0;"><em>' . sprintf($this->getLang('cron_note'), $logFile) . '</em></p>';
+            echo '<p style="color:#999; font-size:11px; margin:5px 0;">To enable automatic syncing, add to crontab: <code style="background:#f0f0f0; padding:2px 4px; border-radius:2px;">*/30 * * * * cd ' . DOKU_PLUGIN . 'calendar && php sync_outlook.php</code></p>';
+            echo '<p style="color:#888; font-size:10px; margin:3px 0;"><em>Note: The script logs to ' . $logFile . ' automatically. Do not use &gt;&gt; redirect.</em></p>';
         }
         
         echo '</div>';
         
-        // JavaScript for Run Sync Now - with localized strings
-        $syncLang = json_encode([
-            'running' => $this->getLang('running'),
-            'starting_sync' => $this->getLang('starting_sync'),
-            'stopping_sync' => $this->getLang('stopping_sync'),
-            'run_sync_now' => $this->getLang('run_sync_now'),
-            'sync_stopped' => $this->getLang('stopping_sync'),
-            'stop_signal_sent' => $this->getLang('stopping_sync'),
-        ]);
+        // JavaScript for Run Sync Now
         echo '<script>
-        var syncLang = ' . $syncLang . ';
         let syncAbortController = null;
         
         function runSyncNow() {
@@ -553,9 +540,9 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
             btn.disabled = true;
             btn.style.display = "none";
             stopBtn.style.display = "inline-block";
-            btn.textContent = "⏳ " + syncLang.running;
+            btn.textContent = "⏳ Running...";
             btn.style.background = "#999";
-            status.textContent = syncLang.starting_sync;
+            status.textContent = "Starting sync...";
             status.style.color = "#00cc07";
             
             // Create abort controller for this sync
@@ -577,7 +564,7 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
                     btn.disabled = false;
                     btn.style.display = "inline-block";
                     stopBtn.style.display = "none";
-                    btn.textContent = "▶️ " + syncLang.run_sync_now;
+                    btn.textContent = "▶️ Run Sync Now";
                     btn.style.background = "#00cc07";
                     syncAbortController = null;
                     
@@ -588,16 +575,16 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
                 })
                 .catch(error => {
                     if (error.name === "AbortError") {
-                        status.textContent = "⏹️ " + syncLang.sync_stopped;
+                        status.textContent = "⏹️ Sync stopped by user";
                         status.style.color = "#ff9800";
                     } else {
-                        status.textContent = "❌ " + error.message;
+                        status.textContent = "❌ Error: " + error.message;
                         status.style.color = "#dc3545";
                     }
                     btn.disabled = false;
                     btn.style.display = "inline-block";
                     stopBtn.style.display = "none";
-                    btn.textContent = "▶️ " + syncLang.run_sync_now;
+                    btn.textContent = "▶️ Run Sync Now";
                     btn.style.background = "#00cc07";
                     syncAbortController = null;
                 });
@@ -606,7 +593,7 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
         function stopSyncNow() {
             const status = document.getElementById("syncStatus");
             
-            status.textContent = "⏹️ " + syncLang.stopping_sync;
+            status.textContent = "⏹️ Sending stop signal...";
             status.style.color = "#ff9800";
             
             // First, send stop signal to server
@@ -616,7 +603,7 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
             .then(response => response.json())
             .then(data => {
                 if (data.success) {
-                    status.textContent = "⏹️ " + syncLang.stop_signal_sent;
+                    status.textContent = "⏹️ Stop signal sent - sync will abort soon";
                     status.style.color = "#ff9800";
                 } else {
                     status.textContent = "⚠️ " + data.message;
@@ -624,14 +611,14 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
                 }
             })
             .catch(error => {
-                status.textContent = "⚠️ " + error.message;
+                status.textContent = "⚠️ Error sending stop signal: " + error.message;
                 status.style.color = "#ff9800";
             });
             
             // Also abort the fetch request
             if (syncAbortController) {
                 syncAbortController.abort();
-                status.textContent = "⏹️ " + syncLang.stopping_sync;
+                status.textContent = "⏹️ Stopping sync...";
                 status.style.color = "#ff9800";
             }
         }
@@ -639,8 +626,8 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
         
         // Log Viewer Section - More Compact
         echo '<div style="background:' . $colors['bg'] . '; padding:12px; margin:15px 0 10px 0; border-left:3px solid #00cc07; border-radius:3px; max-width:900px;">';
-        echo '<h3 style="margin:0 0 5px 0; color:#00cc07; font-size:16px;">📜 ' . $this->getLang('live_sync_log') . '</h3>';
-        echo '<p style="color:' . $colors['text'] . '; font-size:0.8em; margin:0 0 8px;">' . $this->getLang('log_location') . ' <code style="font-size:10px;">' . $logFile . '</code> • ' . $this->getLang('updates_interval') . '</p>';
+        echo '<h3 style="margin:0 0 5px 0; color:#00cc07; font-size:16px;">📜 Live Sync Log</h3>';
+        echo '<p style="color:' . $colors['text'] . '; font-size:0.8em; margin:0 0 8px;">Location: <code style="font-size:10px;">' . $logFile . '</code> • Updates every 2 seconds</p>';
         
         // Log viewer container
         echo '<div style="background:#1e1e1e; border-radius:5px; overflow:hidden; box-shadow:0 2px 4px rgba(0,0,0,0.3);">';
@@ -649,29 +636,20 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
         echo '<div style="background:#2d2d2d; padding:6px 10px; display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid #444;">';
         echo '<span style="color:#00cc07; font-family:monospace; font-weight:bold; font-size:12px;">sync.log</span>';
         echo '<div>';
-        echo '<button id="pauseBtn" onclick="togglePause()" style="background:#666; color:white; border:none; padding:4px 8px; border-radius:3px; cursor:pointer; margin-right:4px; font-size:11px;">⏸ ' . $this->getLang('pause') . '</button>';
-        echo '<button onclick="clearLog()" style="background:#e74c3c; color:white; border:none; padding:4px 8px; border-radius:3px; cursor:pointer; margin-right:4px; font-size:11px;">🗑️ ' . $this->getLang('clear') . '</button>';
-        echo '<button onclick="downloadLog()" style="background:#666; color:white; border:none; padding:4px 8px; border-radius:3px; cursor:pointer; font-size:11px;">💾 ' . $this->getLang('download') . '</button>';
+        echo '<button id="pauseBtn" onclick="togglePause()" style="background:#666; color:white; border:none; padding:4px 8px; border-radius:3px; cursor:pointer; margin-right:4px; font-size:11px;">⏸ Pause</button>';
+        echo '<button onclick="clearLog()" style="background:#e74c3c; color:white; border:none; padding:4px 8px; border-radius:3px; cursor:pointer; margin-right:4px; font-size:11px;">🗑️ Clear</button>';
+        echo '<button onclick="downloadLog()" style="background:#666; color:white; border:none; padding:4px 8px; border-radius:3px; cursor:pointer; font-size:11px;">💾 Download</button>';
         echo '</div>';
         echo '</div>';
         
         // Log content - Reduced height to 250px
-        echo '<pre id="logContent" style="background:#1e1e1e; color:#00cc07; font-family:monospace; font-size:11px; padding:10px; margin:0; overflow-x:auto; white-space:pre-wrap; word-wrap:break-word; line-height:1.4; max-height:250px; overflow-y:auto;">' . $this->getLang('loading_log') . '</pre>';
+        echo '<pre id="logContent" style="background:#1e1e1e; color:#00cc07; font-family:monospace; font-size:11px; padding:10px; margin:0; overflow-x:auto; white-space:pre-wrap; word-wrap:break-word; line-height:1.4; max-height:250px; overflow-y:auto;">Loading log...</pre>';
         
         echo '</div>';
         echo '</div>';
         
-        // JavaScript for log viewer - with localized strings
-        $logLang = json_encode([
-            'no_log_data' => $this->getLang('no_log_data'),
-            'pause' => $this->getLang('pause'),
-            'resume' => $this->getLang('resume'),
-            'clear_log_confirm' => $this->getLang('clear_log_confirm'),
-            'log_cleared_success' => $this->getLang('log_cleared_success'),
-            'error' => $this->getLang('error'),
-        ]);
+        // JavaScript for log viewer
         echo '<script>
-        var logLang = ' . $logLang . ';
         let refreshInterval = null;
         let isPaused = false;
         
@@ -683,7 +661,7 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
                 .then(data => {
                     const logContent = document.getElementById("logContent");
                     if (logContent) {
-                        logContent.textContent = data.log || logLang.no_log_data;
+                        logContent.textContent = data.log || "No log data available";
                         logContent.scrollTop = logContent.scrollHeight;
                     }
                 })
@@ -696,17 +674,17 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
             isPaused = !isPaused;
             const btn = document.getElementById("pauseBtn");
             if (isPaused) {
-                btn.textContent = "▶ " + logLang.resume;
+                btn.textContent = "▶ Resume";
                 btn.style.background = "#00cc07";
             } else {
-                btn.textContent = "⏸ " + logLang.pause;
+                btn.textContent = "⏸ Pause";
                 btn.style.background = "#666";
                 refreshLog();
             }
         }
         
         function clearLog() {
-            if (!confirm(logLang.clear_log_confirm)) {
+            if (!confirm("Clear the sync log file?\\n\\nThis will delete all log entries.")) {
                 return;
             }
             
@@ -717,13 +695,13 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
                 .then(data => {
                     if (data.success) {
                         refreshLog();
-                        alert(logLang.log_cleared_success);
+                        alert("Log cleared successfully");
                     } else {
-                        alert(logLang.error + ": " + data.message);
+                        alert("Error clearing log: " + data.message);
                     }
                 })
                 .catch(error => {
-                    alert(logLang.error + ": " + error.message);
+                    alert("Error: " + error.message);
                 });
         }
         
@@ -1184,8 +1162,6 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
             'delete_ns_confirm' => $this->getLang('delete_ns_confirm'),
             'scanning' => $this->getLang('scanning'),
             'cleaning' => $this->getLang('cleaning'),
-            'cleanup_complete' => $this->getLang('cleanup_complete'),
-            'failed' => $this->getLang('failed'),
             'no_empty_ns' => $this->getLang('no_empty_ns'),
             'found_items' => $this->getLang('found_items'),
             'proceed_cleanup' => $this->getLang('proceed_cleanup'),
@@ -1264,30 +1240,6 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
             'rec_weeks' => $this->getLang('rec_weeks'),
             'rec_months' => $this->getLang('rec_months'),
             'rec_years' => $this->getLang('rec_years'),
-            // Additional Edit Recurring Dialog strings
-            'default_label' => $this->getLang('default_label'),
-            'current_suffix' => $this->getLang('current_suffix'),
-            'repeat_every' => $this->getLang('repeat_every'),
-            'on_these_days' => $this->getLang('on_these_days'),
-            'repeat_on_label' => $this->getLang('repeat_on'),
-            'weekday_pattern' => $this->getLang('weekday_pattern'),
-            'day_label' => $this->getLang('day_label'),
-            'of_each_month' => $this->getLang('of_each_month'),
-            'repeat_until' => $this->getLang('repeat_until'),
-            'repeat_until_hint' => $this->getLang('repeat_until_hint'),
-            // Sync controls
-            'run_sync_now' => $this->getLang('run_sync_now'),
-            'stop_sync' => $this->getLang('stop_sync'),
-            'running_ellipsis' => $this->getLang('running'),
-            'starting_sync' => $this->getLang('starting_sync'),
-            'stopping_sync' => $this->getLang('stopping_sync'),
-            // Sync log
-            'pause' => $this->getLang('pause'),
-            'resume' => $this->getLang('resume'),
-            'loading_log' => $this->getLang('loading_log'),
-            'no_log_data' => $this->getLang('no_log_data'),
-            'clear_log_confirm' => $this->getLang('clear_log_confirm'),
-            'log_cleared_success' => $this->getLang('log_cleared_success'),
         ];
         
         // JavaScript
@@ -1317,7 +1269,7 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
             .then(function(data) {
                 if (btn) { btn.textContent = "🧹 " + adminLang.cleanup_empty; btn.disabled = false; }
                 if (!data.success) {
-                    if (status) { status.innerHTML = "<span style=\"color:#e74c3c;\">❌ " + (data.error || adminLang.failed) + "</span>"; }
+                    if (status) { status.innerHTML = "<span style=\"color:#e74c3c;\">❌ " + (data.error || "Failed") + "</span>"; }
                     return;
                 }
                 
@@ -1347,7 +1299,7 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
                 })
                 .then(function(r) { return r.json(); })
                 .then(function(data2) {
-                    var msgText = data2.message || adminLang.cleanup_complete;
+                    var msgText = data2.message || "Cleanup complete";
                     if (data2.details && data2.details.length > 0) {
                         msgText += " (" + data2.details.join(", ") + ")";
                     }
@@ -1974,9 +1926,9 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
             const nsArray = Array.from(namespaces).sort();
             
             // Build namespace options
-            let nsOptions = "<option value=\\"\\">" + adminLang.default_label + "</option>";
+            let nsOptions = "<option value=\\"\\">(default)</option>";
             if (namespace && namespace !== "") {
-                nsOptions += "<option value=\\"" + namespace + "\\" selected>" + namespace + " " + adminLang.current_suffix + "</option>";
+                nsOptions += "<option value=\\"" + namespace + "\\" selected>" + namespace + " (current)</option>";
             }
             for (const ns of nsArray) {
                 if (ns !== namespace) {
@@ -1985,7 +1937,7 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
             }
             
             // Build weekday checkboxes - matching event editor style exactly
-            const dayNames = adminLang.day_names;
+            const dayNames = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
             let weekDayChecks = "";
             for (let i = 0; i < 7; i++) {
                 const checked = weekDays && weekDays.includes(i) ? " checked" : "";
@@ -1997,14 +1949,14 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
             
             // Build ordinal week options
             let ordinalWeekOpts = "";
-            const ordinalLabels = [[1,adminLang.ordinal_first], [2,adminLang.ordinal_second], [3,adminLang.ordinal_third], [4,adminLang.ordinal_fourth], [5,adminLang.ordinal_fifth], [-1,adminLang.ordinal_last]];
+            const ordinalLabels = [[1,"First"], [2,"Second"], [3,"Third"], [4,"Fourth"], [5,"Fifth"], [-1,"Last"]];
             for (const [val, label] of ordinalLabels) {
                 const selected = val === ordinalWeek ? " selected" : "";
                 ordinalWeekOpts += `<option value="${val}"${selected}>${label}</option>`;
             }
             
             // Build ordinal day options - full day names like event editor
-            const fullDayNames = adminLang.day_names_full;
+            const fullDayNames = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
             let ordinalDayOpts = "";
             for (let i = 0; i < 7; i++) {
                 const selected = i === ordinalDay ? " selected" : "";
@@ -2028,7 +1980,7 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
             const monthlyDisplay = recurrenceType === "monthly" ? "block" : "none";
             
             // Get recurrence type selection - matching event editor labels
-            const recTypes = [["daily",adminLang.rec_days], ["weekly",adminLang.rec_weeks], ["monthly",adminLang.rec_months], ["yearly",adminLang.rec_years]];
+            const recTypes = [["daily","Day(s)"], ["weekly","Week(s)"], ["monthly","Month(s)"], ["yearly","Year(s)"]];
             let recTypeOptions = "";
             for (const [val, label] of recTypes) {
                 const selected = val === recurrenceType ? " selected" : "";
@@ -2045,29 +1997,29 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
                     
                     <!-- Header - matching event editor -->
                     <div style="display:flex; align-items:center; justify-content:space-between; padding:10px 14px; background:#2c3e50; color:white; flex-shrink:0;">
-                        <h3 style="margin:0; font-size:15px; font-weight:600;">✏️ ${adminLang.edit_recurring_title}</h3>
+                        <h3 style="margin:0; font-size:15px; font-weight:600;">✏️ Edit Recurring Event</h3>
                         <button type="button" onclick="closeEditDialog()" style="background:rgba(255,255,255,0.2); border:none; color:white; font-size:22px; width:28px; height:28px; border-radius:50%; cursor:pointer; display:flex; align-items:center; justify-content:center; line-height:1; padding:0;">×</button>
                     </div>
                     
                     <!-- Form body - matching event editor -->
                     <form id="editRecurringForm" style="padding:10px 12px; overflow-y:auto; flex:1; display:flex; flex-direction:column; gap:8px;">
                         
-                        <p style="margin:0 0 4px; color:#888; font-size:11px;">${adminLang.changes_apply_to} <strong style="color:#00cc07;">${title}</strong></p>
+                        <p style="margin:0 0 4px; color:#888; font-size:11px;">Changes apply to ALL occurrences of: <strong style="color:#00cc07;">${title}</strong></p>
                         
                         <!-- Title -->
                         <div>
-                            <label style="${labelStyle}">📝 ${adminLang.field_title}</label>
+                            <label style="${labelStyle}">📝 TITLE</label>
                             <input type="text" name="new_title" value="${title}" style="${inputStyle}" required>
                         </div>
                         
                         <!-- Time Row -->
                         <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px;">
                             <div>
-                                <label style="${labelStyle}">🕐 ${adminLang.field_start_time}</label>
+                                <label style="${labelStyle}">🕐 START TIME</label>
                                 <input type="time" name="start_time" value="${time || \'\'}" style="${inputStyle}">
                             </div>
                             <div>
-                                <label style="${labelStyle}">🕐 ${adminLang.field_end_time}</label>
+                                <label style="${labelStyle}">🕐 END TIME</label>
                                 <input type="time" name="end_time" style="${inputStyle}">
                             </div>
                         </div>
@@ -2078,7 +2030,7 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
                             <!-- Repeat every [N] [period] -->
                             <div style="display:flex; gap:8px; align-items:flex-end; margin-bottom:6px;">
                                 <div style="flex:0 0 auto;">
-                                    <label style="${labelStyle}">${adminLang.repeat_every}</label>
+                                    <label style="${labelStyle}">Repeat every</label>
                                     <input type="number" name="recurrence_interval" value="${recurrenceInterval || 1}" min="1" max="99" style="width:50px; ${inputSmallStyle}">
                                 </div>
                                 <div style="flex:1;">
@@ -2091,7 +2043,7 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
                             
                             <!-- Weekly options - day checkboxes -->
                             <div id="editWeeklyOptions" style="display:${weeklyDisplay}; margin-bottom:6px;">
-                                <label style="${labelStyle}">${adminLang.on_these_days}</label>
+                                <label style="${labelStyle}">On these days:</label>
                                 <div style="display:flex; flex-wrap:wrap; gap:2px;">
                                     ${weekDayChecks}
                                 </div>
@@ -2099,25 +2051,25 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
                             
                             <!-- Monthly options -->
                             <div id="editMonthlyOptions" style="display:${monthlyDisplay}; margin-bottom:6px;">
-                                <label style="${labelStyle}">${adminLang.repeat_on_label}</label>
+                                <label style="${labelStyle}">Repeat on:</label>
                                 
                                 <!-- Radio: Day of month vs Ordinal weekday -->
                                 <div style="margin-bottom:6px;">
                                     <label style="display:inline-flex; align-items:center; margin-right:12px; cursor:pointer; font-size:11px; color:#ccc;">
                                         <input type="radio" name="monthly_type" value="dayOfMonth" ${monthlyDayChecked} onchange="toggleEditMonthlyType()" style="margin-right:4px;">
-                                        ${adminLang.day_of_month}
+                                        Day of month
                                     </label>
                                     <label style="display:inline-flex; align-items:center; cursor:pointer; font-size:11px; color:#ccc;">
                                         <input type="radio" name="monthly_type" value="ordinalWeekday" ${monthlyOrdinalChecked} onchange="toggleEditMonthlyType()" style="margin-right:4px;">
-                                        ${adminLang.weekday_pattern}
+                                        Weekday pattern
                                     </label>
                                 </div>
                                 
                                 <!-- Day of month input -->
                                 <div id="editMonthlyDay" style="display:${monthlyType !== "ordinalWeekday" ? "flex" : "none"}; align-items:center; gap:6px;">
-                                    <span style="font-size:11px; color:#ccc;">${adminLang.day_label}</span>
+                                    <span style="font-size:11px; color:#ccc;">Day</span>
                                     <input type="number" name="month_day" value="${monthDay || 1}" min="1" max="31" style="width:50px; ${inputSmallStyle}">
-                                    <span style="font-size:10px; color:#666;">${adminLang.of_each_month}</span>
+                                    <span style="font-size:10px; color:#666;">of each month</span>
                                 </div>
                                 
                                 <!-- Ordinal weekday -->
@@ -2128,21 +2080,21 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
                                     <select name="ordinal_day" style="width:auto; ${inputSmallStyle}">
                                         ${ordinalDayOpts}
                                     </select>
-                                    <span style="font-size:10px; color:#666;">${adminLang.of_each_month}</span>
+                                    <span style="font-size:10px; color:#666;">of each month</span>
                                 </div>
                             </div>
                             
                             <!-- Repeat Until -->
                             <div>
-                                <label style="${labelStyle}">${adminLang.repeat_until}</label>
+                                <label style="${labelStyle}">Repeat Until (optional)</label>
                                 <input type="date" name="recurrence_end" style="width:100%; ${inputSmallStyle}; box-sizing:border-box;">
-                                <div style="font-size:9px; color:#666; margin-top:2px;">${adminLang.repeat_until_hint}</div>
+                                <div style="font-size:9px; color:#666; margin-top:2px;">Leave empty to keep existing end date</div>
                             </div>
                         </div>
                         
                         <!-- Namespace -->
                         <div>
-                            <label style="${labelStyle}">📁 ${adminLang.field_namespace}</label>
+                            <label style="${labelStyle}">📁 NAMESPACE</label>
                             <select name="new_namespace" style="${inputStyle}">
                                 ${nsOptions}
                             </select>
@@ -2151,8 +2103,8 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
                     
                     <!-- Footer buttons - matching event editor -->
                     <div style="display:flex; gap:8px; padding:12px 14px; background:#252525; border-top:1px solid #333; flex-shrink:0;">
-                        <button type="button" onclick="closeEditDialog()" style="flex:1; background:#444; color:#ccc; padding:8px; border:none; border-radius:4px; cursor:pointer; font-size:12px;">${adminLang.btn_cancel}</button>
-                        <button type="button" onclick="document.getElementById(\x27editRecurringForm\x27).dispatchEvent(new Event(\x27submit\x27))" style="flex:1; background:#00cc07; color:white; padding:8px; border:none; border-radius:4px; cursor:pointer; font-weight:bold; font-size:12px; box-shadow:0 2px 4px rgba(0,0,0,0.2);">💾 ${adminLang.btn_save_changes}</button>
+                        <button type="button" onclick="closeEditDialog()" style="flex:1; background:#444; color:#ccc; padding:8px; border:none; border-radius:4px; cursor:pointer; font-size:12px;">Cancel</button>
+                        <button type="button" onclick="document.getElementById(\x27editRecurringForm\x27).dispatchEvent(new Event(\x27submit\x27))" style="flex:1; background:#00cc07; color:white; padding:8px; border:none; border-radius:4px; cursor:pointer; font-weight:bold; font-size:12px; box-shadow:0 2px 4px rgba(0,0,0,0.2);">💾 Save Changes</button>
                     </div>
                 </div>
             `;
@@ -2278,7 +2230,7 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
             $colors = $this->getTemplateColors();
         }
         
-        echo '<h2 style="margin:10px 0; font-size:20px;">📦 ' . $this->getLang('update_plugin') . '</h2>';
+        echo '<h2 style="margin:10px 0; font-size:20px;">📦 Update Plugin</h2>';
         
         // Show message if present
         if ($INPUT->has('msg')) {
@@ -2298,14 +2250,14 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
         }
         
         echo '<div style="background:' . $colors['bg'] . '; padding:12px; margin:10px 0; border-left:3px solid #00cc07; border-radius:3px; max-width:1200px;">';
-        echo '<h3 style="margin:0 0 8px 0; color:#00cc07; font-size:16px;">📋 ' . $this->getLang('current_version') . '</h3>';
+        echo '<h3 style="margin:0 0 8px 0; color:#00cc07; font-size:16px;">📋 Current Version</h3>';
         echo '<div style="font-size:12px; line-height:1.6;">';
-        echo '<div style="margin:4px 0;"><strong>' . $this->getLang('version_label') . ':</strong> ' . hsc($info['version']) . ' (' . hsc($info['date']) . ')</div>';
-        echo '<div style="margin:4px 0;"><strong>' . $this->getLang('author') . ':</strong> ' . hsc($info['author']) . ($info['email'] ? ' &lt;' . hsc($info['email']) . '&gt;' : '') . '</div>';
+        echo '<div style="margin:4px 0;"><strong>Version:</strong> ' . hsc($info['version']) . ' (' . hsc($info['date']) . ')</div>';
+        echo '<div style="margin:4px 0;"><strong>Author:</strong> ' . hsc($info['author']) . ($info['email'] ? ' &lt;' . hsc($info['email']) . '&gt;' : '') . '</div>';
         if ($info['desc']) {
-            echo '<div style="margin:4px 0;"><strong>' . $this->getLang('description_label') . ':</strong> ' . hsc($info['desc']) . '</div>';
+            echo '<div style="margin:4px 0;"><strong>Description:</strong> ' . hsc($info['desc']) . '</div>';
         }
-        echo '<div style="margin:4px 0;"><strong>' . $this->getLang('location') . ':</strong> <code style="background:#f0f0f0; padding:2px 4px; border-radius:2px;">' . DOKU_PLUGIN . 'calendar/</code></div>';
+        echo '<div style="margin:4px 0;"><strong>Location:</strong> <code style="background:#f0f0f0; padding:2px 4px; border-radius:2px;">' . DOKU_PLUGIN . 'calendar/</code></div>';
         echo '</div>';
         
         // Check permissions
@@ -2315,17 +2267,17 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
         
         echo '<div style="margin-top:8px; padding-top:8px; border-top:1px solid ' . $colors['border'] . ';">';
         if ($pluginWritable && $parentWritable) {
-            echo '<p style="margin:5px 0; font-size:13px; color:#28a745;"><strong>✅ ' . $this->getLang('permissions') . ':</strong> ' . $this->getLang('permissions_ok') . '</p>';
+            echo '<p style="margin:5px 0; font-size:13px; color:#28a745;"><strong>✅ Permissions:</strong> OK - ready to update</p>';
         } else {
-            echo '<p style="margin:5px 0; font-size:13px; color:#dc3545;"><strong>❌ ' . $this->getLang('permissions') . ':</strong> ' . $this->getLang('permissions_issues') . '</p>';
+            echo '<p style="margin:5px 0; font-size:13px; color:#dc3545;"><strong>❌ Permissions:</strong> Issues detected</p>';
             if (!$pluginWritable) {
-                echo '<p style="margin:2px 0 2px 20px; font-size:12px; color:#dc3545;">' . $this->getLang('plugin_dir_not_writable') . '</p>';
+                echo '<p style="margin:2px 0 2px 20px; font-size:12px; color:#dc3545;">Plugin directory not writable</p>';
             }
             if (!$parentWritable) {
-                echo '<p style="margin:2px 0 2px 20px; font-size:12px; color:#dc3545;">' . $this->getLang('parent_dir_not_writable') . '</p>';
+                echo '<p style="margin:2px 0 2px 20px; font-size:12px; color:#dc3545;">Parent directory not writable</p>';
             }
-            echo '<p style="margin:5px 0; font-size:12px; color:' . $colors['text'] . ';">' . $this->getLang('fix_with') . ': <code style="background:#f0f0f0; padding:2px 4px; border-radius:2px;">chmod -R 755 ' . DOKU_PLUGIN . 'calendar/</code></p>';
-            echo '<p style="margin:2px 0; font-size:12px; color:' . $colors['text'] . ';">' . $this->getLang('or_label') . ': <code style="background:#f0f0f0; padding:2px 4px; border-radius:2px;">chown -R www-data:www-data ' . DOKU_PLUGIN . 'calendar/</code></p>';
+            echo '<p style="margin:5px 0; font-size:12px; color:' . $colors['text'] . ';">Fix with: <code style="background:#f0f0f0; padding:2px 4px; border-radius:2px;">chmod -R 755 ' . DOKU_PLUGIN . 'calendar/</code></p>';
+            echo '<p style="margin:2px 0; font-size:12px; color:' . $colors['text'] . ';">Or: <code style="background:#f0f0f0; padding:2px 4px; border-radius:2px;">chown -R www-data:www-data ' . DOKU_PLUGIN . 'calendar/</code></p>';
         }
         echo '</div>';
         
@@ -2336,8 +2288,8 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
         
         // Left side - Upload form (60% width)
         echo '<div style="flex:1; min-width:0; background:' . $colors['bg'] . '; padding:12px; border-left:3px solid #00cc07; border-radius:3px;">';
-        echo '<h3 style="margin:0 0 8px 0; color:#00cc07; font-size:16px;">📤 ' . $this->getLang('upload_new_version') . '</h3>';
-        echo '<p style="color:' . $colors['text'] . '; font-size:13px; margin:0 0 10px;">' . $this->getLang('upload_desc') . '</p>';
+        echo '<h3 style="margin:0 0 8px 0; color:#00cc07; font-size:16px;">📤 Upload New Version</h3>';
+        echo '<p style="color:' . $colors['text'] . '; font-size:13px; margin:0 0 10px;">Upload a calendar plugin ZIP file to update. Your configuration will be preserved.</p>';
         
         echo '<form method="post" action="?do=admin&page=calendar&tab=update" enctype="multipart/form-data" id="uploadForm">';
         echo '<input type="hidden" name="action" value="upload_update">';
@@ -2347,35 +2299,35 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
         echo '<div style="margin:10px 0;">';
         echo '<label style="display:flex; align-items:center; gap:8px; font-size:13px;">';
         echo '<input type="checkbox" name="backup_first" value="1" checked>';
-        echo '<span>' . $this->getLang('backup_before_update') . '</span>';
+        echo '<span>Create backup before updating (Recommended)</span>';
         echo '</label>';
         echo '</div>';
         
         // Buttons side by side
         echo '<div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">';
-        echo '<button type="submit" onclick="return confirmUpload()" style="background:#00cc07; color:white; padding:10px 20px; border:none; border-radius:3px; cursor:pointer; font-size:14px; font-weight:bold;">📤 ' . $this->getLang('upload_install') . '</button>';
+        echo '<button type="submit" onclick="return confirmUpload()" style="background:#00cc07; color:white; padding:10px 20px; border:none; border-radius:3px; cursor:pointer; font-size:14px; font-weight:bold;">📤 Upload & Install</button>';
         echo '</form>';
         
         // Clear Cache button (next to Upload button)
         echo '<form method="post" action="?do=admin&page=calendar&tab=update" style="display:inline; margin:0;">';
         echo '<input type="hidden" name="action" value="clear_cache">';
         echo '<input type="hidden" name="tab" value="update">';
-        echo '<button type="submit" onclick="return confirm(\'' . $this->getLang('clear_cache_confirm') . '\')" style="background:#ff9800; color:white; padding:10px 20px; border:none; border-radius:3px; cursor:pointer; font-size:14px; font-weight:bold;">🗑️ ' . $this->getLang('clear_cache') . '</button>';
+        echo '<button type="submit" onclick="return confirm(\'Clear all DokuWiki cache? This will refresh all plugin files.\')" style="background:#ff9800; color:white; padding:10px 20px; border:none; border-radius:3px; cursor:pointer; font-size:14px; font-weight:bold;">🗑️ Clear Cache</button>';
         echo '</form>';
         echo '</div>';
         
-        echo '<p style="margin:8px 0 0 0; font-size:12px; color:' . $colors['text'] . ';">' . $this->getLang('clear_cache_hint') . '</p>';
+        echo '<p style="margin:8px 0 0 0; font-size:12px; color:' . $colors['text'] . ';">Clear the DokuWiki cache if changes aren\'t appearing or after updating the plugin.</p>';
         echo '</div>';
         
         // Right side - Important Notes (40% width)
         echo '<div style="flex:0 0 350px; min-width:0; background:#fff3e0; border-left:3px solid #ff9800; padding:12px; border-radius:3px;">';
-        echo '<h4 style="margin:0 0 5px 0; color:#e65100; font-size:14px;">⚠️ ' . $this->getLang('important_notes') . '</h4>';
+        echo '<h4 style="margin:0 0 5px 0; color:#e65100; font-size:14px;">⚠️ Important Notes</h4>';
         echo '<ul style="margin:5px 0; padding-left:20px; font-size:12px; color:#e65100; line-height:1.6;">';
-        echo '<li>' . $this->getLang('note_replace_files') . '</li>';
-        echo '<li>' . $this->getLang('note_preserve_config') . '</li>';
-        echo '<li>' . $this->getLang('note_data_safe') . '</li>';
-        echo '<li>' . $this->getLang('note_backup_location') . ': <code style="font-size:10px;">calendar.backup.vX.X.X.YYYY-MM-DD_HH-MM-SS.zip</code></li>';
-        echo '<li>' . $this->getLang('note_valid_zip') . '</li>';
+        echo '<li>This will replace all plugin files</li>';
+        echo '<li>Configuration files (sync_config.php) will be preserved</li>';
+        echo '<li>Event data will not be affected</li>';
+        echo '<li>Backup will be saved to: <code style="font-size:10px;">calendar.backup.vX.X.X.YYYY-MM-DD_HH-MM-SS.zip</code></li>';
+        echo '<li>Make sure the ZIP file is a valid calendar plugin</li>';
         echo '</ul>';
         echo '</div>';
         
@@ -2383,7 +2335,7 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
         
         // Changelog section - Timeline viewer
         echo '<div style="background:' . $colors['bg'] . '; padding:12px; margin:10px 0; border-left:3px solid #00cc07; border-radius:3px; max-width:1200px;">';
-        echo '<h3 style="margin:0 0 8px 0; color:#00cc07; font-size:16px;">📋 ' . $this->getLang('version_history') . '</h3>';
+        echo '<h3 style="margin:0 0 8px 0; color:#00cc07; font-size:16px;">📋 Version History</h3>';
         
         $changelogFile = DOKU_PLUGIN . 'calendar/CHANGELOG.md';
         if (file_exists($changelogFile)) {
@@ -2461,7 +2413,7 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
                 echo '<button id="' . $uniqueId . '_prev" onclick="changelogNav(\'' . $uniqueId . '\', -1)" style="background:none; border:1px solid ' . $colors['border'] . '; color:' . $colors['text'] . '; width:32px; height:32px; border-radius:50%; cursor:pointer; font-size:16px; display:flex; align-items:center; justify-content:center; transition:all 0.15s;" onmouseover="this.style.borderColor=\'#00cc07\'; this.style.color=\'#00cc07\'" onmouseout="this.style.borderColor=\'' . $colors['border'] . '\'; this.style.color=\'' . $colors['text'] . '\'">‹</button>';
                 echo '<div style="flex:1; text-align:center; display:flex; align-items:center; justify-content:center; gap:10px;">';
                 echo '<span id="' . $uniqueId . '_counter" style="font-size:11px; color:' . $colors['text'] . '; opacity:0.7;">1 of ' . $totalVersions . '</span>';
-                echo '<button id="' . $uniqueId . '_current" onclick="changelogJumpTo(\'' . $uniqueId . '\', ' . $runningIndex . ')" style="background:#00cc07; border:none; color:#fff; padding:3px 10px; border-radius:3px; cursor:pointer; font-size:10px; font-weight:600; letter-spacing:0.3px; transition:all 0.15s;" onmouseover="this.style.filter=\'brightness(1.2)\'" onmouseout="this.style.filter=\'none\'">' . $this->getLang('current_release') . '</button>';
+                echo '<button id="' . $uniqueId . '_current" onclick="changelogJumpTo(\'' . $uniqueId . '\', ' . $runningIndex . ')" style="background:#00cc07; border:none; color:#fff; padding:3px 10px; border-radius:3px; cursor:pointer; font-size:10px; font-weight:600; letter-spacing:0.3px; transition:all 0.15s;" onmouseover="this.style.filter=\'brightness(1.2)\'" onmouseout="this.style.filter=\'none\'">Current Release</button>';
                 echo '</div>';
                 echo '<button id="' . $uniqueId . '_next" onclick="changelogNav(\'' . $uniqueId . '\', 1)" style="background:none; border:1px solid ' . $colors['border'] . '; color:' . $colors['text'] . '; width:32px; height:32px; border-radius:50%; cursor:pointer; font-size:16px; display:flex; align-items:center; justify-content:center; transition:all 0.15s;" onmouseover="this.style.borderColor=\'#00cc07\'; this.style.color=\'#00cc07\'" onmouseout="this.style.borderColor=\'' . $colors['border'] . '\'; this.style.color=\'' . $colors['text'] . '\'">›</button>';
                 echo '</div>';
@@ -2477,7 +2429,7 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
                     echo '<div style="display:flex; align-items:baseline; gap:8px; margin-bottom:8px;">';
                     echo '<span style="font-weight:bold; color:#00cc07; font-size:14px;">v' . hsc($ver['number']) . '</span>';
                     if ($isRunning) {
-                        echo '<span style="background:#00cc07; color:#fff; padding:1px 6px; border-radius:3px; font-size:9px; font-weight:700; letter-spacing:0.3px;">' . $this->getLang('running') . '</span>';
+                        echo '<span style="background:#00cc07; color:#fff; padding:1px 6px; border-radius:3px; font-size:9px; font-weight:700; letter-spacing:0.3px;">RUNNING</span>';
                     }
                     if ($ver['date']) {
                         echo '<span style="font-size:11px; color:' . $colors['text'] . '; opacity:0.6;">' . hsc($ver['date']) . '</span>';
@@ -2513,7 +2465,7 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
                         }
                         echo '</div>';
                     } else {
-                        echo '<div style="font-size:11px; color:' . $colors['text'] . '; opacity:0.5; font-style:italic;">' . $this->getLang('no_details_recorded') . '</div>';
+                        echo '<div style="font-size:11px; color:' . $colors['text'] . '; opacity:0.5; font-style:italic;">No detailed changes recorded</div>';
                     }
                     
                     echo '</div>';
@@ -2569,10 +2521,10 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
                 </script>';
                 
             } else {
-                echo '<p style="color:#999; font-size:13px; font-style:italic;">' . $this->getLang('no_versions_found') . '</p>';
+                echo '<p style="color:#999; font-size:13px; font-style:italic;">No versions found in changelog</p>';
             }
         } else {
-            echo '<p style="color:#999; font-size:13px; font-style:italic;">' . $this->getLang('changelog_not_available') . '</p>';
+            echo '<p style="color:#999; font-size:13px; font-style:italic;">Changelog not available</p>';
         }
         
         echo '</div>';
@@ -2591,18 +2543,18 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
         // Always show backup section (even if no backups yet)
         echo '<div id="backupSection" style="background:' . $colors['bg'] . '; padding:12px; margin:10px 0; border-left:3px solid #00cc07; border-radius:3px; max-width:900px;">';
         echo '<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">';
-        echo '<h3 style="margin:0; color:#00cc07; font-size:16px;">📁 ' . $this->getLang('backups') . '</h3>';
+        echo '<h3 style="margin:0; color:#00cc07; font-size:16px;">📁 Backups</h3>';
         
         // Manual backup button
         echo '<form method="post" action="?do=admin&page=calendar&tab=update" style="margin:0;">';
         echo '<input type="hidden" name="action" value="create_manual_backup">';
-        echo '<button type="submit" onclick="return confirm(\'' . $this->getLang('create_backup_confirm') . '\')" style="background:#00cc07; color:white; padding:6px 12px; border:none; border-radius:3px; cursor:pointer; font-size:12px; font-weight:bold;">💾 ' . $this->getLang('create_backup_now') . '</button>';
+        echo '<button type="submit" onclick="return confirm(\'Create a backup of the current plugin version?\')" style="background:#00cc07; color:white; padding:6px 12px; border:none; border-radius:3px; cursor:pointer; font-size:12px; font-weight:bold;">💾 Create Backup Now</button>';
         echo '</form>';
         echo '</div>';
         
         // Restore instructions note
         echo '<div style="background:#1a2d1a; border:1px solid #00cc07; border-radius:3px; padding:8px 12px; margin-bottom:10px;">';
-        echo '<p style="margin:0; color:#00cc07; font-size:12px;"><strong>💡 ' . $this->getLang('restore') . ':</strong> ' . $this->getLang('restore_hint') . '</p>';
+        echo '<p style="margin:0; color:#00cc07; font-size:12px;"><strong>💡 Restore:</strong> Click the 🔄 Restore button to reinstall from a backup. This uses DokuWiki\'s Extension Manager for safe installation. Alternatively, download the ZIP and upload via <strong>Admin → Extension Manager → Install</strong>.</p>';
         echo '</div>';
         
         if (!empty($backups)) {
@@ -2612,9 +2564,9 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
             echo '<div id="bulkActionBar" style="display:flex; align-items:center; gap:10px; margin-bottom:8px; padding:6px 10px; background:#333; border-radius:3px;">';
             echo '<label style="display:flex; align-items:center; gap:5px; color:#ccc; font-size:12px; cursor:pointer;">';
             echo '<input type="checkbox" id="selectAllBackups" onchange="toggleAllBackups(this)" style="width:16px; height:16px;">';
-            echo $this->getLang('select_all') . '</label>';
-            echo '<span id="selectedCount" style="color:#888; font-size:11px;">(0 ' . $this->getLang('selected') . ')</span>';
-            echo '<button onclick="deleteSelectedBackups()" id="bulkDeleteBtn" style="background:#e74c3c; color:white; border:none; padding:4px 10px; border-radius:3px; cursor:pointer; font-size:11px; margin-left:auto; display:none;">🗑️ ' . $this->getLang('delete_selected') . '</button>';
+            echo 'Select All</label>';
+            echo '<span id="selectedCount" style="color:#888; font-size:11px;">(0 selected)</span>';
+            echo '<button onclick="deleteSelectedBackups()" id="bulkDeleteBtn" style="background:#e74c3c; color:white; border:none; padding:4px 10px; border-radius:3px; cursor:pointer; font-size:11px; margin-left:auto; display:none;">🗑️ Delete Selected</button>';
             echo '</div>';
             
             echo '<div style="max-height:200px; overflow-y:auto; border:1px solid ' . $colors['border'] . '; border-radius:3px; background:' . $colors['bg'] . ';">';
@@ -2622,9 +2574,9 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
             echo '<thead style="position:sticky; top:0; background:#e9e9e9;">';
             echo '<tr>';
             echo '<th style="padding:6px; text-align:center; border-bottom:2px solid ' . $colors['border'] . '; width:30px;"></th>';
-            echo '<th style="padding:6px; text-align:left; border-bottom:2px solid ' . $colors['border'] . ';">' . $this->getLang('backup_file') . '</th>';
-            echo '<th style="padding:6px; text-align:left; border-bottom:2px solid ' . $colors['border'] . ';">' . $this->getLang('size') . '</th>';
-            echo '<th style="padding:6px; text-align:left; border-bottom:2px solid ' . $colors['border'] . ';">' . $this->getLang('actions') . '</th>';
+            echo '<th style="padding:6px; text-align:left; border-bottom:2px solid ' . $colors['border'] . ';">Backup File</th>';
+            echo '<th style="padding:6px; text-align:left; border-bottom:2px solid ' . $colors['border'] . ';">Size</th>';
+            echo '<th style="padding:6px; text-align:left; border-bottom:2px solid ' . $colors['border'] . ';">Actions</th>';
             echo '</tr></thead><tbody>';
             
             foreach ($backups as $backup) {
@@ -2635,9 +2587,9 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
                 echo '<td style="padding:6px;"><code style="font-size:11px;">' . hsc($filename) . '</code></td>';
                 echo '<td style="padding:6px;">' . $size . '</td>';
                 echo '<td style="padding:6px; white-space:nowrap;">';
-                echo '<a href="' . DOKU_BASE . 'lib/plugins/' . hsc($filename) . '" download style="color:#00cc07; text-decoration:none; font-size:11px; margin-right:10px;">📥 ' . $this->getLang('download') . '</a>';
-                echo '<button onclick="restoreBackup(\'' . hsc(addslashes($filename)) . '\')" style="background:#7b1fa2; color:white; border:none; padding:2px 6px; border-radius:2px; cursor:pointer; font-size:10px; margin-right:5px;">🔄 ' . $this->getLang('restore') . '</button>';
-                echo '<button onclick="renameBackup(\'' . hsc(addslashes($filename)) . '\')" style="background:#f39c12; color:white; border:none; padding:2px 6px; border-radius:2px; cursor:pointer; font-size:10px;">✏️ ' . $this->getLang('rename') . '</button>';
+                echo '<a href="' . DOKU_BASE . 'lib/plugins/' . hsc($filename) . '" download style="color:#00cc07; text-decoration:none; font-size:11px; margin-right:10px;">📥 Download</a>';
+                echo '<button onclick="restoreBackup(\'' . hsc(addslashes($filename)) . '\')" style="background:#7b1fa2; color:white; border:none; padding:2px 6px; border-radius:2px; cursor:pointer; font-size:10px; margin-right:5px;">🔄 Restore</button>';
+                echo '<button onclick="renameBackup(\'' . hsc(addslashes($filename)) . '\')" style="background:#f39c12; color:white; border:none; padding:2px 6px; border-radius:2px; cursor:pointer; font-size:10px;">✏️ Rename</button>';
                 echo '</td>';
                 echo '</tr>';
             }
@@ -2645,39 +2597,25 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
             echo '</tbody></table>';
             echo '</div>';
         } else {
-            echo '<p style="color:' . $colors['text'] . '; font-size:13px; margin:8px 0;">' . $this->getLang('no_backups_yet') . '</p>';
+            echo '<p style="color:' . $colors['text'] . '; font-size:13px; margin:8px 0;">No backups yet. Click "Create Backup Now" to create your first backup.</p>';
         }
         echo '</div>';
         
-        // JavaScript for Update Plugin - with localized strings
-        $updateLang = json_encode([
-            'select_zip_file' => $this->getLang('select_zip_file'),
-            'upload_confirm' => $this->getLang('upload_confirm'),
-            'selected' => $this->getLang('selected'),
-            'no_backups_selected' => $this->getLang('no_backups_selected'),
-            'delete_selected_confirm' => $this->getLang('delete_selected_confirm'),
-            'deleted_with_errors' => $this->getLang('deleted_with_errors'),
-            'restore_confirm' => $this->getLang('restore_confirm'),
-            'rename_prompt' => $this->getLang('rename_prompt'),
-            'invalid_filename' => $this->getLang('invalid_filename'),
-        ]);
         echo '<script>
-        var updateLang = ' . $updateLang . ';
-        
         function confirmUpload() {
             const fileInput = document.querySelector(\'input[name="plugin_zip"]\');
             if (!fileInput.files[0]) {
-                alert(updateLang.select_zip_file);
+                alert("Please select a ZIP file");
                 return false;
             }
             
             const fileName = fileInput.files[0].name;
             if (!fileName.endsWith(".zip")) {
-                alert(updateLang.select_zip_file);
+                alert("Please select a ZIP file");
                 return false;
             }
             
-            return confirm(updateLang.upload_confirm.replace("%s", fileName));
+            return confirm("Upload and install: " + fileName + "?\\n\\nThis will replace all plugin files.\\nYour configuration and data will be preserved.\\n\\nContinue?");
         }
         
         // Toggle all backup checkboxes
@@ -2696,7 +2634,7 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
             const selectAllCheckbox = document.getElementById(\'selectAllBackups\');
             const totalCheckboxes = document.querySelectorAll(\'.backup-checkbox\').length;
             
-            if (countSpan) countSpan.textContent = \'(\' + count + \' \' + updateLang.selected + \')\';
+            if (countSpan) countSpan.textContent = \'(\' + count + \' selected)\';
             if (bulkDeleteBtn) bulkDeleteBtn.style.display = count > 0 ? \'block\' : \'none\';
             if (selectAllCheckbox) selectAllCheckbox.checked = (count === totalCheckboxes && count > 0);
         }
@@ -2707,11 +2645,11 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
             const filenames = Array.from(checkboxes).map(cb => cb.value);
             
             if (filenames.length === 0) {
-                alert(updateLang.no_backups_selected);
+                alert(\'No backups selected\');
                 return;
             }
             
-            if (!confirm(updateLang.delete_selected_confirm.replace("%d", filenames.length).replace("%s", filenames.join(\'\\n\')))) {
+            if (!confirm(\'Delete \' + filenames.length + \' selected backup(s)?\\n\\n\' + filenames.join(\'\\n\') + \'\\n\\nThis cannot be undone!\')) {
                 return;
             }
             
@@ -2723,7 +2661,7 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
                 if (index >= filenames.length) {
                     // All done
                     if (errors.length > 0) {
-                        alert(updateLang.deleted_with_errors.replace("%d", deleted).replace("%s", errors.join(\', \')));
+                        alert(\'Deleted \' + deleted + \' backups. Errors: \' + errors.join(\', \'));
                     }
                     updateSelectedCount();
                     
@@ -2766,7 +2704,7 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
         }
         
         function restoreBackup(filename) {
-            if (!confirm(updateLang.restore_confirm.replace("%s", filename))) {
+            if (!confirm("Restore from backup: " + filename + "?\\n\\nThis will use DokuWiki\'s Extension Manager to reinstall the plugin from the backup.\\nYour current plugin files will be replaced.\\n\\nContinue?")) {
                 return;
             }
             
@@ -2791,9 +2729,8 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
         }
         
         function renameBackup(filename) {
-            const currentName = filename.replace(/\\.zip$/, "");
-            const newName = prompt(updateLang.rename_prompt.replace("%s", currentName), currentName);
-            if (!newName || newName === currentName) {
+            const newName = prompt("Enter new backup name (without .zip extension):\\n\\nCurrent: " + filename.replace(/\\.zip$/, ""), filename.replace(/\\.zip$/, ""));
+            if (!newName || newName === filename.replace(/\\.zip$/, "")) {
                 return;
             }
             
@@ -2802,7 +2739,7 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
             
             // Basic validation
             if (!/^[a-zA-Z0-9._-]+$/.test(newFilename.replace(/\\.zip$/, ""))) {
-                alert(updateLang.invalid_filename);
+                alert("Invalid filename. Use only letters, numbers, dots, dashes, and underscores.");
                 return;
             }
             
@@ -2903,9 +2840,9 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
         
         // Save file
         if (file_put_contents($configFile, $content)) {
-            $this->redirect($this->getLang('config_saved_success'), 'success');
+            $this->redirect('Configuration saved successfully!', 'success');
         } else {
-            $this->redirect($this->getLang('config_save_error'), 'error');
+            $this->redirect('Error: Could not save configuration file', 'error');
         }
     }
     
@@ -2915,9 +2852,9 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
         
         if (is_dir($cacheDir)) {
             $this->recursiveDelete($cacheDir, false);
-            $this->redirect($this->getLang('cache_cleared'), 'success', 'update');
+            $this->redirect('Cache cleared successfully!', 'success', 'update');
         } else {
-            $this->redirect($this->getLang('cache_not_found'), 'error', 'update');
+            $this->redirect('Cache directory not found', 'error', 'update');
         }
     }
     
@@ -3119,30 +3056,22 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
         switch ($type) {
             case 'daily':
                 if ($interval == 1) {
-                    $result = $this->getLang('daily');
+                    $result = 'Daily';
                 } else {
-                    $result = sprintf($this->getLang('every_x_days'), $interval);
+                    $result = "Every $interval days";
                 }
                 break;
                 
             case 'weekly':
                 $weekDays = $series['weekDays'] ?? [];
-                $dayNames = [
-                    $this->getLang('day_sun'),
-                    $this->getLang('day_mon'),
-                    $this->getLang('day_tue'),
-                    $this->getLang('day_wed'),
-                    $this->getLang('day_thu'),
-                    $this->getLang('day_fri'),
-                    $this->getLang('day_sat')
-                ];
+                $dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
                 
                 if ($interval == 1) {
-                    $result = $this->getLang('weekly');
+                    $result = 'Weekly';
                 } elseif ($interval == 2) {
-                    $result = $this->getLang('bi_weekly');
+                    $result = 'Bi-weekly';
                 } else {
-                    $result = sprintf($this->getLang('every_x_weeks'), $interval);
+                    $result = "Every $interval weeks";
                 }
                 
                 if (!empty($weekDays) && count($weekDays) < 7) {
@@ -3157,47 +3086,32 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
                 $monthlyType = $series['monthlyType'] ?? 'dayOfMonth';
                 
                 if ($interval == 1) {
-                    $prefix = $this->getLang('monthly');
+                    $prefix = 'Monthly';
                 } elseif ($interval == 3) {
-                    $prefix = $this->getLang('quarterly');
+                    $prefix = 'Quarterly';
                 } elseif ($interval == 6) {
-                    $prefix = $this->getLang('semi_annual');
+                    $prefix = 'Semi-annual';
                 } else {
-                    $prefix = sprintf($this->getLang('every_x_months'), $interval);
+                    $prefix = "Every $interval months";
                 }
                 
                 if ($monthlyType === 'dayOfMonth') {
                     $day = $series['monthDay'] ?? '?';
-                    $result = sprintf($this->getLang('pattern_day_x'), $prefix, $day);
+                    $result = "$prefix (day $day)";
                 } else {
-                    $ordinalNames = [
-                        1 => $this->getLang('ordinal_1st'),
-                        2 => $this->getLang('ordinal_2nd'),
-                        3 => $this->getLang('ordinal_3rd'),
-                        4 => $this->getLang('ordinal_4th'),
-                        5 => $this->getLang('ordinal_5th'),
-                        -1 => $this->getLang('ordinal_last')
-                    ];
-                    $dayNames = [
-                        $this->getLang('day_sun'),
-                        $this->getLang('day_mon'),
-                        $this->getLang('day_tue'),
-                        $this->getLang('day_wed'),
-                        $this->getLang('day_thu'),
-                        $this->getLang('day_fri'),
-                        $this->getLang('day_sat')
-                    ];
+                    $ordinalNames = [1 => '1st', 2 => '2nd', 3 => '3rd', 4 => '4th', 5 => '5th', -1 => 'Last'];
+                    $dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
                     $ordinal = $ordinalNames[$series['ordinalWeek']] ?? '';
                     $dayName = $dayNames[$series['ordinalDay']] ?? '';
-                    $result = sprintf($this->getLang('pattern_ordinal_day'), $prefix, $ordinal, $dayName);
+                    $result = "$prefix ($ordinal $dayName)";
                 }
                 break;
                 
             case 'yearly':
                 if ($interval == 1) {
-                    $result = $this->getLang('yearly');
+                    $result = 'Yearly';
                 } else {
-                    $result = sprintf($this->getLang('every_x_years'), $interval);
+                    $result = "Every $interval years";
                 }
                 break;
                 
@@ -3615,7 +3529,7 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
         }
         
         if (!$dryRun) $this->clearStatsCache();
-        echo json_encode(['success' => true, 'count' => $removed, 'message' => sprintf($this->getLang('removed_past_recurring'), $removed)]);
+        echo json_encode(['success' => true, 'count' => $removed, 'message' => "Removed $removed past recurring occurrences"]);
     }
     
     private function handleRescanRecurring() {
@@ -3742,7 +3656,7 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
         }
         
         $this->clearStatsCache();
-        echo json_encode(['success' => true, 'message' => sprintf($this->getLang('added_occurrences'), $added)]);
+        echo json_encode(['success' => true, 'message' => "Added $added new occurrences"]);
     }
     
     /**
@@ -3785,7 +3699,7 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
         }
         
         $this->clearStatsCache();
-        echo json_encode(['success' => true, 'message' => sprintf($this->getLang('removed_past_before'), $removed, $cutoffDate)]);
+        echo json_encode(['success' => true, 'message' => "Removed $removed past occurrences before $cutoffDate"]);
     }
     
     /**
@@ -3820,7 +3734,7 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
         }
         
         $this->clearStatsCache();
-        echo json_encode(['success' => true, 'message' => sprintf($this->getLang('paused_occurrences'), $paused)]);
+        echo json_encode(['success' => true, 'message' => "Paused $paused future occurrences"]);
     }
     
     /**
@@ -3877,7 +3791,7 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
         }
         
         $this->clearStatsCache();
-        echo json_encode(['success' => true, 'message' => sprintf($this->getLang('resumed_occurrences'), $resumed)]);
+        echo json_encode(['success' => true, 'message' => "Resumed $resumed occurrences"]);
     }
     
     /**
@@ -3906,7 +3820,7 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
         $offsetDays = (int)$oldFirst->diff($newFirst)->format('%r%a');
         
         if ($offsetDays === 0) {
-            echo json_encode(['success' => true, 'message' => $this->getLang('start_date_unchanged')]);
+            echo json_encode(['success' => true, 'message' => 'Start date unchanged']);
             return;
         }
         
@@ -3965,9 +3879,9 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
             $moved++;
         }
         
-        $dir = $offsetDays > 0 ? $this->getLang('forward') : $this->getLang('back');
+        $dir = $offsetDays > 0 ? 'forward' : 'back';
         $this->clearStatsCache();
-        echo json_encode(['success' => true, 'message' => sprintf($this->getLang('shifted_occurrences'), $moved, abs($offsetDays), $dir)]);
+        echo json_encode(['success' => true, 'message' => "Shifted $moved occurrences $dir by " . abs($offsetDays) . " days"]);
     }
     
     /**
@@ -3994,7 +3908,7 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
         }
         
         if (empty($futureEvents)) {
-            echo json_encode(['success' => false, 'error' => $this->getLang('no_future_to_respace')]);
+            echo json_encode(['success' => false, 'error' => 'No future occurrences to respace']);
             return;
         }
         
@@ -4057,17 +3971,17 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
         
         $this->clearStatsCache();
         $patternName = $this->intervalToPattern($newIntervalDays);
-        echo json_encode(['success' => true, 'message' => sprintf($this->getLang('respaced_occurrences'), $created, $patternName, $newIntervalDays)]);
+        echo json_encode(['success' => true, 'message' => "Respaced $created future occurrences to $patternName ($newIntervalDays days)"]);
     }
     
     private function intervalToPattern($days) {
-        if ($days == 1) return $this->getLang('daily');
-        if ($days == 7) return $this->getLang('weekly');
-        if ($days == 14) return $this->getLang('bi_weekly');
-        if ($days >= 28 && $days <= 31) return $this->getLang('monthly');
-        if ($days >= 89 && $days <= 93) return $this->getLang('quarterly');
-        if ($days >= 363 && $days <= 368) return $this->getLang('yearly');
-        return sprintf($this->getLang('every_x_days'), $days);
+        if ($days == 1) return 'Daily';
+        if ($days == 7) return 'Weekly';
+        if ($days == 14) return 'Bi-weekly';
+        if ($days >= 28 && $days <= 31) return 'Monthly';
+        if ($days >= 89 && $days <= 93) return 'Quarterly';
+        if ($days >= 363 && $days <= 368) return 'Yearly';
+        return "Every $days days";
     }
     
     private function getEventsByNamespace() {
@@ -4321,7 +4235,7 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
         }
         
         $this->clearStatsCache();
-        $this->redirect(sprintf($this->getLang('deleted_recurring'), $count, $eventTitle), 'success', 'manage');
+        $this->redirect("Deleted $count occurrences of recurring event: " . $eventTitle, 'success', 'manage');
     }
     
     private function editRecurringSeries() {
@@ -4554,7 +4468,7 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
         
         $changeStr = !empty($changes) ? " (" . implode(", ", $changes) . ")" : "";
         $this->clearStatsCache();
-        $this->redirect(sprintf($this->getLang('updated_recurring'), $count, $changeStr), 'success', 'manage');
+        $this->redirect("Updated $count occurrences of recurring event$changeStr", 'success', 'manage');
     }
     
     /**
@@ -4666,7 +4580,7 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
         $targetNamespace = $INPUT->str('target_namespace');
         
         if (empty($events)) {
-            $this->redirect($this->getLang('no_events_selected'), 'error', 'manage');
+            $this->redirect('No events selected', 'error', 'manage');
         }
         
         $moved = 0;
@@ -4739,9 +4653,9 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
             $moved++;
         }
         
-        $displayTarget = $targetNamespace ?: $this->getLang('default_ns');
+        $displayTarget = $targetNamespace ?: '(default)';
         $this->clearStatsCache();
-        $this->redirect(sprintf($this->getLang('moved_events'), $moved, $displayTarget), 'success', 'manage');
+        $this->redirect("Moved $moved event(s) to namespace: " . $displayTarget, 'success', 'manage');
     }
     
     private function moveSingleEvent() {
@@ -4760,12 +4674,12 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
         }
         
         if (!file_exists($oldFile)) {
-            $this->redirect($this->getLang('event_file_not_found'), 'error', 'manage');
+            $this->redirect('Event file not found', 'error', 'manage');
         }
         
         $oldData = json_decode(file_get_contents($oldFile), true);
         if (!$oldData) {
-            $this->redirect($this->getLang('event_read_failed'), 'error', 'manage');
+            $this->redirect('Could not read event file', 'error', 'manage');
         }
         
         // Find and remove event from old file
@@ -4787,7 +4701,7 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
         }
         
         if (!$event) {
-            $this->redirect($this->getLang('event_not_found'), 'error', 'manage');
+            $this->redirect('Event not found', 'error', 'manage');
         }
         
         // Save old file (or delete if empty)
@@ -4825,9 +4739,9 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
         
         file_put_contents($newFile, json_encode($newData, JSON_PRETTY_PRINT));
         
-        $displayTarget = $targetNamespace ?: $this->getLang('default_ns');
+        $displayTarget = $targetNamespace ?: '(default)';
         $this->clearStatsCache();
-        $this->redirect(sprintf($this->getLang('moved_event'), $event['title'], $displayTarget), 'success', 'manage');
+        $this->redirect('Moved "' . $event['title'] . '" to ' . $displayTarget, 'success', 'manage');
     }
     
     private function createNamespace() {
@@ -4837,11 +4751,11 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
         
         // Validate namespace name
         if (empty($namespaceName)) {
-            $this->redirect($this->getLang('namespace_empty'), 'error', 'manage');
+            $this->redirect('Namespace name cannot be empty', 'error', 'manage');
         }
         
         if (!preg_match('/^[a-zA-Z0-9_:-]+$/', $namespaceName)) {
-            $this->redirect($this->getLang('namespace_invalid'), 'error', 'manage');
+            $this->redirect('Invalid namespace name. Use only letters, numbers, underscore, hyphen, and colon.', 'error', 'manage');
         }
         
         // Convert namespace to directory path
@@ -4853,7 +4767,7 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
             // Check if it has any JSON files
             $hasFiles = !empty(glob($calendarDir . '/*.json'));
             if ($hasFiles) {
-                $this->redirect(sprintf($this->getLang('namespace_exists'), $namespaceName), 'info', 'manage');
+                $this->redirect("Namespace '$namespaceName' already exists with events", 'info', 'manage');
             }
             // If directory exists but empty, continue to create placeholder
         }
@@ -4861,7 +4775,7 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
         // Create the directory
         if (!is_dir($calendarDir)) {
             if (!mkdir($calendarDir, 0755, true)) {
-                $this->redirect($this->getLang('namespace_create_failed'), 'error', 'manage');
+                $this->redirect("Failed to create namespace directory", 'error', 'manage');
             }
         }
         
@@ -4874,7 +4788,7 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
             file_put_contents($placeholderFile, json_encode([], JSON_PRETTY_PRINT));
         }
         
-        $this->redirect(sprintf($this->getLang('namespace_created'), $namespaceName), 'success', 'manage');
+        $this->redirect("Created namespace: $namespaceName", 'success', 'manage');
     }
     
     private function deleteNamespace() {
@@ -4884,13 +4798,13 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
         
         // Validate namespace name to prevent path traversal
         if ($namespace !== '' && !preg_match('/^[a-zA-Z0-9_:-]+$/', $namespace)) {
-            $this->redirect($this->getLang('namespace_invalid'), 'error', 'manage');
+            $this->redirect('Invalid namespace name. Use only letters, numbers, underscore, hyphen, and colon.', 'error', 'manage');
             return;
         }
         
         // Additional safety: ensure no path traversal sequences
         if (strpos($namespace, '..') !== false || strpos($namespace, '/') !== false || strpos($namespace, '\\') !== false) {
-            $this->redirect($this->getLang('namespace_traversal'), 'error', 'manage');
+            $this->redirect('Invalid namespace: path traversal not allowed', 'error', 'manage');
             return;
         }
         
@@ -4909,7 +4823,7 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
         // Check if directory exists
         if (!is_dir($calendarDir)) {
             // Maybe it was never created or already deleted
-            $this->redirect(sprintf($this->getLang('namespace_not_found'), $calendarDir), 'error', 'manage');
+            $this->redirect("Namespace directory not found: $calendarDir", 'error', 'manage');
             return;
         }
         
@@ -4964,9 +4878,9 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
             }
         }
         
-        $displayName = $namespace ?: $this->getLang('default_ns');
+        $displayName = $namespace ?: '(default)';
         $this->clearStatsCache();
-        $this->redirect(sprintf($this->getLang('namespace_deleted'), $displayName, $eventsDeleted, $filesDeleted), 'success', 'manage');
+        $this->redirect("Deleted namespace '$displayName': $eventsDeleted events in $filesDeleted files", 'success', 'manage');
     }
     
     private function renameNamespace() {
@@ -4977,25 +4891,25 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
         
         // Validate namespace names to prevent path traversal
         if ($oldNamespace !== '' && !preg_match('/^[a-zA-Z0-9_:-]+$/', $oldNamespace)) {
-            $this->redirect($this->getLang('old_namespace_invalid'), 'error', 'manage');
+            $this->redirect('Invalid old namespace name. Use only letters, numbers, underscore, hyphen, and colon.', 'error', 'manage');
             return;
         }
         
         if ($newNamespace !== '' && !preg_match('/^[a-zA-Z0-9_:-]+$/', $newNamespace)) {
-            $this->redirect($this->getLang('new_namespace_invalid'), 'error', 'manage');
+            $this->redirect('Invalid new namespace name. Use only letters, numbers, underscore, hyphen, and colon.', 'error', 'manage');
             return;
         }
         
         // Additional safety: ensure no path traversal sequences
         if (strpos($oldNamespace, '..') !== false || strpos($oldNamespace, '/') !== false || strpos($oldNamespace, '\\') !== false ||
             strpos($newNamespace, '..') !== false || strpos($newNamespace, '/') !== false || strpos($newNamespace, '\\') !== false) {
-            $this->redirect($this->getLang('namespace_traversal'), 'error', 'manage');
+            $this->redirect('Invalid namespace: path traversal not allowed', 'error', 'manage');
             return;
         }
         
         // Validate new namespace name
         if ($newNamespace === '') {
-            $this->redirect($this->getLang('cannot_rename_empty'), 'error', 'manage');
+            $this->redirect("Cannot rename to empty namespace", 'error', 'manage');
             return;
         }
         
@@ -5018,13 +4932,13 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
         
         // Check if source exists
         if (!is_dir($sourceDir)) {
-            $this->redirect(sprintf($this->getLang('source_namespace_not_found'), $oldNamespace), 'error', 'manage');
+            $this->redirect("Source namespace not found: $oldNamespace", 'error', 'manage');
             return;
         }
         
         // Check if target already exists
         if (is_dir($targetDir)) {
-            $this->redirect(sprintf($this->getLang('target_namespace_exists'), $newNamespace), 'error', 'manage');
+            $this->redirect("Target namespace already exists: $newNamespace", 'error', 'manage');
             return;
         }
         
@@ -5035,7 +4949,7 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
         
         // Rename directory
         if (!rename($sourceDir, $targetDir)) {
-            $this->redirect($this->getLang('rename_namespace_failed'), 'error', 'manage');
+            $this->redirect("Failed to rename namespace", 'error', 'manage');
             return;
         }
         
@@ -5079,7 +4993,7 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
         }
         
         $this->clearStatsCache();
-        $this->redirect(sprintf($this->getLang('namespace_renamed'), $oldNamespace, $newNamespace, $eventsUpdated, 0), 'success', 'manage');
+        $this->redirect("Renamed namespace from '$oldNamespace' to '$newNamespace' ($eventsUpdated events updated)", 'success', 'manage');
     }
     
     private function deleteSelectedEvents() {
@@ -5088,7 +5002,7 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
         $events = $INPUT->arr('events');
         
         if (empty($events)) {
-            $this->redirect($this->getLang('no_events_selected'), 'error', 'manage');
+            $this->redirect('No events selected', 'error', 'manage');
         }
         
         $deletedCount = 0;
@@ -5130,7 +5044,7 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
         }
         
         $this->clearStatsCache();
-        $this->redirect(sprintf($this->getLang('deleted_events'), $deletedCount), 'success', 'manage');
+        $this->redirect("Deleted $deletedCount event(s)", 'success', 'manage');
     }
     
     /**
@@ -5149,9 +5063,9 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
         
         $content = "<?php\nreturn " . var_export($config, true) . ";\n";
         if (file_put_contents($configFile, $content)) {
-            $this->redirect($this->getLang('important_ns_saved'), 'success', 'manage');
+            $this->redirect('Important namespaces saved', 'success', 'manage');
         } else {
-            $this->redirect($this->getLang('config_save_error'), 'error', 'manage');
+            $this->redirect('Error: Could not save configuration', 'error', 'manage');
         }
     }
     
@@ -5225,35 +5139,45 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
     private function parseCronExpression($minute, $hour, $day, $month, $weekday) {
         // Parse minute field
         if ($minute === '*') {
-            return $this->getLang('runs_every_minute');
+            return 'Runs every minute';
         } elseif (strpos($minute, '*/') === 0) {
-            $interval = (int)substr($minute, 2);
+            $interval = substr($minute, 2);
             if ($interval == 1) {
-                return $this->getLang('runs_every_minute');
+                return 'Runs every minute';
+            } elseif ($interval == 5) {
+                return 'Runs every 5 minutes';
+            } elseif ($interval == 8) {
+                return 'Runs every 8 minutes';
+            } elseif ($interval == 10) {
+                return 'Runs every 10 minutes';
+            } elseif ($interval == 15) {
+                return 'Runs every 15 minutes';
+            } elseif ($interval == 30) {
+                return 'Runs every 30 minutes';
             } else {
-                return sprintf($this->getLang('runs_every_x_minutes'), $interval);
+                return "Runs every $interval minutes";
             }
         }
         
         // Parse hour field
         if ($hour === '*' && $minute !== '*') {
-            return $this->getLang('runs_hourly');
+            return 'Runs hourly';
         } elseif (strpos($hour, '*/') === 0 && $minute !== '*') {
-            $interval = (int)substr($hour, 2);
+            $interval = substr($hour, 2);
             if ($interval == 1) {
-                return $this->getLang('runs_every_hour');
+                return 'Runs every hour';
             } else {
-                return sprintf($this->getLang('runs_every_x_hours'), $interval);
+                return "Runs every $interval hours";
             }
         }
         
         // Parse day field
         if ($day === '*' && $hour !== '*' && $minute !== '*') {
-            return $this->getLang('runs_daily');
+            return 'Runs daily';
         }
         
         // Default
-        return $this->getLang('custom_schedule');
+        return 'Custom schedule';
     }
     
     private function runSync() {
@@ -5271,7 +5195,7 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
             }
             
             if (!file_exists($syncScript)) {
-                echo json_encode(['success' => false, 'message' => sprintf($this->getLang('sync_script_not_found'), $syncScript)]);
+                echo json_encode(['success' => false, 'message' => 'Sync script not found at: ' . $syncScript]);
                 exit;
             }
             
@@ -5282,7 +5206,7 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
             // Ensure log directory exists
             if (!is_dir($logDir)) {
                 if (!@mkdir($logDir, 0755, true)) {
-                    echo json_encode(['success' => false, 'message' => sprintf($this->getLang('cannot_create_log_dir'), $logDir)]);
+                    echo json_encode(['success' => false, 'message' => 'Cannot create log directory: ' . $logDir]);
                     exit;
                 }
             }
@@ -5290,7 +5214,7 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
             // Ensure log file exists and is writable
             if (!file_exists($logFile)) {
                 if (!@touch($logFile)) {
-                    echo json_encode(['success' => false, 'message' => sprintf($this->getLang('cannot_create_log_file'), $logFile)]);
+                    echo json_encode(['success' => false, 'message' => 'Cannot create log file: ' . $logFile]);
                     exit;
                 }
                 @chmod($logFile, 0666);
@@ -5298,14 +5222,14 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
             
             // Check if we can write to the log
             if (!is_writable($logFile)) {
-                echo json_encode(['success' => false, 'message' => sprintf($this->getLang('log_not_writable_chmod'), $logFile, $logFile)]);
+                echo json_encode(['success' => false, 'message' => 'Log file not writable: ' . $logFile . ' - Run: chmod 666 ' . $logFile]);
                 exit;
             }
             
             // Find PHP binary
             $phpPath = $this->findPhpBinary();
             if (!$phpPath) {
-                echo json_encode(['success' => false, 'message' => $this->getLang('cannot_find_php')]);
+                echo json_encode(['success' => false, 'message' => 'Cannot find PHP binary']);
                 exit;
             }
             
@@ -5341,10 +5265,10 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
             if ($returnCode === 0) {
                 echo json_encode([
                     'success' => true,
-                    'message' => $this->getLang('sync_completed')
+                    'message' => 'Sync completed! Check log for details.'
                 ]);
             } else {
-                $errorMsg = sprintf($this->getLang('sync_failed_exit'), $returnCode);
+                $errorMsg = 'Sync failed (exit code: ' . $returnCode . ')';
                 if (!empty($output)) {
                     $lastLines = array_slice($output, -3);
                     $errorMsg .= ' - ' . implode(' | ', $lastLines);
@@ -5370,12 +5294,12 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
             if (file_put_contents($abortFile, date('Y-m-d H:i:s')) !== false) {
                 echo json_encode([
                     'success' => true,
-                    'message' => $this->getLang('stop_signal_sent')
+                    'message' => 'Stop signal sent to sync process'
                 ]);
             } else {
                 echo json_encode([
                     'success' => false,
-                    'message' => $this->getLang('failed_abort_flag')
+                    'message' => 'Failed to create abort flag'
                 ]);
             }
             exit;
@@ -5384,7 +5308,7 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
     
     private function uploadUpdate() {
         if (!isset($_FILES['plugin_zip']) || $_FILES['plugin_zip']['error'] !== UPLOAD_ERR_OK) {
-            $this->redirect(sprintf($this->getLang('upload_failed'), ($_FILES['plugin_zip']['error'] ?? $this->getLang('no_file_uploaded'))), 'error', 'update');
+            $this->redirect('Upload failed: ' . ($_FILES['plugin_zip']['error'] ?? 'No file uploaded'), 'error', 'update');
             return;
         }
         
@@ -5394,13 +5318,13 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
         
         // Check if plugin directory is writable
         if (!is_writable($pluginDir)) {
-            $this->redirect(sprintf($this->getLang('dir_not_writable'), $pluginDir), 'error', 'update');
+            $this->redirect('Plugin directory is not writable. Please check permissions: ' . $pluginDir, 'error', 'update');
             return;
         }
         
         // Check if parent directory is writable (for backup and temp files)
         if (!is_writable(DOKU_PLUGIN)) {
-            $this->redirect(sprintf($this->getLang('parent_dir_not_writable'), DOKU_PLUGIN), 'error', 'update');
+            $this->redirect('Plugin parent directory is not writable. Please check permissions: ' . DOKU_PLUGIN, 'error', 'update');
             return;
         }
         
@@ -5410,7 +5334,7 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
         finfo_close($finfo);
         
         if ($mimeType !== 'application/zip' && $mimeType !== 'application/x-zip-compressed') {
-            $this->redirect($this->getLang('invalid_file_type'), 'error', 'update');
+            $this->redirect('Invalid file type. Please upload a ZIP file.', 'error', 'update');
             return;
         }
         
@@ -5435,31 +5359,31 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
                     
                     // Verify backup was created and has content
                     if (!file_exists($backupPath)) {
-                        $this->redirect($this->getLang('backup_not_created'), 'error', 'update');
+                        $this->redirect('Backup file was not created', 'error', 'update');
                         return;
                     }
                     
                     $backupSize = filesize($backupPath);
                     if ($backupSize < 1000) { // Backup should be at least 1KB
                         @unlink($backupPath);
-                        $this->redirect(sprintf($this->getLang('backup_too_small'), $this->formatBytes($backupSize), $fileCount), 'error', 'update');
+                        $this->redirect('Backup file is too small (' . $backupSize . ' bytes). Only ' . $fileCount . ' files were added. Backup aborted.', 'error', 'update');
                         return;
                     }
                     
                     if ($fileCount < 10) { // Should have at least 10 files
                         @unlink($backupPath);
-                        $this->redirect(sprintf($this->getLang('backup_incomplete'), $fileCount), 'error', 'update');
+                        $this->redirect('Backup incomplete: Only ' . $fileCount . ' files were added (expected 30+). Backup aborted.', 'error', 'update');
                         return;
                     }
                 } else {
-                    $this->redirect($this->getLang('backup_zip_failed'), 'error', 'update');
+                    $this->redirect('Failed to create backup ZIP file', 'error', 'update');
                     return;
                 }
             } catch (Exception $e) {
                 if (file_exists($backupPath)) {
                     @unlink($backupPath);
                 }
-                $this->redirect(sprintf($this->getLang('backup_failed'), $e->getMessage()), 'error', 'update');
+                $this->redirect('Backup failed: ' . $e->getMessage(), 'error', 'update');
                 return;
             }
         }
@@ -5467,7 +5391,7 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
         // Extract uploaded ZIP
         $zip = new ZipArchive();
         if ($zip->open($uploadedFile) !== TRUE) {
-            $this->redirect($this->getLang('open_zip_failed'), 'error', 'update');
+            $this->redirect('Failed to open ZIP file', 'error', 'update');
             return;
         }
         
@@ -5541,9 +5465,9 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
         // Cleanup temp directory
         $this->deleteDirectory($tempDir);
         
-        $message = $this->getLang('plugin_updated');
+        $message = 'Plugin updated successfully!';
         if ($backupFirst) {
-            $message .= sprintf($this->getLang('backup_saved_as'), $backupName);
+            $message .= ' Backup saved as: ' . $backupName;
         }
         $this->redirect($message, 'success', 'update');
     }
@@ -5554,27 +5478,27 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
         $filename = $INPUT->str('backup_file');
         
         if (empty($filename)) {
-            $this->redirect($this->getLang('no_backup_specified'), 'error', 'update');
+            $this->redirect('No backup file specified', 'error', 'update');
             return;
         }
         
         // Security: only allow files starting with "calendar" and ending with .zip, no directory traversal
         if (!preg_match('/^calendar[a-zA-Z0-9._-]*\.zip$/', $filename)) {
-            $this->redirect($this->getLang('invalid_backup_filename'), 'error', 'update');
+            $this->redirect('Invalid backup filename', 'error', 'update');
             return;
         }
         
         $backupPath = DOKU_PLUGIN . $filename;
         
         if (!file_exists($backupPath)) {
-            $this->redirect($this->getLang('backup_not_found'), 'error', 'update');
+            $this->redirect('Backup file not found', 'error', 'update');
             return;
         }
         
         if (@unlink($backupPath)) {
-            $this->redirect(sprintf($this->getLang('backup_deleted'), $filename), 'success', 'update');
+            $this->redirect('Backup deleted: ' . $filename, 'success', 'update');
         } else {
-            $this->redirect($this->getLang('delete_backup_failed'), 'error', 'update');
+            $this->redirect('Failed to delete backup. Check file permissions.', 'error', 'update');
         }
     }
     
@@ -5585,13 +5509,13 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
         $newName = $INPUT->str('new_name');
         
         if (empty($oldName) || empty($newName)) {
-            $this->redirect($this->getLang('missing_filenames'), 'error', 'update');
+            $this->redirect('Missing filename(s)', 'error', 'update');
             return;
         }
         
         // Security: validate filenames
         if (!preg_match('/^[a-zA-Z0-9._-]+\.zip$/', $oldName) || !preg_match('/^[a-zA-Z0-9._-]+\.zip$/', $newName)) {
-            $this->redirect($this->getLang('invalid_filename_format'), 'error', 'update');
+            $this->redirect('Invalid filename format', 'error', 'update');
             return;
         }
         
@@ -5599,19 +5523,19 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
         $newPath = DOKU_PLUGIN . $newName;
         
         if (!file_exists($oldPath)) {
-            $this->redirect($this->getLang('backup_not_found'), 'error', 'update');
+            $this->redirect('Backup file not found', 'error', 'update');
             return;
         }
         
         if (file_exists($newPath)) {
-            $this->redirect($this->getLang('file_exists'), 'error', 'update');
+            $this->redirect('A file with the new name already exists', 'error', 'update');
             return;
         }
         
         if (@rename($oldPath, $newPath)) {
-            $this->redirect(sprintf($this->getLang('backup_renamed'), $oldName, $newName), 'success', 'update');
+            $this->redirect('Backup renamed: ' . $oldName . ' → ' . $newName, 'success', 'update');
         } else {
-            $this->redirect($this->getLang('rename_backup_failed'), 'error', 'update');
+            $this->redirect('Failed to rename backup. Check file permissions.', 'error', 'update');
         }
     }
     
@@ -5625,20 +5549,20 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
         $filename = $INPUT->str('backup_file');
         
         if (empty($filename)) {
-            $this->redirect($this->getLang('no_backup_specified'), 'error', 'update');
+            $this->redirect('No backup file specified', 'error', 'update');
             return;
         }
         
         // Security: only allow files starting with "calendar" and ending with .zip, no directory traversal
         if (!preg_match('/^calendar[a-zA-Z0-9._-]*\.zip$/', $filename)) {
-            $this->redirect($this->getLang('invalid_backup_filename'), 'error', 'update');
+            $this->redirect('Invalid backup filename', 'error', 'update');
             return;
         }
         
         $backupPath = DOKU_PLUGIN . $filename;
         
         if (!file_exists($backupPath)) {
-            $this->redirect($this->getLang('backup_not_found'), 'error', 'update');
+            $this->redirect('Backup file not found', 'error', 'update');
             return;
         }
         
@@ -5647,7 +5571,7 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
         
         if (!$extensionHelper) {
             // Extension manager not available - provide manual instructions
-            $this->redirect($this->getLang('extension_manager_unavailable'), 'error', 'update');
+            $this->redirect('DokuWiki Extension Manager not available. Please install manually: Download the backup, go to Admin → Extension Manager → Install, and upload the ZIP file.', 'error', 'update');
             return;
         }
         
@@ -5660,15 +5584,15 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
             $installed = $extensionHelper->installFromLocal($backupPath, true); // true = overwrite
             
             if ($installed) {
-                $this->redirect(sprintf($this->getLang('plugin_restored'), $filename), 'success', 'update');
+                $this->redirect('Plugin restored from backup: ' . $filename . ' (via Extension Manager)', 'success', 'update');
             } else {
                 // Get any error message from the extension helper
                 $errors = $extensionHelper->getErrors();
                 $errorMsg = !empty($errors) ? implode(', ', $errors) : 'Unknown error';
-                $this->redirect(sprintf($this->getLang('restore_failed'), $errorMsg), 'error', 'update');
+                $this->redirect('Restore failed: ' . $errorMsg, 'error', 'update');
             }
         } catch (Exception $e) {
-            $this->redirect(sprintf($this->getLang('restore_failed'), $e->getMessage()), 'error', 'update');
+            $this->redirect('Restore failed: ' . $e->getMessage(), 'error', 'update');
         }
     }
     
@@ -5677,13 +5601,13 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
         
         // Check if plugin directory is readable
         if (!is_readable($pluginDir)) {
-            $this->redirect($this->getLang('dir_not_readable'), 'error', 'update');
+            $this->redirect('Plugin directory is not readable. Please check permissions.', 'error', 'update');
             return;
         }
         
         // Check if parent directory is writable (for saving backup)
         if (!is_writable(DOKU_PLUGIN)) {
-            $this->redirect($this->getLang('cannot_save_backup'), 'error', 'update');
+            $this->redirect('Plugin parent directory is not writable. Cannot save backup.', 'error', 'update');
             return;
         }
         
@@ -5706,35 +5630,35 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
                 
                 // Verify backup was created and has content
                 if (!file_exists($backupPath)) {
-                    $this->redirect($this->getLang('backup_not_created'), 'error', 'update');
+                    $this->redirect('Backup file was not created', 'error', 'update');
                     return;
                 }
                 
                 $backupSize = filesize($backupPath);
                 if ($backupSize < 1000) { // Backup should be at least 1KB
                     @unlink($backupPath);
-                    $this->redirect(sprintf($this->getLang('backup_too_small'), $this->formatBytes($backupSize), $fileCount), 'error', 'update');
+                    $this->redirect('Backup file is too small (' . $this->formatBytes($backupSize) . '). Only ' . $fileCount . ' files were added. Backup failed.', 'error', 'update');
                     return;
                 }
                 
                 if ($fileCount < 10) { // Should have at least 10 files
                     @unlink($backupPath);
-                    $this->redirect(sprintf($this->getLang('backup_incomplete'), $fileCount), 'error', 'update');
+                    $this->redirect('Backup incomplete: Only ' . $fileCount . ' files were added (expected 30+). Backup failed.', 'error', 'update');
                     return;
                 }
                 
                 // Success!
-                $this->redirect(sprintf($this->getLang('backup_created_success'), $backupName, $this->formatBytes($backupSize), $fileCount), 'success', 'update');
+                $this->redirect('✓ Manual backup created successfully: ' . $backupName . ' (' . $this->formatBytes($backupSize) . ', ' . $fileCount . ' files)', 'success', 'update');
                 
             } else {
-                $this->redirect($this->getLang('backup_zip_failed'), 'error', 'update');
+                $this->redirect('Failed to create backup ZIP file', 'error', 'update');
                 return;
             }
         } catch (Exception $e) {
             if (file_exists($backupPath)) {
                 @unlink($backupPath);
             }
-            $this->redirect(sprintf($this->getLang('backup_failed'), $e->getMessage()), 'error', 'update');
+            $this->redirect('Backup failed: ' . $e->getMessage(), 'error', 'update');
             return;
         }
     }
@@ -5747,11 +5671,11 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
         $dir = rtrim($dir, '/') . '/';
         
         if (!is_dir($dir)) {
-            throw new Exception(sprintf($this->getLang('dir_does_not_exist'), $dir));
+            throw new Exception("Directory does not exist: $dir");
         }
         
         if (!is_readable($dir)) {
-            throw new Exception(sprintf($this->getLang('dir_not_readable_err'), $dir));
+            throw new Exception("Directory is not readable: $dir");
         }
         
         try {
@@ -5778,10 +5702,10 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
                         if ($zip->addFile($itemPath, $relativePath)) {
                             $fileCount++;
                         } else {
-                            $errors[] = sprintf($this->getLang('failed_to_add'), basename($itemPath));
+                            $errors[] = "Failed to add: " . basename($itemPath);
                         }
                     } else {
-                        $errors[] = sprintf($this->getLang('cannot_read'), basename($itemPath));
+                        $errors[] = "Cannot read: " . basename($itemPath);
                     }
                 }
             }
@@ -5959,7 +5883,7 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
                     $log = implode('', $lines);
                 }
             } else {
-                $log = $this->getLang('no_log_file');
+                $log = "No log file found. Sync hasn't run yet.";
             }
             
             echo json_encode(['log' => $log]);
@@ -5979,7 +5903,7 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
                 if (!file_exists($configFile)) {
                     echo json_encode([
                         'success' => false,
-                        'message' => $this->getLang('config_not_found')
+                        'message' => 'Config file not found'
                     ]);
                     exit;
                 }
@@ -5996,7 +5920,7 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
                 echo json_encode([
                     'success' => true,
                     'encrypted' => $encrypted,
-                    'message' => $this->getLang('config_exported')
+                    'message' => 'Config exported successfully'
                 ]);
                 exit;
                 
@@ -6017,12 +5941,12 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
             header('Content-Type: application/json');
             
             try {
-                $encrypted = trim($_POST['encrypted_config'] ?? '');
+                $encrypted = $_POST['encrypted_config'] ?? '';
                 
                 if (empty($encrypted)) {
                     echo json_encode([
                         'success' => false,
-                        'message' => $this->getLang('no_config_data')
+                        'message' => 'No config data provided'
                     ]);
                     exit;
                 }
@@ -6033,22 +5957,20 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
                 // Decrypt config
                 $configContent = $this->decryptData($encrypted, $key);
                 
-                if ($configContent === false || $configContent === '') {
+                if ($configContent === false) {
                     echo json_encode([
                         'success' => false,
-                        'message' => $this->getLang('decryption_failed')
+                        'message' => 'Decryption failed. Invalid key or corrupted file.'
                     ]);
                     exit;
                 }
                 
                 // Validate PHP config file structure (without using eval)
                 // Check that it starts with <?php and contains a return statement with array
-                $configContent = trim($configContent);
-                
                 if (strpos($configContent, '<?php') === false) {
                     echo json_encode([
                         'success' => false,
-                        'message' => $this->getLang('invalid_config_php_tag')
+                        'message' => 'Invalid config file: missing PHP opening tag'
                     ]);
                     exit;
                 }
@@ -6066,18 +5988,18 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
                     if (preg_match($pattern, $configContent)) {
                         echo json_encode([
                             'success' => false,
-                            'message' => $this->getLang('invalid_config_prohibited')
+                            'message' => 'Invalid config file: contains prohibited code patterns'
                         ]);
                         exit;
                     }
                 }
                 
                 // Verify it looks like a valid config (has return array structure)
-                // Accept both "return [" (short syntax) and "return array(" (long syntax)
+                // Accept both "return [" and "return array(" syntax
                 if (!preg_match('/return\s*(\[|array\s*\()/', $configContent)) {
                     echo json_encode([
                         'success' => false,
-                        'message' => $this->getLang('invalid_config_return')
+                        'message' => 'Invalid config file: must contain a return array statement'
                     ]);
                     exit;
                 }
@@ -6095,14 +6017,14 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
                 if (file_put_contents($configFile, $configContent) === false) {
                     echo json_encode([
                         'success' => false,
-                        'message' => $this->getLang('config_write_failed')
+                        'message' => 'Failed to write config file'
                     ]);
                     exit;
                 }
                 
                 echo json_encode([
                     'success' => true,
-                    'message' => $this->getLang('config_imported')
+                    'message' => 'Config imported successfully'
                 ]);
                 exit;
                 
@@ -6165,16 +6087,16 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
             if (!file_exists($logFile)) {
                 // Try to create empty file
                 if (@touch($logFile)) {
-                    echo json_encode(['success' => true, 'message' => $this->getLang('log_file_created')]);
+                    echo json_encode(['success' => true, 'message' => 'Log file created']);
                 } else {
-                    echo json_encode(['success' => false, 'message' => sprintf($this->getLang('log_not_exist_create'), $logFile)]);
+                    echo json_encode(['success' => false, 'message' => 'Log file does not exist and cannot be created: ' . $logFile]);
                 }
                 exit;
             }
             
             // Check if writable
             if (!is_writable($logFile)) {
-                echo json_encode(['success' => false, 'message' => sprintf($this->getLang('log_not_writable_sudo'), $logFile)]);
+                echo json_encode(['success' => false, 'message' => 'Log file not writable. Run: sudo chmod 666 ' . $logFile]);
                 exit;
             }
             
@@ -6183,7 +6105,7 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
             if ($result !== false) {
                 echo json_encode(['success' => true]);
             } else {
-                echo json_encode(['success' => false, 'message' => sprintf($this->getLang('file_put_failed'), $logFile)]);
+                echo json_encode(['success' => false, 'message' => 'file_put_contents failed on: ' . $logFile]);
             }
             exit;
         }
@@ -6198,7 +6120,7 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
             readfile($logFile);
             exit;
         } else {
-            echo $this->getLang('no_log_file');
+            echo 'No log file found';
             exit;
         }
     }
@@ -6466,9 +6388,9 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
         // Clear cache
         $this->clearStatsCache();
         
-        $message = sprintf($this->getLang('import_complete'), $importedCount);
+        $message = "Import complete! Imported $importedCount new events";
         if ($mergedCount > 0) {
-            $message .= sprintf($this->getLang('skipped_duplicates'), $mergedCount);
+            $message .= ", skipped $mergedCount duplicates";
         }
         
         $redirectUrl = DOKU_URL . 'doku.php?do=admin&page=calendar&tab=manage&msg=' . urlencode($message) . '&msgtype=success';
@@ -6575,7 +6497,7 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
         // Clear cache
         $this->clearStatsCache();
         
-        $message = sprintf($this->getLang('cleanup_deleted'), $deletedCount, basename($backupFile));
+        $message = "Cleanup complete! Deleted $deletedCount event(s). Backup created: " . basename($backupFile);
         $redirectUrl = DOKU_URL . 'doku.php?do=admin&page=calendar&tab=manage&msg=' . urlencode($message) . '&msgtype=success';
         header('Location: ' . $redirectUrl, true, 303);
         exit;
@@ -6733,7 +6655,7 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
             $this->saveWeekStartDay($weekStart);
             $this->saveItineraryCollapsed($itineraryCollapsed === 'yes');
             echo '<div style="background:#d4edda; border:1px solid #c3e6cb; color:#155724; padding:12px; border-radius:4px; margin-bottom:20px;">';
-            echo $this->getLang('theme_saved_refresh');
+            echo '✓ Theme and settings saved successfully! Refresh any page with the sidebar to see changes.';
             echo '</div>';
         }
         
@@ -6741,31 +6663,31 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
         $currentWeekStart = $this->getWeekStartDay();
         $currentItineraryCollapsed = $this->getItineraryCollapsed();
         
-        echo '<h2 style="margin:0 0 20px 0; color:' . $colors['text'] . ';">🎨 ' . $this->getLang('sidebar_widget_settings') . '</h2>';
-        echo '<p style="color:' . $colors['text'] . '; margin-bottom:20px;">' . $this->getLang('sidebar_widget_desc') . '</p>';
+        echo '<h2 style="margin:0 0 20px 0; color:' . $colors['text'] . ';">🎨 Sidebar Widget Settings</h2>';
+        echo '<p style="color:' . $colors['text'] . '; margin-bottom:20px;">Customize the appearance and behavior of the sidebar calendar widget.</p>';
         
         echo '<form method="post" action="?do=admin&page=calendar&tab=themes">';
         echo '<input type="hidden" name="action" value="save_theme">';
         
         // Week Start Day Section
         echo '<div style="background:' . $colors['bg'] . '; border:1px solid ' . $colors['border'] . '; border-radius:6px; padding:20px; margin-bottom:30px;">';
-        echo '<h3 style="margin:0 0 15px 0; color:' . $colors['text'] . '; font-size:16px;">📅 ' . $this->getLang('week_start_day') . '</h3>';
-        echo '<p style="color:' . $colors['text'] . '; margin-bottom:15px; font-size:13px;">' . $this->getLang('week_start_desc') . '</p>';
+        echo '<h3 style="margin:0 0 15px 0; color:' . $colors['text'] . '; font-size:16px;">📅 Week Start Day</h3>';
+        echo '<p style="color:' . $colors['text'] . '; margin-bottom:15px; font-size:13px;">Choose which day the week calendar grid starts with:</p>';
         
         echo '<div style="display:flex; gap:15px;">';
         echo '<label style="flex:1; padding:12px; border:2px solid ' . ($currentWeekStart === 'monday' ? '#00cc07' : $colors['border']) . '; border-radius:4px; background:' . ($currentWeekStart === 'monday' ? 'rgba(0, 204, 7, 0.05)' : $colors['bg']) . '; cursor:pointer; display:flex; align-items:center;">';
         echo '<input type="radio" name="week_start" value="monday" ' . ($currentWeekStart === 'monday' ? 'checked' : '') . ' style="margin-right:10px; width:18px; height:18px;">';
         echo '<div>';
-        echo '<div style="font-weight:bold; color:' . $colors['text'] . '; margin-bottom:3px;">' . $this->getLang('monday') . '</div>';
-        echo '<div style="font-size:11px; color:' . $colors['text'] . ';">' . $this->getLang('week_starts_monday') . '</div>';
+        echo '<div style="font-weight:bold; color:' . $colors['text'] . '; margin-bottom:3px;">Monday</div>';
+        echo '<div style="font-size:11px; color:' . $colors['text'] . ';">Week starts on Monday (ISO standard)</div>';
         echo '</div>';
         echo '</label>';
         
         echo '<label style="flex:1; padding:12px; border:2px solid ' . ($currentWeekStart === 'sunday' ? '#00cc07' : $colors['border']) . '; border-radius:4px; background:' . ($currentWeekStart === 'sunday' ? 'rgba(0, 204, 7, 0.05)' : $colors['bg']) . '; cursor:pointer; display:flex; align-items:center;">';
         echo '<input type="radio" name="week_start" value="sunday" ' . ($currentWeekStart === 'sunday' ? 'checked' : '') . ' style="margin-right:10px; width:18px; height:18px;">';
         echo '<div>';
-        echo '<div style="font-weight:bold; color:' . $colors['text'] . '; margin-bottom:3px;">' . $this->getLang('sunday') . '</div>';
-        echo '<div style="font-size:11px; color:' . $colors['text'] . ';">' . $this->getLang('week_starts_sunday') . '</div>';
+        echo '<div style="font-weight:bold; color:' . $colors['text'] . '; margin-bottom:3px;">Sunday</div>';
+        echo '<div style="font-size:11px; color:' . $colors['text'] . ';">Week starts on Sunday (US/Canada standard)</div>';
         echo '</div>';
         echo '</label>';
         echo '</div>';
@@ -6773,39 +6695,39 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
         
         // Itinerary Default State Section
         echo '<div style="background:' . $colors['bg'] . '; border:1px solid ' . $colors['border'] . '; border-radius:6px; padding:20px; margin-bottom:30px;">';
-        echo '<h3 style="margin:0 0 15px 0; color:' . $colors['text'] . '; font-size:16px;">📋 ' . $this->getLang('itinerary_section') . '</h3>';
-        echo '<p style="color:' . $colors['text'] . '; margin-bottom:15px; font-size:13px;">' . $this->getLang('itinerary_desc') . '</p>';
+        echo '<h3 style="margin:0 0 15px 0; color:' . $colors['text'] . '; font-size:16px;">📋 Itinerary Section</h3>';
+        echo '<p style="color:' . $colors['text'] . '; margin-bottom:15px; font-size:13px;">Choose whether the Today/Tomorrow/Important Events sections are expanded or collapsed by default:</p>';
         
         echo '<div style="display:flex; gap:15px;">';
         echo '<label style="flex:1; padding:12px; border:2px solid ' . (!$currentItineraryCollapsed ? '#00cc07' : $colors['border']) . '; border-radius:4px; background:' . (!$currentItineraryCollapsed ? 'rgba(0, 204, 7, 0.05)' : $colors['bg']) . '; cursor:pointer; display:flex; align-items:center;">';
         echo '<input type="radio" name="itinerary_collapsed" value="no" ' . (!$currentItineraryCollapsed ? 'checked' : '') . ' style="margin-right:10px; width:18px; height:18px;">';
         echo '<div>';
-        echo '<div style="font-weight:bold; color:' . $colors['text'] . '; margin-bottom:3px;">' . $this->getLang('expanded') . '</div>';
-        echo '<div style="font-size:11px; color:' . $colors['text'] . ';">' . $this->getLang('show_itinerary_default') . '</div>';
+        echo '<div style="font-weight:bold; color:' . $colors['text'] . '; margin-bottom:3px;">Expanded</div>';
+        echo '<div style="font-size:11px; color:' . $colors['text'] . ';">Show itinerary sections by default</div>';
         echo '</div>';
         echo '</label>';
         
         echo '<label style="flex:1; padding:12px; border:2px solid ' . ($currentItineraryCollapsed ? '#00cc07' : $colors['border']) . '; border-radius:4px; background:' . ($currentItineraryCollapsed ? 'rgba(0, 204, 7, 0.05)' : $colors['bg']) . '; cursor:pointer; display:flex; align-items:center;">';
         echo '<input type="radio" name="itinerary_collapsed" value="yes" ' . ($currentItineraryCollapsed ? 'checked' : '') . ' style="margin-right:10px; width:18px; height:18px;">';
         echo '<div>';
-        echo '<div style="font-weight:bold; color:' . $colors['text'] . '; margin-bottom:3px;">' . $this->getLang('collapsed') . '</div>';
-        echo '<div style="font-size:11px; color:' . $colors['text'] . ';">' . $this->getLang('hide_itinerary_default') . '</div>';
+        echo '<div style="font-weight:bold; color:' . $colors['text'] . '; margin-bottom:3px;">Collapsed</div>';
+        echo '<div style="font-size:11px; color:' . $colors['text'] . ';">Hide itinerary sections by default (click bar to expand)</div>';
         echo '</div>';
         echo '</label>';
         echo '</div>';
         echo '</div>';
         
         // Visual Theme Section
-        echo '<h3 style="margin:0 0 15px 0; color:' . $colors['text'] . '; font-size:16px;">🎨 ' . $this->getLang('visual_theme') . '</h3>';
+        echo '<h3 style="margin:0 0 15px 0; color:' . $colors['text'] . '; font-size:16px;">🎨 Visual Theme</h3>';
         
         // Matrix Theme
         echo '<div style="border:2px solid ' . ($currentTheme === 'matrix' ? '#00cc07' : $colors['border']) . '; border-radius:6px; padding:20px; margin-bottom:20px; background:' . ($currentTheme === 'matrix' ? 'rgba(0, 204, 7, 0.05)' : $colors['bg']) . ';">';
         echo '<label style="display:flex; align-items:center; cursor:pointer;">';
         echo '<input type="radio" name="theme" value="matrix" ' . ($currentTheme === 'matrix' ? 'checked' : '') . ' style="margin-right:12px; width:20px; height:20px;">';
         echo '<div style="flex:1;">';
-        echo '<div style="font-size:18px; font-weight:bold; color:#00cc07; margin-bottom:8px;">🟢 ' . $this->getLang('theme_matrix') . '</div>';
-        echo '<div style="color:' . $colors['text'] . '; margin-bottom:12px;">' . $this->getLang('theme_matrix_desc') . '</div>';
-        echo '<div style="display:inline-block; background:#242424; border:2px solid #00cc07; padding:8px 12px; border-radius:4px; font-size:11px; font-family:monospace; color:#00cc07; box-shadow:0 0 10px rgba(0, 204, 7, 0.3);">' . $this->getLang('preview') . ': Matrix</div>';
+        echo '<div style="font-size:18px; font-weight:bold; color:#00cc07; margin-bottom:8px;">🟢 Matrix Edition</div>';
+        echo '<div style="color:' . $colors['text'] . '; margin-bottom:12px;">Dark green theme with Matrix-style glow effects and neon accents</div>';
+        echo '<div style="display:inline-block; background:#242424; border:2px solid #00cc07; padding:8px 12px; border-radius:4px; font-size:11px; font-family:monospace; color:#00cc07; box-shadow:0 0 10px rgba(0, 204, 7, 0.3);">Preview: Matrix Theme</div>';
         echo '</div>';
         echo '</label>';
         echo '</div>';
@@ -6815,9 +6737,9 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
         echo '<label style="display:flex; align-items:center; cursor:pointer;">';
         echo '<input type="radio" name="theme" value="purple" ' . ($currentTheme === 'purple' ? 'checked' : '') . ' style="margin-right:12px; width:20px; height:20px;">';
         echo '<div style="flex:1;">';
-        echo '<div style="font-size:18px; font-weight:bold; color:#9b59b6; margin-bottom:8px;">🟣 ' . $this->getLang('theme_purple') . '</div>';
-        echo '<div style="color:' . $colors['text'] . '; margin-bottom:12px;">' . $this->getLang('theme_purple_desc') . '</div>';
-        echo '<div style="display:inline-block; background:#2a2030; border:2px solid #9b59b6; padding:8px 12px; border-radius:4px; font-size:11px; font-family:monospace; color:#b19cd9; box-shadow:0 0 10px rgba(155, 89, 182, 0.3);">' . $this->getLang('preview') . ': Purple</div>';
+        echo '<div style="font-size:18px; font-weight:bold; color:#9b59b6; margin-bottom:8px;">🟣 Purple Dream</div>';
+        echo '<div style="color:' . $colors['text'] . '; margin-bottom:12px;">Rich purple theme with elegant violet accents and soft glow</div>';
+        echo '<div style="display:inline-block; background:#2a2030; border:2px solid #9b59b6; padding:8px 12px; border-radius:4px; font-size:11px; font-family:monospace; color:#b19cd9; box-shadow:0 0 10px rgba(155, 89, 182, 0.3);">Preview: Purple Theme</div>';
         echo '</div>';
         echo '</label>';
         echo '</div>';
@@ -6827,9 +6749,9 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
         echo '<label style="display:flex; align-items:center; cursor:pointer;">';
         echo '<input type="radio" name="theme" value="professional" ' . ($currentTheme === 'professional' ? 'checked' : '') . ' style="margin-right:12px; width:20px; height:20px;">';
         echo '<div style="flex:1;">';
-        echo '<div style="font-size:18px; font-weight:bold; color:#4a90e2; margin-bottom:8px;">🔵 ' . $this->getLang('theme_professional') . '</div>';
-        echo '<div style="color:' . $colors['text'] . '; margin-bottom:12px;">' . $this->getLang('theme_professional_desc') . '</div>';
-        echo '<div style="display:inline-block; background:#f5f7fa; border:2px solid #4a90e2; padding:8px 12px; border-radius:4px; font-size:11px; font-family:sans-serif; color:#2c3e50; box-shadow:0 2px 4px rgba(0, 0, 0, 0.1);">' . $this->getLang('preview') . ': Professional</div>';
+        echo '<div style="font-size:18px; font-weight:bold; color:#4a90e2; margin-bottom:8px;">🔵 Professional Blue</div>';
+        echo '<div style="color:' . $colors['text'] . '; margin-bottom:12px;">Clean blue and grey theme with modern professional styling, no glow effects</div>';
+        echo '<div style="display:inline-block; background:#f5f7fa; border:2px solid #4a90e2; padding:8px 12px; border-radius:4px; font-size:11px; font-family:sans-serif; color:#2c3e50; box-shadow:0 2px 4px rgba(0, 0, 0, 0.1);">Preview: Professional Theme</div>';
         echo '</div>';
         echo '</label>';
         echo '</div>';
@@ -6839,9 +6761,9 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
         echo '<label style="display:flex; align-items:center; cursor:pointer;">';
         echo '<input type="radio" name="theme" value="pink" ' . ($currentTheme === 'pink' ? 'checked' : '') . ' style="margin-right:12px; width:20px; height:20px;">';
         echo '<div style="flex:1;">';
-        echo '<div style="font-size:18px; font-weight:bold; color:#ff1493; margin-bottom:8px;">💎 ' . $this->getLang('theme_pink') . '</div>';
-        echo '<div style="color:' . $colors['text'] . '; margin-bottom:12px;">' . $this->getLang('theme_pink_desc') . '</div>';
-        echo '<div style="display:inline-block; background:#1a0d14; border:2px solid #ff1493; padding:8px 12px; border-radius:4px; font-size:11px; font-family:monospace; color:#ff69b4; box-shadow:0 0 12px rgba(255, 20, 147, 0.6);">' . $this->getLang('preview') . ': Pink 💖</div>';
+        echo '<div style="font-size:18px; font-weight:bold; color:#ff1493; margin-bottom:8px;">💎 Pink Bling</div>';
+        echo '<div style="color:' . $colors['text'] . '; margin-bottom:12px;">Glamorous hot pink theme with maximum sparkle, hearts, and diamonds ✨</div>';
+        echo '<div style="display:inline-block; background:#1a0d14; border:2px solid #ff1493; padding:8px 12px; border-radius:4px; font-size:11px; font-family:monospace; color:#ff69b4; box-shadow:0 0 12px rgba(255, 20, 147, 0.6);">Preview: Pink Bling Theme 💖</div>';
         echo '</div>';
         echo '</label>';
         echo '</div>';
@@ -6851,14 +6773,14 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
         echo '<label style="display:flex; align-items:center; cursor:pointer;">';
         echo '<input type="radio" name="theme" value="wiki" ' . ($currentTheme === 'wiki' ? 'checked' : '') . ' style="margin-right:12px; width:20px; height:20px;">';
         echo '<div style="flex:1;">';
-        echo '<div style="font-size:18px; font-weight:bold; color:#2b73b7; margin-bottom:8px;">📄 ' . $this->getLang('theme_wiki') . '</div>';
-        echo '<div style="color:' . $colors['text'] . '; margin-bottom:12px;">' . $this->getLang('theme_wiki_desc') . '</div>';
-        echo '<div style="display:inline-block; background:#f5f5f5; border:2px solid #ccc; padding:8px 12px; border-radius:4px; font-size:11px; font-family:sans-serif; color:' . $colors['text'] . '; box-shadow:0 1px 2px rgba(0, 0, 0, 0.1);">' . $this->getLang('preview') . ': Wiki</div>';
+        echo '<div style="font-size:18px; font-weight:bold; color:#2b73b7; margin-bottom:8px;">📄 Wiki Default</div>';
+        echo '<div style="color:' . $colors['text'] . '; margin-bottom:12px;">Automatically matches your DokuWiki template theme using CSS variables - adapts to light and dark themes</div>';
+        echo '<div style="display:inline-block; background:#f5f5f5; border:2px solid #ccc; padding:8px 12px; border-radius:4px; font-size:11px; font-family:sans-serif; color:' . $colors['text'] . '; box-shadow:0 1px 2px rgba(0, 0, 0, 0.1);">Preview: Matches Your Wiki Theme</div>';
         echo '</div>';
         echo '</label>';
         echo '</div>';
         
-        echo '<button type="submit" style="background:#00cc07; color:#fff; border:none; padding:12px 24px; border-radius:4px; font-size:14px; font-weight:bold; cursor:pointer; box-shadow:0 2px 4px rgba(0,0,0,0.2);">' . $this->getLang('save_settings') . '</button>';
+        echo '<button type="submit" style="background:#00cc07; color:#fff; border:none; padding:12px 24px; border-radius:4px; font-size:14px; font-weight:bold; cursor:pointer; box-shadow:0 2px 4px rgba(0,0,0,0.2);">Save Settings</button>';
         echo '</form>';
     }
     

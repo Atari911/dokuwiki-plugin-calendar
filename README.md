@@ -1,234 +1,139 @@
-# DokuWiki Calendar Plugin — Matrix Edition
+# DokuWiki Calendar Plugin - Matrix Edition
 
-A full-featured calendar plugin for DokuWiki with five visual themes, Outlook sync, conflict detection, and an admin panel for managing events across namespaces.
-
-**Version:** 6.6.0
-**Author:** atari911 (atari911@gmail.com)
-**License:** GPL 2
-**Requires:** DokuWiki "Kaos" (2024) or newer
-
----
-
-## Installation
-
-1. Download the latest release ZIP.
-2. Extract into `lib/plugins/` so the path is `lib/plugins/calendar/`.
-3. Go to **Admin → Calendar Management** to verify.
-
-Alternatively, place the ZIP in the DokuWiki plugin manager upload field.
-
----
-
-## Quick Start
-
-Add any of these to a wiki page:
-
-```
-{{calendar}}                          Full month calendar with event panel
-{{eventlist sidebar}}                 Sidebar widget (week grid + today/tomorrow)
-{{eventpanel}}                        Standalone event list
-{{eventlist range=30}}                Upcoming events for the next 30 days
-{{eventlist range=-7,30}}             Past 7 days through next 30 days
-```
-
-### Namespace-scoped calendars
-
-```
-{{calendar namespace=work}}           Only show events in the "work" namespace
-{{eventlist sidebar namespace=personal}}
-```
-
-### Theme selection
-
-```
-{{calendar theme=matrix}}
-{{calendar theme=purple}}
-{{calendar theme=pink}}
-{{calendar theme=professional}}
-{{calendar theme=wiki}}
-```
-
-The `wiki` theme reads your DokuWiki template's `style.ini` colors automatically. The default theme for sidebar widgets can be set globally in **Admin → Calendar Management → Themes**.
-
----
+A feature-rich calendar plugin for DokuWiki with multiple themes, Outlook sync, recurring events, and a static presentation mode.
 
 ## Features
 
-### Calendar views
+### Calendar Views
+- **Interactive Calendar** - Full-featured calendar with event management
+- **Static Calendar** - Read-only presentation mode for public display
+- **Sidebar Widget** - Compact upcoming events widget
+- **Event Panel** - Standalone event list
 
-- **Full calendar** — Month grid with clickable day cells, integrated event panel, month picker, AJAX navigation.
-- **Sidebar widget** — Compact week grid with expandable day events, Today / Tomorrow / Important Events sections, conflict badges.
-- **Event panel** — Standalone chronological event list with past-event collapsing.
-- **Event list** — Date-range-based display for dashboards and overview pages.
-
-### Event management
-
-- Create, edit, and delete events without page reload (AJAX).
-- All-day and timed events with start/end times.
-- Multi-day events with end date support.
-- Recurring events (daily, weekly, biweekly, monthly, yearly) with series editing.
-- Tasks with completion checkboxes and past-due badges.
-- Event colors (8 presets + custom hex picker).
-- Rich descriptions with full DokuWiki markup (bold, italic, links, etc.).
-- Draggable event dialogs.
-- Namespace-based organization.
-
-### Conflict detection
-
-Overlapping timed events on the same day display an ⚠️ badge with a tooltip listing all conflicts. Works across all views including after AJAX navigation.
-
-### Five themes
-
-| Theme | Style |
-|---|---|
-| **Matrix** | Green-on-dark with glow effects |
-| **Purple** | Purple-on-dark with soft highlights |
-| **Pink** | Hot pink neon on dark with particle effects |
-| **Professional** | Clean blue-on-white, no glow |
-| **Wiki** | Inherits colors from your DokuWiki template |
-
-All themes are applied via CSS variables — no inline style overrides. The sidebar widget, full calendar, event panel, day popups, conflict tooltips, and event dialogs all inherit theme colors consistently.
-
-### Outlook sync (one-way: DokuWiki → Outlook)
-
-Push calendar events to Microsoft 365 / Outlook via the Graph API.
-
-- **Delta sync** — Only new, modified, or deleted events hit the API. Unchanged events are skipped entirely using hash-based change tracking.
-- **Category mapping** — Map DokuWiki namespaces or event colors to Outlook color categories.
-- **Duplicate detection** — Automatic cleanup of duplicate events.
-- **Dry-run mode** — Preview what would sync before committing.
-- **Cron-friendly** — Run on a schedule; typical syncs with few changes complete in seconds.
-
-Setup: copy `sync_config.php`, add your Azure app credentials, and run:
-
-```bash
-php lib/plugins/calendar/sync_outlook.php --dry-run
-php lib/plugins/calendar/sync_outlook.php
-```
-
-See `OUTLOOK_SYNC_SETUP.md` and `CRON_SETUP.md` for full instructions.
-
----
-
-## Admin panel
-
-Access via **Admin → Calendar Management**. Four tabs:
-
-### Manage Events
-
-- **Event statistics** — Total events, namespaces, files, recurring series.
-- **Re-scan / Export / Import** — Bulk operations across all namespaces.
-- **Cleanup** — Delete events by age, status (completed tasks / past events), or date range. Automatic backup before deletion. Preview before committing.
-- **Recurring events table** — View, edit, and delete recurring series. Sortable columns, search filter. Edit dialog lets you change title, times, interval, and namespace for all occurrences at once.
-- **Namespace explorer** — Tree view of all events by namespace. Checkbox selection, drag-and-drop between namespaces, rename/delete namespaces, create new namespaces.
-
-### Update Plugin
-
-- Current version display.
-- Upload a new ZIP to update in place (automatic backup).
-- Paginated changelog viewer (all 150+ versions).
-- Clear DokuWiki cache.
-
-### Outlook Sync
-
-- Azure credential configuration (encrypted storage).
-- Category mapping editor.
-- Live sync runner with real-time log output.
-- Cron status detection.
+### Event Management
+- Create, edit, and delete events
+- Recurring events (daily, weekly, monthly, yearly)
+- Multi-day events with date ranges
+- Time conflict detection
+- Task mode with completion tracking
+- Important event highlighting with ⭐
 
 ### Themes
+- **Matrix** - Green on dark (default)
+- **Pink** - Pink/magenta on dark
+- **Purple** - Purple/violet on dark  
+- **Professional** - Blue on white
+- **Wiki** - Neutral gray (matches DokuWiki)
+- **Dark** - Blue on dark gray
+- **Light** - Clean white/gray
 
-- Global sidebar widget theme selector with live preview.
-- Week start day setting (Sunday or Monday).
+### Sync & Backup
+- Outlook/ICS calendar sync
+- Full event backup/restore
+- Config import/export
 
----
+### Localization
+- English (en)
+- German (de)
 
-## File structure
+## Installation
 
-```
-calendar/
-├── syntax.php            Main plugin (calendar rendering, PHP event logic)
-├── action.php            AJAX handlers (create, edit, delete, navigate)
-├── admin.php             Admin panel (4 tabs, all management features)
-├── calendar-main.js      Client-side JavaScript (2,800+ lines)
-├── style.css             All CSS with theme variables (3,200+ lines)
-├── script.js             Empty loader (avoids DokuWiki concatenation)
-├── sync_outlook.php      Outlook sync script (delta-aware)
-├── sync_config.php       Outlook sync credentials (edit this)
-├── get_system_stats.php  System monitoring endpoint
-├── plugin.info.txt       Plugin metadata
-├── lang/en/lang.php      Language strings
-├── CHANGELOG.md          Full version history
-├── OUTLOOK_SYNC_SETUP.md Outlook sync setup guide
-├── CRON_SETUP.md         Cron job setup guide
-└── QUICK_REFERENCE.md    Syntax quick reference
-```
+1. Download the latest release
+2. Extract to `lib/plugins/calendar/`
+3. Access Admin > Calendar Management to configure
 
----
+## Syntax
 
-## Event data storage
-
-Events are stored as JSON files in DokuWiki's `data/meta/` directory:
-
-```
-data/meta/calendar/2026-02.json              Default namespace
-data/meta/work/calendar/2026-02.json         "work" namespace
-data/meta/personal/calendar/2026-02.json     "personal" namespace
-```
-
-Each file is keyed by date, with an array of events per date. Events are plain JSON — no database required.
-
----
-
-## Syntax reference
-
-### Full calendar
-
+### Interactive Calendar
 ```
 {{calendar}}
-{{calendar namespace=work theme=purple}}
+{{calendar namespace=work}}
+{{calendar namespace=personal;work}}
+{{calendar namespace=projects:*}}
 ```
 
-### Sidebar widget
-
+### Static Calendar (Read-only)
 ```
-{{eventlist sidebar}}
-{{eventlist sidebar namespace=personal theme=wiki}}
+{{calendar static}}
+{{calendar namespace=meetings static}}
+{{calendar month=2 static}}
+{{calendar title="Club Events" static}}
+{{calendar theme=professional static}}
+{{calendar static noprint}}
 ```
 
-### Event panel
+#### Static Calendar Options
 
+| Option | Description | Example |
+|--------|-------------|---------|
+| `static` | Enable read-only mode | `{{calendar static}}` |
+| `namespace=X` | Filter by namespace | `namespace=meetings` |
+| `month=X` | Lock to specific month (1-12) | `month=6` |
+| `year=X` | Lock to specific year | `year=2026` |
+| `title="X"` | Custom title (supports spaces) | `title="Team Events"` |
+| `theme=X` | Apply theme | `theme=matrix` |
+| `noprint` | Hide print button | `noprint` |
+
+### Event Panel
 ```
 {{eventpanel}}
-{{eventpanel namespace=work}}
+{{eventpanel namespace=work height=400}}
 ```
 
-### Event list with date range
-
+### Event List
 ```
-{{eventlist range=30}}              Next 30 days
-{{eventlist range=-7,30}}           Past 7 days + next 30
-{{eventlist range=90 namespace=work}}
+{{eventlist}}
+{{eventlist namespace=meetings range=30}}
 ```
 
----
+### Sidebar Widget
+```
+{{calendar sidebar}}
+{{calendar sidebar namespace=important}}
+```
 
-## Week start day
+## Admin Features
 
-By default the week grid starts on Sunday. To change to Monday, go to **Admin → Calendar Management → Themes** and select Monday. This applies globally to all sidebar widgets.
+Access via **Admin > Calendar Management**:
 
----
+- **Manage Events** - Browse, search, move events between namespaces
+- **Recurring Events** - Manage series, extend, trim, pause/resume
+- **Important Namespaces** - Configure which namespaces get ⭐ highlighting
+- **Outlook Sync** - Configure ICS calendar synchronization
+- **Backup/Restore** - Full event data backup
+- **Themes** - Select and preview themes
 
-## Changelog
+## Event Description Formatting
 
-See `CHANGELOG.md` for the full version history. Recent highlights:
+Descriptions support DokuWiki-style formatting:
 
-- **6.0.0** — Code audit, admin cleanup, fresh README.
-- **5.5.8** — Delta sync for Outlook (hash-based change tracking).
-- **5.5.0** — Full CSS refactor, CSS variables as single source of truth for all themes.
-- **5.0.0** — Wiki theme with automatic template color inheritance.
-- **4.0.0** — Sidebar widget, five themes, conflict detection, system monitoring.
+- `**bold**` or `__bold__` → **bold**
+- `//italic//` → *italic*
+- `[[page|text]]` → DokuWiki links
+- `[text](url)` → Markdown links
+- Line breaks preserved
 
----
+## Keyboard Shortcuts
 
-## Version 6.0.0
+- `Escape` - Close dialogs
+- `Enter` - Submit forms (when focused)
+
+## Requirements
+
+- DokuWiki (Hogfather or later recommended)
+- PHP 7.4+
+- Modern browser (Chrome, Firefox, Edge, Safari)
+
+## License
+
+GPL-2.0
+
+## Author
+
+atari911 (atari911@gmail.com)
+
+## Links
+
+- [DokuWiki Plugin Page](https://www.dokuwiki.org/plugin:calendar)
+- [GitHub Repository](https://github.com/atari911/dokuwiki-plugin-calendar)
+- [Issue Tracker](https://github.com/atari911/dokuwiki-plugin-calendar/issues)
