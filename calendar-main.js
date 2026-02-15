@@ -33,6 +33,34 @@ if (typeof DOKU_BASE === 'undefined') {
 // Shorthand for convenience  
 var DOKU_BASE = window.DOKU_BASE || '/';
 
+/**
+ * Get DokuWiki security token from multiple possible sources
+ * DokuWiki stores this in different places depending on version/config
+ */
+function getSecurityToken() {
+    // Try JSINFO.sectok (standard location)
+    if (typeof JSINFO !== 'undefined' && JSINFO.sectok) {
+        return JSINFO.sectok;
+    }
+    // Try window.JSINFO
+    if (typeof window.JSINFO !== 'undefined' && window.JSINFO.sectok) {
+        return window.JSINFO.sectok;
+    }
+    // Try finding it in a hidden form field (some templates/plugins add this)
+    var sectokInput = document.querySelector('input[name="sectok"]');
+    if (sectokInput && sectokInput.value) {
+        return sectokInput.value;
+    }
+    // Try meta tag (some DokuWiki setups)
+    var sectokMeta = document.querySelector('meta[name="sectok"]');
+    if (sectokMeta && sectokMeta.content) {
+        return sectokMeta.content;
+    }
+    // Return empty string if not found
+    console.warn('Calendar plugin: Security token not found');
+    return '';
+}
+
 // Helper: propagate CSS variables from a calendar container to a target element
 // This is needed for dialogs/popups that use position:fixed (they inherit CSS vars
 // from DOM parents per spec, but some DokuWiki templates break this inheritance)
@@ -1482,7 +1510,7 @@ window.deleteEvent = function(calId, eventId, date, namespace) {
         namespace: namespace,
         date: date,
         eventId: eventId,
-        sectok: typeof JSINFO !== 'undefined' ? JSINFO.sectok : ''
+        sectok: getSecurityToken()
     });
     
     fetch(DOKU_BASE + 'lib/exe/ajax.php', {
@@ -1615,7 +1643,7 @@ window.saveEventCompact = function(calId, namespace) {
         monthDay: monthDay,
         ordinalWeek: ordinalWeek,
         ordinalDay: ordinalDay,
-        sectok: typeof JSINFO !== 'undefined' ? JSINFO.sectok : ''
+        sectok: getSecurityToken()
     });
     
     fetch(DOKU_BASE + 'lib/exe/ajax.php', {
@@ -2006,7 +2034,7 @@ window.toggleTaskComplete = function(calId, eventId, date, namespace, completed)
         date: date,
         eventId: eventId,
         completed: completed ? '1' : '0',
-        sectok: typeof JSINFO !== 'undefined' ? JSINFO.sectok : ''
+        sectok: getSecurityToken()
     });
     
     fetch(DOKU_BASE + 'lib/exe/ajax.php', {

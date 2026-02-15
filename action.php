@@ -61,16 +61,31 @@ class action_plugin_calendar extends DokuWiki_Action_Plugin {
 
         $action = $_REQUEST['action'] ?? '';
         
-        // Actions that modify data require CSRF token verification
+        // Actions that modify data require authentication and CSRF token verification
         $writeActions = ['save_event', 'delete_event', 'toggle_task', 'cleanup_empty_namespaces',
                          'trim_all_past_recurring', 'rescan_recurring', 'extend_recurring',
                          'trim_recurring', 'pause_recurring', 'resume_recurring',
                          'change_start_recurring', 'change_pattern_recurring'];
         
         if (in_array($action, $writeActions)) {
-            // Check for valid security token
-            $sectok = $_REQUEST['sectok'] ?? '';
+            global $INPUT, $INFO;
+            
+            // Check if user is logged in (at minimum)
+            if (empty($_SERVER['REMOTE_USER'])) {
+                echo json_encode(['success' => false, 'error' => 'Authentication required. Please log in.']);
+                return;
+            }
+            
+            // Check for valid security token - try multiple sources
+            $sectok = $INPUT->str('sectok', '');
+            if (empty($sectok)) {
+                $sectok = $_REQUEST['sectok'] ?? '';
+            }
+            
+            // Use DokuWiki's built-in check
             if (!checkSecurityToken($sectok)) {
+                // Log for debugging
+                $this->debugLog("Security token check failed. Received: '$sectok'");
                 echo json_encode(['success' => false, 'error' => 'Invalid security token. Please refresh the page and try again.']);
                 return;
             }

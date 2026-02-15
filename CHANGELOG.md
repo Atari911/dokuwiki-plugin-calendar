@@ -1,5 +1,21 @@
 # Calendar Plugin Changelog
 
+## Version 6.14.1 (2026-02-14) - SECURITY FIX
+
+### Security Improvements
+- **Authentication required** - Write actions (save, delete, toggle) now require user to be logged in
+- **Improved CSRF token handling** - New `getSecurityToken()` helper function checks multiple sources:
+  - `JSINFO.sectok` (standard)
+  - `window.JSINFO.sectok`
+  - Hidden form field `input[name="sectok"]`
+  - Meta tag `meta[name="sectok"]`
+- Anonymous users can no longer add/edit/delete events
+- Better error messages for authentication and token failures
+
+### Bug Fixes
+- Fixed "Invalid security token" error on clean DokuWiki installations
+- Added debug logging for security token failures
+
 ## Version 6.14.0 (2026-02-14) - STABLE RELEASE
 
 ### Code Cleanup & Localization
