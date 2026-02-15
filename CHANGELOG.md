@@ -1,5 +1,14 @@
 # Calendar Plugin Changelog
 
+## Version 6.14.2 (2026-02-15) - SYSTEM LOAD TOGGLE
+
+### Added System Load Bars Toggle
+- New toggle in **Admin > Calendar > Themes** tab
+- Choose to show or hide CPU/Memory load indicator bars
+- Setting applies to both event panel and sidebar widget
+- Stored in `data/meta/calendar_show_system_load.txt`
+- JavaScript polling is also disabled when hidden (saves resources)
+
 ## Version 6.14.1 (2026-02-14) - SECURITY FIX
 
 ### Security Improvements

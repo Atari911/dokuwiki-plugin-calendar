@@ -1,8 +1,8 @@
 base     calendar
 author   atari911
 email    atari911@gmail.com
-date     2026-02-14
-name     Calendar Plugin - Matrix Edition
-desc     Matrix-themed calendar with sidebar widget, Outlook sync, and system monitoring
+date     2026-02-15
+name     Calendar Plugin
+desc     Themed calendar with sidebar widget, Outlook sync, static calendar view. 
 url      https://www.dokuwiki.org/plugin:calendar
-version  6.14.1
+version  6.14.2

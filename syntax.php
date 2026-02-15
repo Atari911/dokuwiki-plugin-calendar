@@ -1497,7 +1497,7 @@ class syntax_plugin_calendar extends DokuWiki_Syntax_Plugin {
             $containerStyle .= ' border-radius:4px;';
         }
         
-        $html = '<div class="eventlist-simple ' . $themeClass . '" id="' . $calId . '" style="' . $containerStyle . '">';
+        $html = '<div class="eventlist-simple ' . $themeClass . '" id="' . $calId . '" style="' . $containerStyle . '" data-show-system-load="' . ($this->getShowSystemLoad() ? 'yes' : 'no') . '">';
         
         // Inject CSS variables for this eventlist instance
         $html .= '<style>
@@ -1543,28 +1543,31 @@ class syntax_plugin_calendar extends DokuWiki_Syntax_Plugin {
             $html .= '<span class="eventlist-today-date">' . $displayDate . '</span>';
             $html .= '</div>';
             
-            // Three CPU/Memory bars (all update live)
-            $html .= '<div class="eventlist-stats-container">';
-            
-            // 5-minute load average (green, updates every 2 seconds)
-            $html .= '<div class="eventlist-cpu-bar" style="background:' . $themeStyles['cell_today_bg'] . ' !important;" onmouseover="showTooltip_' . $calId . '(\'green\')" onmouseout="hideTooltip_' . $calId . '(\'green\')">';
-            $html .= '<div class="eventlist-cpu-fill" id="cpu-5min-' . $calId . '" style="width: 0%; background:' . $themeStyles['text_bright'] . ' !important;"></div>';
-            $html .= '<div class="system-tooltip" id="tooltip-green-' . $calId . '" style="display:none;"></div>';
-            $html .= '</div>';
-            
-            // Real-time CPU (purple, updates with 5-sec average)
-            $html .= '<div class="eventlist-cpu-bar eventlist-cpu-realtime" style="background:' . $themeStyles['cell_today_bg'] . ' !important;" onmouseover="showTooltip_' . $calId . '(\'purple\')" onmouseout="hideTooltip_' . $calId . '(\'purple\')">';
-            $html .= '<div class="eventlist-cpu-fill eventlist-cpu-fill-purple" id="cpu-realtime-' . $calId . '" style="width: 0%; background:' . $themeStyles['border'] . ' !important;"></div>';
-            $html .= '<div class="system-tooltip" id="tooltip-purple-' . $calId . '" style="display:none;"></div>';
-            $html .= '</div>';
-            
-            // Real-time Memory (orange, updates)
-            $html .= '<div class="eventlist-cpu-bar eventlist-mem-realtime" style="background:' . $themeStyles['cell_today_bg'] . ' !important;" onmouseover="showTooltip_' . $calId . '(\'orange\')" onmouseout="hideTooltip_' . $calId . '(\'orange\')">';
-            $html .= '<div class="eventlist-cpu-fill eventlist-cpu-fill-orange" id="mem-realtime-' . $calId . '" style="width: 0%; background:' . $themeStyles['text_primary'] . ' !important;"></div>';
-            $html .= '<div class="system-tooltip" id="tooltip-orange-' . $calId . '" style="display:none;"></div>';
-            $html .= '</div>';
-            
-            $html .= '</div>';
+            // Three CPU/Memory bars (all update live) - only if enabled
+            $showSystemLoad = $this->getShowSystemLoad();
+            if ($showSystemLoad) {
+                $html .= '<div class="eventlist-stats-container">';
+                
+                // 5-minute load average (green, updates every 2 seconds)
+                $html .= '<div class="eventlist-cpu-bar" style="background:' . $themeStyles['cell_today_bg'] . ' !important;" onmouseover="showTooltip_' . $calId . '(\'green\')" onmouseout="hideTooltip_' . $calId . '(\'green\')">';
+                $html .= '<div class="eventlist-cpu-fill" id="cpu-5min-' . $calId . '" style="width: 0%; background:' . $themeStyles['text_bright'] . ' !important;"></div>';
+                $html .= '<div class="system-tooltip" id="tooltip-green-' . $calId . '" style="display:none;"></div>';
+                $html .= '</div>';
+                
+                // Real-time CPU (purple, updates with 5-sec average)
+                $html .= '<div class="eventlist-cpu-bar eventlist-cpu-realtime" style="background:' . $themeStyles['cell_today_bg'] . ' !important;" onmouseover="showTooltip_' . $calId . '(\'purple\')" onmouseout="hideTooltip_' . $calId . '(\'purple\')">';
+                $html .= '<div class="eventlist-cpu-fill eventlist-cpu-fill-purple" id="cpu-realtime-' . $calId . '" style="width: 0%; background:' . $themeStyles['border'] . ' !important;"></div>';
+                $html .= '<div class="system-tooltip" id="tooltip-purple-' . $calId . '" style="display:none;"></div>';
+                $html .= '</div>';
+                
+                // Real-time Memory (orange, updates)
+                $html .= '<div class="eventlist-cpu-bar eventlist-mem-realtime" style="background:' . $themeStyles['cell_today_bg'] . ' !important;" onmouseover="showTooltip_' . $calId . '(\'orange\')" onmouseout="hideTooltip_' . $calId . '(\'orange\')">';
+                $html .= '<div class="eventlist-cpu-fill eventlist-cpu-fill-orange" id="mem-realtime-' . $calId . '" style="width: 0%; background:' . $themeStyles['text_primary'] . ' !important;"></div>';
+                $html .= '<div class="system-tooltip" id="tooltip-orange-' . $calId . '" style="display:none;"></div>';
+                $html .= '</div>';
+                
+                $html .= '</div>';
+            }
             $html .= '</div>';
             
             // Add JavaScript to update clock and weather
@@ -1673,6 +1676,11 @@ class syntax_plugin_calendar extends DokuWiki_Syntax_Plugin {
     updateWeather();
     setInterval(updateWeather, 600000);
     
+    // Check if system load bars are enabled
+    const container = document.getElementById("' . $calId . '");
+    const showSystemLoad = container && container.dataset.showSystemLoad !== "no";
+    
+    if (showSystemLoad) {
     // CPU load history for 4-second rolling average
     const cpuHistory = [];
     const CPU_HISTORY_SIZE = 2; // 2 samples × 2 seconds = 4 seconds
@@ -1844,6 +1852,7 @@ class syntax_plugin_calendar extends DokuWiki_Syntax_Plugin {
     // Update immediately and then every 2 seconds
     updateSystemStats();
     setInterval(updateSystemStats, 2000);
+    } // End showSystemLoad check
 })();
 </script>';
         }
@@ -3060,28 +3069,31 @@ class syntax_plugin_calendar extends DokuWiki_Syntax_Plugin {
         $html .= '<span class="eventlist-today-date" style="color:' . $themeStyles['text_dim'] . ';">' . $displayDate . '</span>';
         $html .= '</div>';
         
-        // Three CPU/Memory bars (all update live)
-        $html .= '<div class="eventlist-stats-container">';
-        
-        // 5-minute load average (green, updates every 2 seconds)
-        $html .= '<div class="eventlist-cpu-bar" style="background:' . $themeStyles['cell_today_bg'] . ' !important;" onmouseover="showTooltip_' . $jsCalId . '(\'green\')" onmouseout="hideTooltip_' . $jsCalId . '(\'green\')">';
-        $html .= '<div class="eventlist-cpu-fill" id="cpu-5min-' . $calId . '" style="width: 0%; background:' . $themeStyles['text_bright'] . ' !important;"></div>';
-        $html .= '<div class="system-tooltip" id="tooltip-green-' . $calId . '" style="display:none;"></div>';
-        $html .= '</div>';
-        
-        // Real-time CPU (purple, updates with 5-sec average)
-        $html .= '<div class="eventlist-cpu-bar eventlist-cpu-realtime" style="background:' . $themeStyles['cell_today_bg'] . ' !important;" onmouseover="showTooltip_' . $jsCalId . '(\'purple\')" onmouseout="hideTooltip_' . $jsCalId . '(\'purple\')">';
-        $html .= '<div class="eventlist-cpu-fill eventlist-cpu-fill-purple" id="cpu-realtime-' . $calId . '" style="width: 0%; background:' . $themeStyles['border'] . ' !important;"></div>';
-        $html .= '<div class="system-tooltip" id="tooltip-purple-' . $calId . '" style="display:none;"></div>';
-        $html .= '</div>';
-        
-        // Real-time Memory (orange, updates)
-        $html .= '<div class="eventlist-cpu-bar eventlist-mem-realtime" style="background:' . $themeStyles['cell_today_bg'] . ' !important;" onmouseover="showTooltip_' . $jsCalId . '(\'orange\')" onmouseout="hideTooltip_' . $jsCalId . '(\'orange\')">';
-        $html .= '<div class="eventlist-cpu-fill eventlist-cpu-fill-orange" id="mem-realtime-' . $calId . '" style="width: 0%; background:' . $themeStyles['text_primary'] . ' !important;"></div>';
-        $html .= '<div class="system-tooltip" id="tooltip-orange-' . $calId . '" style="display:none;"></div>';
-        $html .= '</div>';
-        
-        $html .= '</div>';
+        // Three CPU/Memory bars (all update live) - only if enabled
+        $showSystemLoad = $this->getShowSystemLoad();
+        if ($showSystemLoad) {
+            $html .= '<div class="eventlist-stats-container">';
+            
+            // 5-minute load average (green, updates every 2 seconds)
+            $html .= '<div class="eventlist-cpu-bar" style="background:' . $themeStyles['cell_today_bg'] . ' !important;" onmouseover="showTooltip_' . $jsCalId . '(\'green\')" onmouseout="hideTooltip_' . $jsCalId . '(\'green\')">';
+            $html .= '<div class="eventlist-cpu-fill" id="cpu-5min-' . $calId . '" style="width: 0%; background:' . $themeStyles['text_bright'] . ' !important;"></div>';
+            $html .= '<div class="system-tooltip" id="tooltip-green-' . $calId . '" style="display:none;"></div>';
+            $html .= '</div>';
+            
+            // Real-time CPU (purple, updates with 5-sec average)
+            $html .= '<div class="eventlist-cpu-bar eventlist-cpu-realtime" style="background:' . $themeStyles['cell_today_bg'] . ' !important;" onmouseover="showTooltip_' . $jsCalId . '(\'purple\')" onmouseout="hideTooltip_' . $jsCalId . '(\'purple\')">';
+            $html .= '<div class="eventlist-cpu-fill eventlist-cpu-fill-purple" id="cpu-realtime-' . $calId . '" style="width: 0%; background:' . $themeStyles['border'] . ' !important;"></div>';
+            $html .= '<div class="system-tooltip" id="tooltip-purple-' . $calId . '" style="display:none;"></div>';
+            $html .= '</div>';
+            
+            // Real-time Memory (orange, updates)
+            $html .= '<div class="eventlist-cpu-bar eventlist-mem-realtime" style="background:' . $themeStyles['cell_today_bg'] . ' !important;" onmouseover="showTooltip_' . $jsCalId . '(\'orange\')" onmouseout="hideTooltip_' . $jsCalId . '(\'orange\')">';
+            $html .= '<div class="eventlist-cpu-fill eventlist-cpu-fill-orange" id="mem-realtime-' . $calId . '" style="width: 0%; background:' . $themeStyles['text_primary'] . ' !important;"></div>';
+            $html .= '<div class="system-tooltip" id="tooltip-orange-' . $calId . '" style="display:none;"></div>';
+            $html .= '</div>';
+            
+            $html .= '</div>';
+        }
         $html .= '</div>';
         
         // Get today's date for default event date
@@ -4168,5 +4180,16 @@ class syntax_plugin_calendar extends DokuWiki_Syntax_Plugin {
             return trim(file_get_contents($configFile)) === 'yes';
         }
         return false; // Default to expanded
+    }
+    
+    /**
+     * Get system load bars visibility setting
+     */
+    private function getShowSystemLoad() {
+        $configFile = DOKU_INC . 'data/meta/calendar_show_system_load.txt';
+        if (file_exists($configFile)) {
+            return trim(file_get_contents($configFile)) !== 'no';
+        }
+        return true; // Default to showing
     }
 }

@@ -6651,9 +6651,11 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
             $theme = $INPUT->str('theme', 'matrix');
             $weekStart = $INPUT->str('week_start', 'monday');
             $itineraryCollapsed = $INPUT->str('itinerary_collapsed', 'no');
+            $showSystemLoad = $INPUT->str('show_system_load', 'yes');
             $this->saveSidebarTheme($theme);
             $this->saveWeekStartDay($weekStart);
             $this->saveItineraryCollapsed($itineraryCollapsed === 'yes');
+            $this->saveShowSystemLoad($showSystemLoad === 'yes');
             echo '<div style="background:#d4edda; border:1px solid #c3e6cb; color:#155724; padding:12px; border-radius:4px; margin-bottom:20px;">';
             echo '✓ Theme and settings saved successfully! Refresh any page with the sidebar to see changes.';
             echo '</div>';
@@ -6662,6 +6664,7 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
         $currentTheme = $this->getSidebarTheme();
         $currentWeekStart = $this->getWeekStartDay();
         $currentItineraryCollapsed = $this->getItineraryCollapsed();
+        $currentShowSystemLoad = $this->getShowSystemLoad();
         
         echo '<h2 style="margin:0 0 20px 0; color:' . $colors['text'] . ';">🎨 Sidebar Widget Settings</h2>';
         echo '<p style="color:' . $colors['text'] . '; margin-bottom:20px;">Customize the appearance and behavior of the sidebar calendar widget.</p>';
@@ -6712,6 +6715,30 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
         echo '<div>';
         echo '<div style="font-weight:bold; color:' . $colors['text'] . '; margin-bottom:3px;">Collapsed</div>';
         echo '<div style="font-size:11px; color:' . $colors['text'] . ';">Hide itinerary sections by default (click bar to expand)</div>';
+        echo '</div>';
+        echo '</label>';
+        echo '</div>';
+        echo '</div>';
+        
+        // System Load Bars Section
+        echo '<div style="background:' . $colors['bg'] . '; border:1px solid ' . $colors['border'] . '; border-radius:6px; padding:20px; margin-bottom:30px;">';
+        echo '<h3 style="margin:0 0 15px 0; color:' . $colors['text'] . '; font-size:16px;">📊 System Load Bars</h3>';
+        echo '<p style="color:' . $colors['text'] . '; margin-bottom:15px; font-size:13px;">Show or hide the CPU/Memory load indicator bars in the event panel:</p>';
+        
+        echo '<div style="display:flex; gap:15px;">';
+        echo '<label style="flex:1; padding:12px; border:2px solid ' . ($currentShowSystemLoad ? '#00cc07' : $colors['border']) . '; border-radius:4px; background:' . ($currentShowSystemLoad ? 'rgba(0, 204, 7, 0.05)' : $colors['bg']) . '; cursor:pointer; display:flex; align-items:center;">';
+        echo '<input type="radio" name="show_system_load" value="yes" ' . ($currentShowSystemLoad ? 'checked' : '') . ' style="margin-right:10px; width:18px; height:18px;">';
+        echo '<div>';
+        echo '<div style="font-weight:bold; color:' . $colors['text'] . '; margin-bottom:3px;">Show</div>';
+        echo '<div style="font-size:11px; color:' . $colors['text'] . ';">Display CPU/Memory load bars</div>';
+        echo '</div>';
+        echo '</label>';
+        
+        echo '<label style="flex:1; padding:12px; border:2px solid ' . (!$currentShowSystemLoad ? '#00cc07' : $colors['border']) . '; border-radius:4px; background:' . (!$currentShowSystemLoad ? 'rgba(0, 204, 7, 0.05)' : $colors['bg']) . '; cursor:pointer; display:flex; align-items:center;">';
+        echo '<input type="radio" name="show_system_load" value="no" ' . (!$currentShowSystemLoad ? 'checked' : '') . ' style="margin-right:10px; width:18px; height:18px;">';
+        echo '<div>';
+        echo '<div style="font-weight:bold; color:' . $colors['text'] . '; margin-bottom:3px;">Hide</div>';
+        echo '<div style="font-size:11px; color:' . $colors['text'] . ';">Disable system monitoring</div>';
         echo '</div>';
         echo '</label>';
         echo '</div>';
@@ -6854,6 +6881,26 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
     private function saveItineraryCollapsed($collapsed) {
         $configFile = DOKU_INC . 'data/meta/calendar_itinerary_collapsed.txt';
         file_put_contents($configFile, $collapsed ? 'yes' : 'no');
+        return true;
+    }
+    
+    /**
+     * Get system load bars visibility setting
+     */
+    private function getShowSystemLoad() {
+        $configFile = DOKU_INC . 'data/meta/calendar_show_system_load.txt';
+        if (file_exists($configFile)) {
+            return trim(file_get_contents($configFile)) !== 'no';
+        }
+        return true; // Default to showing
+    }
+    
+    /**
+     * Save system load bars visibility setting
+     */
+    private function saveShowSystemLoad($show) {
+        $configFile = DOKU_INC . 'data/meta/calendar_show_system_load.txt';
+        file_put_contents($configFile, $show ? 'yes' : 'no');
         return true;
     }
     
