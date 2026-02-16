@@ -1,11 +1,19 @@
 <?php
 /**
  * Calendar Plugin - Admin Interface
- * Clean rewrite - Configuration only
- * Version: 3.3
+ * 
+ * @license GPL 2 http://www.gnu.org/licenses/gpl-2.0.html
+ * @author  DokuWiki Community
+ * @version 7.0.8
  */
 
 if(!defined('DOKU_INC')) die();
+
+// Load class dependencies
+require_once __DIR__ . '/classes/FileHandler.php';
+require_once __DIR__ . '/classes/EventCache.php';
+require_once __DIR__ . '/classes/RateLimiter.php';
+require_once __DIR__ . '/classes/EventManager.php';
 
 class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
     
@@ -168,11 +176,12 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
         $colors = $this->getTemplateColors();
         $accentColor = '#00cc07'; // Keep calendar plugin accent color
         
-        // Tab navigation (Manage Events, Update Plugin, Outlook Sync, Themes)
+        // Tab navigation (Manage Events, Update Plugin, Outlook Sync, Google Sync, Themes)
         echo '<div style="border-bottom:2px solid ' . $colors['border'] . '; margin:10px 0 15px 0;">';
         echo '<a href="?do=admin&page=calendar&tab=manage" style="display:inline-block; padding:8px 16px; text-decoration:none; color:' . ($tab === 'manage' ? $accentColor : $colors['text']) . '; border-bottom:3px solid ' . ($tab === 'manage' ? $accentColor : 'transparent') . '; font-weight:' . ($tab === 'manage' ? 'bold' : 'normal') . ';">📅 ' . $this->getLang('tab_manage') . '</a>';
         echo '<a href="?do=admin&page=calendar&tab=update" style="display:inline-block; padding:8px 16px; text-decoration:none; color:' . ($tab === 'update' ? $accentColor : $colors['text']) . '; border-bottom:3px solid ' . ($tab === 'update' ? $accentColor : 'transparent') . '; font-weight:' . ($tab === 'update' ? 'bold' : 'normal') . ';">📦 ' . $this->getLang('tab_update') . '</a>';
-        echo '<a href="?do=admin&page=calendar&tab=config" style="display:inline-block; padding:8px 16px; text-decoration:none; color:' . ($tab === 'config' ? $accentColor : $colors['text']) . '; border-bottom:3px solid ' . ($tab === 'config' ? $accentColor : 'transparent') . '; font-weight:' . ($tab === 'config' ? 'bold' : 'normal') . ';">⚙️ ' . $this->getLang('tab_sync') . '</a>';
+        echo '<a href="?do=admin&page=calendar&tab=config" style="display:inline-block; padding:8px 16px; text-decoration:none; color:' . ($tab === 'config' ? $accentColor : $colors['text']) . '; border-bottom:3px solid ' . ($tab === 'config' ? $accentColor : 'transparent') . '; font-weight:' . ($tab === 'config' ? 'bold' : 'normal') . ';">📧 Outlook</a>';
+        echo '<a href="?do=admin&page=calendar&tab=google" style="display:inline-block; padding:8px 16px; text-decoration:none; color:' . ($tab === 'google' ? $accentColor : $colors['text']) . '; border-bottom:3px solid ' . ($tab === 'google' ? $accentColor : 'transparent') . '; font-weight:' . ($tab === 'google' ? 'bold' : 'normal') . ';">📆 Google</a>';
         echo '<a href="?do=admin&page=calendar&tab=themes" style="display:inline-block; padding:8px 16px; text-decoration:none; color:' . ($tab === 'themes' ? $accentColor : $colors['text']) . '; border-bottom:3px solid ' . ($tab === 'themes' ? $accentColor : 'transparent') . '; font-weight:' . ($tab === 'themes' ? 'bold' : 'normal') . ';">🎨 ' . $this->getLang('tab_themes') . '</a>';
         echo '</div>';
         
@@ -183,6 +192,8 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
             $this->renderManageTab($colors);
         } elseif ($tab === 'themes') {
             $this->renderThemesTab($colors);
+        } elseif ($tab === 'google') {
+            $this->renderGoogleSyncTab($colors);
         } else {
             $this->renderUpdateTab($colors);
         }
@@ -2887,7 +2898,7 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
             if (!is_dir($calDir)) return;
             
             foreach (glob($calDir . '/*.json') as $file) {
-                $data = json_decode(file_get_contents($file), true);
+                $data = CalendarFileHandler::readJson($file);
                 if (!$data || !is_array($data)) continue;
                 
                 foreach ($data as $dateKey => $events) {
@@ -3383,7 +3394,7 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
             $hasEvents = false;
             
             foreach ($jsonFiles as $jsonFile) {
-                $data = json_decode(file_get_contents($jsonFile), true);
+                $data = CalendarFileHandler::readJson($jsonFile);
                 if ($data && is_array($data)) {
                     // Check if any date key has actual events
                     foreach ($data as $dateKey => $events) {
@@ -3491,7 +3502,7 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
         
         foreach ($calendarDirs as $calDir) {
             foreach (glob($calDir . '/*.json') as $file) {
-                $data = json_decode(file_get_contents($file), true);
+                $data = CalendarFileHandler::readJson($file);
                 if (!$data || !is_array($data)) continue;
                 
                 $modified = false;
@@ -3522,7 +3533,7 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
                     if (empty($data)) {
                         unlink($file);
                     } else {
-                        file_put_contents($file, json_encode($data, JSON_PRETTY_PRINT));
+                        CalendarFileHandler::writeJson($file, $data);
                     }
                 }
             }
@@ -3562,7 +3573,7 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
         if (!is_dir($dataDir)) return $events;
         
         foreach (glob($dataDir . '*.json') as $file) {
-            $data = json_decode(file_get_contents($file), true);
+            $data = CalendarFileHandler::readJson($file);
             if (!$data || !is_array($data)) continue;
             
             foreach ($data as $dateKey => $dayEvents) {
@@ -3637,7 +3648,7 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
             list($year, $month) = explode('-', $dateKey);
             
             $file = $dataDir . sprintf('%04d-%02d.json', $year, $month);
-            $fileData = file_exists($file) ? json_decode(file_get_contents($file), true) : [];
+            $fileData = file_exists($file) ? CalendarFileHandler::readJson($file) : [];
             if (!is_array($fileData)) $fileData = [];
             
             if (!isset($fileData[$dateKey])) $fileData[$dateKey] = [];
@@ -3651,7 +3662,7 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
             $newEvent['completed'] = false;
             
             $fileData[$dateKey][] = $newEvent;
-            file_put_contents($file, json_encode($fileData, JSON_PRETTY_PRINT));
+            CalendarFileHandler::writeJson($file, $fileData);
             $added++;
         }
         
@@ -3674,7 +3685,7 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
         foreach ($events as $entry) {
             if ($entry['date'] < $cutoffDate) {
                 // Remove this event from its file
-                $data = json_decode(file_get_contents($entry['file']), true);
+                $data = CalendarFileHandler::readJson($entry['file']);
                 if (!$data || !isset($data[$entry['date']])) continue;
                 
                 // Find and remove by matching title
@@ -3693,7 +3704,7 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
                 if (empty($data)) {
                     unlink($entry['file']);
                 } else {
-                    file_put_contents($entry['file'], json_encode($data, JSON_PRETTY_PRINT));
+                    CalendarFileHandler::writeJson($entry['file'], $data);
                 }
             }
         }
@@ -3716,7 +3727,7 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
         
         foreach ($events as $entry) {
             if ($entry['date'] >= $today) {
-                $data = json_decode(file_get_contents($entry['file']), true);
+                $data = CalendarFileHandler::readJson($entry['file']);
                 if (!$data || !isset($data[$entry['date']])) continue;
                 
                 foreach ($data[$entry['date']] as $k => &$evt) {
@@ -3729,7 +3740,7 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
                 }
                 unset($evt);
                 
-                file_put_contents($entry['file'], json_encode($data, JSON_PRETTY_PRINT));
+                CalendarFileHandler::writeJson($entry['file'], $data);
             }
         }
         
@@ -3761,7 +3772,7 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
         }
         
         foreach (glob($dataDir . '*.json') as $file) {
-            $data = json_decode(file_get_contents($file), true);
+            $data = CalendarFileHandler::readJson($file);
             if (!$data) continue;
             
             $modified = false;
@@ -3786,7 +3797,7 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
             unset($dayEvents);
             
             if ($modified) {
-                file_put_contents($file, json_encode($data, JSON_PRETTY_PRINT));
+                CalendarFileHandler::writeJson($file, $data);
             }
         }
         
@@ -3847,7 +3858,7 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
         
         // Remove all from old positions
         foreach ($toMove as $move) {
-            $data = json_decode(file_get_contents($move['file']), true);
+            $data = CalendarFileHandler::readJson($move['file']);
             if (!$data || !isset($data[$move['oldDate']])) continue;
             
             foreach ($data[$move['oldDate']] as $k => $evt) {
@@ -3861,7 +3872,7 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
             if (empty($data)) {
                 unlink($move['file']);
             } else {
-                file_put_contents($move['file'], json_encode($data, JSON_PRETTY_PRINT));
+                CalendarFileHandler::writeJson($move['file'], $data);
             }
         }
         
@@ -3870,12 +3881,12 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
         foreach ($toMove as $move) {
             list($year, $month) = explode('-', $move['newDate']);
             $file = $dataDir . sprintf('%04d-%02d.json', $year, $month);
-            $data = file_exists($file) ? json_decode(file_get_contents($file), true) : [];
+            $data = file_exists($file) ? CalendarFileHandler::readJson($file) : [];
             if (!is_array($data)) $data = [];
             
             if (!isset($data[$move['newDate']])) $data[$move['newDate']] = [];
             $data[$move['newDate']][] = $move['event'];
-            file_put_contents($file, json_encode($data, JSON_PRETTY_PRINT));
+            CalendarFileHandler::writeJson($file, $data);
             $moved++;
         }
         
@@ -3923,7 +3934,7 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
         
         // Remove all future events from files
         foreach ($futureEvents as $entry) {
-            $data = json_decode(file_get_contents($entry['file']), true);
+            $data = CalendarFileHandler::readJson($entry['file']);
             if (!$data || !isset($data[$entry['date']])) continue;
             
             foreach ($data[$entry['date']] as $k => $evt) {
@@ -3937,7 +3948,7 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
             if (empty($data)) {
                 unlink($entry['file']);
             } else {
-                file_put_contents($entry['file'], json_encode($data, JSON_PRETTY_PRINT));
+                CalendarFileHandler::writeJson($entry['file'], $data);
             }
         }
         
@@ -3954,7 +3965,7 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
             list($year, $month) = explode('-', $dateKey);
             
             $file = $dataDir . sprintf('%04d-%02d.json', $year, $month);
-            $fileData = file_exists($file) ? json_decode(file_get_contents($file), true) : [];
+            $fileData = file_exists($file) ? CalendarFileHandler::readJson($file) : [];
             if (!is_array($fileData)) $fileData = [];
             
             if (!isset($fileData[$dateKey])) $fileData[$dateKey] = [];
@@ -3965,7 +3976,7 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
             $newEvent['recurringId'] = $baseId;
             
             $fileData[$dateKey][] = $newEvent;
-            file_put_contents($file, json_encode($fileData, JSON_PRETTY_PRINT));
+            CalendarFileHandler::writeJson($file, $fileData);
             $created++;
         }
         
@@ -3997,7 +4008,7 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
             foreach (glob($rootCalendarDir . '/*.json') as $file) {
                 $hasFiles = true;
                 $month = basename($file, '.json');
-                $data = json_decode(file_get_contents($file), true);
+                $data = CalendarFileHandler::readJson($file);
                 if (!$data) continue;
                 
                 foreach ($data as $dateKey => $eventList) {
@@ -4065,7 +4076,7 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
                 foreach (glob($calendarDir . '/*.json') as $file) {
                     $hasFiles = true;
                     $month = basename($file, '.json');
-                    $data = json_decode(file_get_contents($file), true);
+                    $data = CalendarFileHandler::readJson($file);
                     if (!$data) continue;
                     
                     foreach ($data as $dateKey => $eventList) {
@@ -4146,7 +4157,7 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
             
             foreach (glob($calendarDir . '/*.json') as $file) {
                 $month = basename($file, '.json');
-                $data = json_decode(file_get_contents($file), true);
+                $data = CalendarFileHandler::readJson($file);
                 if (!$data) continue;
                 
                 foreach ($data as $dateKey => $events) {
@@ -4192,7 +4203,7 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
         
         foreach ($calendarDirs as $calDir) {
             foreach (glob($calDir . '/*.json') as $file) {
-                $data = json_decode(file_get_contents($file), true);
+                $data = CalendarFileHandler::readJson($file);
                 if (!$data || !is_array($data)) continue;
                 
                 $modified = false;
@@ -4228,7 +4239,7 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
                     if (empty($data)) {
                         unlink($file);
                     } else {
-                        file_put_contents($file, json_encode($data, JSON_PRETTY_PRINT));
+                        CalendarFileHandler::writeJson($file, $data);
                     }
                 }
             }
@@ -4286,7 +4297,7 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
             }
             
             foreach (glob($dir . '/*.json') as $file) {
-                $data = json_decode(file_get_contents($file), true);
+                $data = CalendarFileHandler::readJson($file);
                 if (!$data || !is_array($data)) continue;
                 
                 $modified = false;
@@ -4349,7 +4360,7 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
                 unset($dayEvents);
                 
                 if ($modified) {
-                    file_put_contents($file, json_encode($data, JSON_PRETTY_PRINT));
+                    CalendarFileHandler::writeJson($file, $data);
                 }
             }
         }
@@ -4389,7 +4400,7 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
                 // Remove all future events (we'll recreate them)
                 for ($i = $anchorIndex + 1; $i < count($allEvents); $i++) {
                     $entry = $allEvents[$i];
-                    $data = json_decode(file_get_contents($entry['file']), true);
+                    $data = CalendarFileHandler::readJson($entry['file']);
                     if (!$data || !isset($data[$entry['date']])) continue;
                     
                     foreach ($data[$entry['date']] as $k => $evt) {
@@ -4403,7 +4414,7 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
                     if (empty($data)) {
                         unlink($entry['file']);
                     } else {
-                        file_put_contents($entry['file'], json_encode($data, JSON_PRETTY_PRINT));
+                        CalendarFileHandler::writeJson($entry['file'], $data);
                     }
                 }
                 
@@ -4438,7 +4449,7 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
                     list($year, $month) = explode('-', $dateKey);
                     
                     $file = $targetDir . '/' . sprintf('%04d-%02d.json', $year, $month);
-                    $fileData = file_exists($file) ? json_decode(file_get_contents($file), true) : [];
+                    $fileData = file_exists($file) ? CalendarFileHandler::readJson($file) : [];
                     if (!is_array($fileData)) $fileData = [];
                     if (!isset($fileData[$dateKey])) $fileData[$dateKey] = [];
                     
@@ -4455,7 +4466,7 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
                     }
                     
                     $fileData[$dateKey][] = $newEvent;
-                    file_put_contents($file, json_encode($fileData, JSON_PRETTY_PRINT));
+                    CalendarFileHandler::writeJson($file, $fileData);
                 }
             }
         }
@@ -4597,7 +4608,7 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
             
             if (!file_exists($oldFile)) continue;
             
-            $oldData = json_decode(file_get_contents($oldFile), true);
+            $oldData = CalendarFileHandler::readJson($oldFile);
             if (!$oldData) continue;
             
             // Find and remove event from old file
@@ -4621,7 +4632,7 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
             if (!$event) continue;
             
             // Save old file
-            file_put_contents($oldFile, json_encode($oldData, JSON_PRETTY_PRINT));
+            CalendarFileHandler::writeJson($oldFile, $oldData);
             
             // Update event namespace
             $event['namespace'] = $targetNamespace;
@@ -4641,7 +4652,7 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
             
             $newData = [];
             if (file_exists($newFile)) {
-                $newData = json_decode(file_get_contents($newFile), true) ?: [];
+                $newData = CalendarFileHandler::readJson($newFile) ?: [];
             }
             
             if (!isset($newData[$date])) {
@@ -4649,7 +4660,7 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
             }
             $newData[$date][] = $event;
             
-            file_put_contents($newFile, json_encode($newData, JSON_PRETTY_PRINT));
+            CalendarFileHandler::writeJson($newFile, $newData);
             $moved++;
         }
         
@@ -4677,7 +4688,7 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
             $this->redirect('Event file not found', 'error', 'manage');
         }
         
-        $oldData = json_decode(file_get_contents($oldFile), true);
+        $oldData = CalendarFileHandler::readJson($oldFile);
         if (!$oldData) {
             $this->redirect('Could not read event file', 'error', 'manage');
         }
@@ -4708,7 +4719,7 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
         if (empty($oldData)) {
             unlink($oldFile);
         } else {
-            file_put_contents($oldFile, json_encode($oldData, JSON_PRETTY_PRINT));
+            CalendarFileHandler::writeJson($oldFile, $oldData);
         }
         
         // Update event namespace
@@ -4729,7 +4740,7 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
         
         $newData = [];
         if (file_exists($newFile)) {
-            $newData = json_decode(file_get_contents($newFile), true) ?: [];
+            $newData = CalendarFileHandler::readJson($newFile) ?: [];
         }
         
         if (!isset($newData[$date])) {
@@ -4737,7 +4748,7 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
         }
         $newData[$date][] = $event;
         
-        file_put_contents($newFile, json_encode($newData, JSON_PRETTY_PRINT));
+        CalendarFileHandler::writeJson($newFile, $newData);
         
         $displayTarget = $targetNamespace ?: '(default)';
         $this->clearStatsCache();
@@ -4785,7 +4796,7 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
         $placeholderFile = $calendarDir . '/' . $currentMonth . '.json';
         
         if (!file_exists($placeholderFile)) {
-            file_put_contents($placeholderFile, json_encode([], JSON_PRETTY_PRINT));
+            CalendarFileHandler::writeJson($placeholderFile, []);
         }
         
         $this->redirect("Created namespace: $namespaceName", 'success', 'manage');
@@ -4832,7 +4843,7 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
         
         // Delete all calendar JSON files (including empty ones)
         foreach (glob($calendarDir . '/*.json') as $file) {
-            $data = json_decode(file_get_contents($file), true);
+            $data = CalendarFileHandler::readJson($file);
             if ($data) {
                 foreach ($data as $events) {
                     if (is_array($events)) {
@@ -4956,7 +4967,7 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
         // Update event namespace field in all JSON files
         $eventsUpdated = 0;
         foreach (glob($targetDir . '/*.json') as $file) {
-            $data = json_decode(file_get_contents($file), true);
+            $data = CalendarFileHandler::readJson($file);
             if ($data) {
                 foreach ($data as $date => &$events) {
                     foreach ($events as &$event) {
@@ -4966,7 +4977,7 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
                         }
                     }
                 }
-                file_put_contents($file, json_encode($data, JSON_PRETTY_PRINT));
+                CalendarFileHandler::writeJson($file, $data);
             }
         }
         
@@ -5019,7 +5030,7 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
             
             if (!file_exists($file)) continue;
             
-            $data = json_decode(file_get_contents($file), true);
+            $data = CalendarFileHandler::readJson($file);
             if (!$data) continue;
             
             // Find and remove event
@@ -5039,7 +5050,7 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
                 }
                 
                 // Save file
-                file_put_contents($file, json_encode($data, JSON_PRETTY_PRINT));
+                CalendarFileHandler::writeJson($file, $data);
             }
         }
         
@@ -6181,7 +6192,7 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
                 
                 foreach ($jsonFiles as $file) {
                     $stats['total_files']++;
-                    $data = json_decode(file_get_contents($file), true);
+                    $data = CalendarFileHandler::readJson($file);
                     if ($data) {
                         foreach ($data as $dateKey => $dateEvents) {
                             // Skip non-date keys (like "mapping" or other metadata)
@@ -6288,7 +6299,7 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
                 
                 foreach ($jsonFiles as $file) {
                     $filename = basename($file);
-                    $data = json_decode(file_get_contents($file), true);
+                    $data = CalendarFileHandler::readJson($file);
                     if ($data) {
                         $allEvents[$namespace][$filename] = $data;
                     }
@@ -6371,11 +6382,11 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
                                 }
                             }
                         }
-                        file_put_contents($targetFile, json_encode($existing, JSON_PRETTY_PRINT));
+                        CalendarFileHandler::writeJson($targetFile, $existing);
                     }
                 } else {
                     // New file
-                    file_put_contents($targetFile, json_encode($events, JSON_PRETTY_PRINT));
+                    CalendarFileHandler::writeJson($targetFile, $events);
                     foreach ($events as $dateEvents) {
                         if (is_array($dateEvents)) {
                             $importedCount += count($dateEvents);
@@ -6490,7 +6501,7 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
             if (empty($data)) {
                 unlink($file);
             } else {
-                file_put_contents($file, json_encode($data, JSON_PRETTY_PRINT));
+                CalendarFileHandler::writeJson($file, $data);
             }
         }
         
@@ -6636,6 +6647,303 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
     }
     
     /**
+     * Render Google Calendar Sync tab
+     */
+    private function renderGoogleSyncTab($colors = null) {
+        global $INPUT;
+        
+        if ($colors === null) {
+            $colors = $this->getTemplateColors();
+        }
+        
+        // Load Google sync class
+        require_once __DIR__ . '/classes/GoogleCalendarSync.php';
+        $googleSync = new GoogleCalendarSync();
+        $status = $googleSync->getStatus();
+        
+        // Handle config save
+        if ($INPUT->str('action') === 'save_google_config') {
+            $clientId = $INPUT->str('google_client_id');
+            $clientSecret = $INPUT->str('google_client_secret');
+            $calendarId = $INPUT->str('google_calendar_id', 'primary');
+            
+            if ($clientId && $clientSecret) {
+                $googleSync->saveConfig($clientId, $clientSecret, $calendarId);
+                echo '<div style="background:#d4edda;border:1px solid #c3e6cb;color:#155724;padding:12px;border-radius:6px;margin-bottom:20px;">✓ Google API credentials saved successfully!</div>';
+                $status = $googleSync->getStatus(); // Refresh status
+            }
+        }
+        
+        // Handle calendar selection
+        if ($INPUT->str('action') === 'select_google_calendar') {
+            $calendarId = $INPUT->str('selected_calendar');
+            if ($calendarId) {
+                $googleSync->setCalendarId($calendarId);
+                echo '<div style="background:#d4edda;border:1px solid #c3e6cb;color:#155724;padding:12px;border-radius:6px;margin-bottom:20px;">✓ Calendar selected!</div>';
+            }
+        }
+        
+        $accentColor = '#00cc07';
+        
+        echo '<div style="max-width:800px;">';
+        echo '<h2 style="color:' . $colors['text'] . ';margin-bottom:20px;">📆 Google Calendar Sync</h2>';
+        
+        // Status indicator
+        $statusColor = $status['authenticated'] ? '#28a745' : ($status['configured'] ? '#ffc107' : '#dc3545');
+        $statusText = $status['authenticated'] ? 'Connected' : ($status['configured'] ? 'Not Authenticated' : 'Not Configured');
+        $statusIcon = $status['authenticated'] ? '✓' : ($status['configured'] ? '⚠' : '✕');
+        
+        echo '<div style="background:' . $colors['bg'] . ';border:1px solid ' . $colors['border'] . ';border-radius:8px;padding:20px;margin-bottom:24px;">';
+        echo '<div style="display:flex;align-items:center;gap:12px;margin-bottom:16px;">';
+        echo '<span style="display:inline-flex;align-items:center;justify-content:center;width:32px;height:32px;background:' . $statusColor . ';color:white;border-radius:50%;font-weight:bold;">' . $statusIcon . '</span>';
+        echo '<span style="font-size:18px;font-weight:600;color:' . $colors['text'] . ';">Status: ' . $statusText . '</span>';
+        echo '</div>';
+        
+        if ($status['authenticated']) {
+            echo '<p style="color:' . $colors['textDim'] . ';margin:0;">Calendar: <strong>' . htmlspecialchars($status['calendar_id']) . '</strong></p>';
+        }
+        echo '</div>';
+        
+        // Setup Instructions
+        echo '<div style="background:' . $colors['bg'] . ';border:1px solid ' . $colors['border'] . ';border-radius:8px;padding:20px;margin-bottom:24px;">';
+        echo '<h3 style="color:' . $colors['text'] . ';margin:0 0 16px 0;">Setup Instructions</h3>';
+        echo '<ol style="color:' . $colors['textDim'] . ';margin:0;padding-left:20px;line-height:1.8;">';
+        echo '<li>Go to <a href="https://console.cloud.google.com/" target="_blank" style="color:' . $accentColor . ';">Google Cloud Console</a></li>';
+        echo '<li>Create a new project (or select existing)</li>';
+        echo '<li>Enable the <strong>Google Calendar API</strong></li>';
+        echo '<li>Go to Credentials → Create Credentials → OAuth 2.0 Client ID</li>';
+        echo '<li>Application type: <strong>Web application</strong></li>';
+        echo '<li>Add Authorized redirect URI: <code style="background:#f5f5f5;padding:2px 6px;border-radius:3px;">' . DOKU_URL . 'lib/exe/ajax.php?call=plugin_calendar&action=google_callback</code></li>';
+        echo '<li>Copy Client ID and Client Secret below</li>';
+        echo '</ol>';
+        echo '</div>';
+        
+        // Configuration Form
+        echo '<div style="background:' . $colors['bg'] . ';border:1px solid ' . $colors['border'] . ';border-radius:8px;padding:20px;margin-bottom:24px;">';
+        echo '<h3 style="color:' . $colors['text'] . ';margin:0 0 16px 0;">API Credentials</h3>';
+        
+        echo '<form method="post" action="?do=admin&page=calendar&tab=google">';
+        echo '<input type="hidden" name="action" value="save_google_config">';
+        
+        echo '<div style="margin-bottom:16px;">';
+        echo '<label style="display:block;font-weight:600;color:' . $colors['text'] . ';margin-bottom:6px;">Client ID</label>';
+        echo '<input type="text" name="google_client_id" value="" placeholder="xxxx.apps.googleusercontent.com" style="width:100%;padding:10px 12px;border:1px solid ' . $colors['border'] . ';border-radius:6px;font-size:14px;background:' . $colors['inputBg'] . ';color:' . $colors['text'] . ';">';
+        echo '<small style="color:' . $colors['textDim'] . ';">Leave blank to keep existing value</small>';
+        echo '</div>';
+        
+        echo '<div style="margin-bottom:16px;">';
+        echo '<label style="display:block;font-weight:600;color:' . $colors['text'] . ';margin-bottom:6px;">Client Secret</label>';
+        echo '<input type="password" name="google_client_secret" value="" placeholder="Enter client secret" style="width:100%;padding:10px 12px;border:1px solid ' . $colors['border'] . ';border-radius:6px;font-size:14px;background:' . $colors['inputBg'] . ';color:' . $colors['text'] . ';">';
+        echo '<small style="color:' . $colors['textDim'] . ';">Leave blank to keep existing value</small>';
+        echo '</div>';
+        
+        echo '<button type="submit" style="background:' . $accentColor . ';color:white;border:none;padding:12px 24px;border-radius:6px;cursor:pointer;font-size:14px;font-weight:600;">Save Credentials</button>';
+        echo '</form>';
+        echo '</div>';
+        
+        // Authentication Section
+        if ($status['configured']) {
+            echo '<div style="background:' . $colors['bg'] . ';border:1px solid ' . $colors['border'] . ';border-radius:8px;padding:20px;margin-bottom:24px;">';
+            echo '<h3 style="color:' . $colors['text'] . ';margin:0 0 16px 0;">Authentication</h3>';
+            
+            if ($status['authenticated']) {
+                echo '<p style="color:#28a745;margin:0 0 16px 0;">✓ Connected to Google Calendar</p>';
+                echo '<button onclick="googleDisconnect()" style="background:#dc3545;color:white;border:none;padding:10px 20px;border-radius:6px;cursor:pointer;font-size:14px;">Disconnect</button>';
+            } else {
+                echo '<p style="color:' . $colors['textDim'] . ';margin:0 0 16px 0;">Click below to authorize access to your Google Calendar.</p>';
+                echo '<button onclick="googleConnect()" style="background:#4285f4;color:white;border:none;padding:12px 24px;border-radius:6px;cursor:pointer;font-size:14px;font-weight:600;">';
+                echo '<span style="margin-right:8px;">🔗</span> Connect Google Calendar</button>';
+            }
+            echo '</div>';
+        }
+        
+        // Calendar Selection (if authenticated)
+        if ($status['authenticated']) {
+            echo '<div style="background:' . $colors['bg'] . ';border:1px solid ' . $colors['border'] . ';border-radius:8px;padding:20px;margin-bottom:24px;">';
+            echo '<h3 style="color:' . $colors['text'] . ';margin:0 0 16px 0;">Select Calendar</h3>';
+            echo '<div id="google-calendars-list">Loading calendars...</div>';
+            echo '</div>';
+            
+            // Import/Export Section
+            echo '<div style="background:' . $colors['bg'] . ';border:1px solid ' . $colors['border'] . ';border-radius:8px;padding:20px;margin-bottom:24px;">';
+            echo '<h3 style="color:' . $colors['text'] . ';margin:0 0 16px 0;">Sync Events</h3>';
+            
+            echo '<div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;">';
+            
+            // Import section
+            echo '<div style="padding:16px;border:1px solid ' . $colors['border'] . ';border-radius:8px;">';
+            echo '<h4 style="color:' . $colors['text'] . ';margin:0 0 12px 0;">⬇️ Import from Google</h4>';
+            echo '<p style="color:' . $colors['textDim'] . ';font-size:13px;margin:0 0 12px 0;">Import events from Google Calendar to DokuWiki.</p>';
+            echo '<div style="margin-bottom:12px;">';
+            echo '<label style="display:block;font-size:12px;color:' . $colors['textDim'] . ';margin-bottom:4px;">Namespace (optional)</label>';
+            echo '<input type="text" id="import-namespace" placeholder="e.g. team:meetings" style="width:100%;padding:8px;border:1px solid ' . $colors['border'] . ';border-radius:4px;font-size:13px;">';
+            echo '</div>';
+            echo '<button onclick="googleImport()" style="background:' . $accentColor . ';color:white;border:none;padding:10px 16px;border-radius:6px;cursor:pointer;font-size:13px;width:100%;">Import Events</button>';
+            echo '</div>';
+            
+            // Export section
+            echo '<div style="padding:16px;border:1px solid ' . $colors['border'] . ';border-radius:8px;">';
+            echo '<h4 style="color:' . $colors['text'] . ';margin:0 0 12px 0;">⬆️ Export to Google</h4>';
+            echo '<p style="color:' . $colors['textDim'] . ';font-size:13px;margin:0 0 12px 0;">Export events from DokuWiki to Google Calendar.</p>';
+            echo '<div style="margin-bottom:12px;">';
+            echo '<label style="display:block;font-size:12px;color:' . $colors['textDim'] . ';margin-bottom:4px;">Namespace (optional)</label>';
+            echo '<input type="text" id="export-namespace" placeholder="e.g. team:meetings" style="width:100%;padding:8px;border:1px solid ' . $colors['border'] . ';border-radius:4px;font-size:13px;">';
+            echo '</div>';
+            echo '<button onclick="googleExport()" style="background:#17a2b8;color:white;border:none;padding:10px 16px;border-radius:6px;cursor:pointer;font-size:13px;width:100%;">Export Events</button>';
+            echo '</div>';
+            
+            echo '</div>';
+            
+            echo '<div id="sync-result" style="margin-top:16px;"></div>';
+            echo '</div>';
+        }
+        
+        echo '</div>'; // End max-width container
+        
+        // JavaScript for Google sync
+        echo '<script>
+        var DOKU_BASE = "' . DOKU_BASE . '";
+        
+        // Listen for OAuth callback
+        window.addEventListener("message", function(e) {
+            if (e.data && e.data.type === "google_auth_complete") {
+                if (e.data.success) {
+                    location.reload();
+                }
+            }
+        });
+        
+        function googleConnect() {
+            fetch(DOKU_BASE + "lib/exe/ajax.php?call=plugin_calendar&action=google_auth_url")
+            .then(r => r.json())
+            .then(data => {
+                if (data.success && data.url) {
+                    // Open auth window
+                    var w = 600, h = 700;
+                    var left = (screen.width - w) / 2;
+                    var top = (screen.height - h) / 2;
+                    window.open(data.url, "google_auth", "width=" + w + ",height=" + h + ",left=" + left + ",top=" + top);
+                } else {
+                    alert("Error: " + (data.error || "Could not get auth URL"));
+                }
+            })
+            .catch(err => alert("Error: " + err.message));
+        }
+        
+        function googleDisconnect() {
+            if (!confirm("Disconnect from Google Calendar?")) return;
+            
+            fetch(DOKU_BASE + "lib/exe/ajax.php?call=plugin_calendar&action=google_disconnect", {
+                method: "POST",
+                headers: {"Content-Type": "application/x-www-form-urlencoded"}
+            })
+            .then(r => r.json())
+            .then(data => {
+                if (data.success) {
+                    location.reload();
+                }
+            });
+        }
+        
+        function loadGoogleCalendars() {
+            var container = document.getElementById("google-calendars-list");
+            if (!container) return;
+            
+            fetch(DOKU_BASE + "lib/exe/ajax.php?call=plugin_calendar&action=google_calendars")
+            .then(r => r.json())
+            .then(data => {
+                if (data.success && data.calendars) {
+                    var html = "<form method=\"post\" action=\"?do=admin&page=calendar&tab=google\">";
+                    html += "<input type=\"hidden\" name=\"action\" value=\"select_google_calendar\">";
+                    html += "<select name=\"selected_calendar\" style=\"width:100%;padding:10px;border:1px solid #ddd;border-radius:6px;margin-bottom:12px;\">";
+                    
+                    data.calendars.forEach(function(cal) {
+                        var selected = cal.primary ? " selected" : "";
+                        html += "<option value=\"" + cal.id + "\"" + selected + ">" + cal.summary;
+                        if (cal.primary) html += " (Primary)";
+                        html += "</option>";
+                    });
+                    
+                    html += "</select>";
+                    html += "<button type=\"submit\" style=\"background:#6c757d;color:white;border:none;padding:10px 20px;border-radius:6px;cursor:pointer;\">Select Calendar</button>";
+                    html += "</form>";
+                    
+                    container.innerHTML = html;
+                } else {
+                    container.innerHTML = "<p style=\"color:#dc3545;\">Error loading calendars: " + (data.error || "Unknown error") + "</p>";
+                }
+            })
+            .catch(err => {
+                container.innerHTML = "<p style=\"color:#dc3545;\">Error: " + err.message + "</p>";
+            });
+        }
+        
+        function googleImport() {
+            var namespace = document.getElementById("import-namespace").value;
+            var resultDiv = document.getElementById("sync-result");
+            
+            resultDiv.innerHTML = "<p style=\"color:#666;\">⏳ Importing events...</p>";
+            
+            var params = new URLSearchParams({
+                call: "plugin_calendar",
+                action: "google_import",
+                namespace: namespace
+            });
+            
+            fetch(DOKU_BASE + "lib/exe/ajax.php", {
+                method: "POST",
+                headers: {"Content-Type": "application/x-www-form-urlencoded"},
+                body: params.toString()
+            })
+            .then(r => r.json())
+            .then(data => {
+                if (data.success) {
+                    resultDiv.innerHTML = "<div style=\"background:#d4edda;border:1px solid #c3e6cb;color:#155724;padding:12px;border-radius:6px;\">✓ Imported " + data.imported + " events, " + data.skipped + " skipped (duplicates)</div>";
+                } else {
+                    resultDiv.innerHTML = "<div style=\"background:#f8d7da;border:1px solid #f5c6cb;color:#721c24;padding:12px;border-radius:6px;\">Error: " + data.error + "</div>";
+                }
+            })
+            .catch(err => {
+                resultDiv.innerHTML = "<div style=\"background:#f8d7da;border:1px solid #f5c6cb;color:#721c24;padding:12px;border-radius:6px;\">Error: " + err.message + "</div>";
+            });
+        }
+        
+        function googleExport() {
+            var namespace = document.getElementById("export-namespace").value;
+            var resultDiv = document.getElementById("sync-result");
+            
+            resultDiv.innerHTML = "<p style=\"color:#666;\">⏳ Exporting events...</p>";
+            
+            var params = new URLSearchParams({
+                call: "plugin_calendar",
+                action: "google_export",
+                namespace: namespace
+            });
+            
+            fetch(DOKU_BASE + "lib/exe/ajax.php", {
+                method: "POST",
+                headers: {"Content-Type": "application/x-www-form-urlencoded"},
+                body: params.toString()
+            })
+            .then(r => r.json())
+            .then(data => {
+                if (data.success) {
+                    resultDiv.innerHTML = "<div style=\"background:#d4edda;border:1px solid #c3e6cb;color:#155724;padding:12px;border-radius:6px;\">✓ Exported " + data.exported + " events, " + data.skipped + " skipped</div>";
+                } else {
+                    resultDiv.innerHTML = "<div style=\"background:#f8d7da;border:1px solid #f5c6cb;color:#721c24;padding:12px;border-radius:6px;\">Error: " + data.error + "</div>";
+                }
+            })
+            .catch(err => {
+                resultDiv.innerHTML = "<div style=\"background:#f8d7da;border:1px solid #f5c6cb;color:#721c24;padding:12px;border-radius:6px;\">Error: " + err.message + "</div>";
+            });
+        }
+        
+        // Load calendars on page load if authenticated
+        ' . ($status['authenticated'] ? 'loadGoogleCalendars();' : '') . '
+        </script>';
+    }
+    
+    /**
      * Render Themes tab for sidebar widget theme selection
      */
     private function renderThemesTab($colors = null) {
@@ -6752,7 +7060,7 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
         echo '<label style="display:flex; align-items:center; cursor:pointer;">';
         echo '<input type="radio" name="theme" value="matrix" ' . ($currentTheme === 'matrix' ? 'checked' : '') . ' style="margin-right:12px; width:20px; height:20px;">';
         echo '<div style="flex:1;">';
-        echo '<div style="font-size:18px; font-weight:bold; color:#00cc07; margin-bottom:8px;">🟢 Matrix Edition</div>';
+        echo '<div style="font-size:18px; font-weight:bold; color:#00cc07; margin-bottom:8px;">🟢 Matrix</div>';
         echo '<div style="color:' . $colors['text'] . '; margin-bottom:12px;">Dark green theme with Matrix-style glow effects and neon accents</div>';
         echo '<div style="display:inline-block; background:#242424; border:2px solid #00cc07; padding:8px 12px; border-radius:4px; font-size:11px; font-family:monospace; color:#00cc07; box-shadow:0 0 10px rgba(0, 204, 7, 0.3);">Preview: Matrix Theme</div>';
         echo '</div>';

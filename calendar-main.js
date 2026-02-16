@@ -1,7 +1,38 @@
 /**
  * DokuWiki Compact Calendar Plugin JavaScript
  * Loaded independently to avoid DokuWiki concatenation issues
+ * @version 7.0.8
  */
+
+// Debug mode - set to true for console logging
+var CALENDAR_DEBUG = false;
+
+// Debug logging helper
+function calendarLog() {
+    if (CALENDAR_DEBUG && console && console.log) {
+        console.log.apply(console, ['[Calendar]'].concat(Array.prototype.slice.call(arguments)));
+    }
+}
+
+function calendarError() {
+    if (console && console.error) {
+        console.error.apply(console, ['[Calendar]'].concat(Array.prototype.slice.call(arguments)));
+    }
+}
+
+/**
+ * Format a Date object as YYYY-MM-DD in LOCAL time (not UTC)
+ * This avoids timezone issues where toISOString() shifts dates
+ * For example: In Prague (UTC+1), midnight local = 23:00 UTC previous day
+ * @param {Date} date - Date object to format
+ * @returns {string} Date string in YYYY-MM-DD format
+ */
+function formatLocalDate(date) {
+    var year = date.getFullYear();
+    var month = String(date.getMonth() + 1).padStart(2, '0');
+    var day = String(date.getDate()).padStart(2, '0');
+    return year + '-' + month + '-' + day;
+}
 
 // Ensure DOKU_BASE is defined - check multiple sources
 if (typeof DOKU_BASE === 'undefined') {
@@ -351,11 +382,11 @@ window.rebuildCalendar = function(calId, year, month, events, namespace) {
             const current = new Date(start);
             
             while (current <= end) {
-                const currentKey = current.toISOString().split('T')[0];
+                // Use formatLocalDate to avoid timezone shift issues
+                const currentKey = formatLocalDate(current);
                 
-                // Check if this date is in current month
-                const currentDate = new Date(currentKey + 'T00:00:00');
-                if (currentDate.getFullYear() === year && currentDate.getMonth() === month - 1) {
+                // Check if this date is in current month (use current Date object directly)
+                if (current.getFullYear() === year && current.getMonth() === month - 1) {
                     if (!eventRanges[currentKey]) {
                         eventRanges[currentKey] = [];
                     }
@@ -532,7 +563,7 @@ window.renderEventListFromData = function(events, calId, namespace, year, month)
     const sortedDates = Object.keys(events).sort();
     const today = new Date();
     today.setHours(0, 0, 0, 0);
-    const todayStr = today.toISOString().split('T')[0];
+    const todayStr = formatLocalDate(today);
     
     // Helper function to check if event is past (with 15-minute grace period)
     const isEventPast = function(dateKey, time) {
@@ -774,7 +805,7 @@ window.showDayPopup = function(calId, date, namespace) {
             }
             
             const importantClass = isImportant ? ' popup-event-important' : '';
-            html += '<div class="popup-event-item' + importantClass + '">';
+            html += '<div class="popup-event-item' + importantClass + '" tabindex="0" role="listitem" aria-label="' + escapeHtml(event.title) + (displayTime ? ', ' + displayTime : '') + '">';
             html += '<div class="event-color-bar" style="background: ' + color + ';"></div>';
             html += '<div class="popup-event-content">';
             
@@ -988,7 +1019,7 @@ window.renderEventItem = function(event, date, calId, namespace) {
     // Check if this event is in the past or today (with 15-minute grace period)
     const today = new Date();
     today.setHours(0, 0, 0, 0);
-    const todayStr = today.toISOString().split('T')[0];
+    const todayStr = formatLocalDate(today);
     const eventDate = new Date(date + 'T00:00:00');
     
     // Helper to determine if event is past with grace period
@@ -1372,19 +1403,18 @@ window.openAddEvent = function(calId, namespace, date) {
     const endDateField = document.getElementById('event-end-date-' + calId);
     if (endDateField) {
         endDateField.value = ''; // Empty by default (single-day event)
-        // Set min attribute to help the date picker open on the right month
-        endDateField.setAttribute('min', defaultDate);
     }
     
     // Set default color
     document.getElementById('event-color-' + calId).value = '#3498db';
     
-    // Initialize end time dropdown (disabled by default since no start time set)
-    const endTimeField = document.getElementById('event-end-time-' + calId);
-    if (endTimeField) {
-        endTimeField.disabled = true;
-        endTimeField.value = '';
-    }
+    // Reset time pickers to default state
+    setTimePicker(calId, false, ''); // Start time = All day
+    setTimePicker(calId, true, '');  // End time = Same as start
+    
+    // Set date pickers
+    setDatePicker(calId, false, defaultDate); // Start date
+    setDatePicker(calId, true, '');  // End date = Optional
     
     // Initialize namespace search
     initNamespaceSearch(calId);
@@ -1397,6 +1427,10 @@ window.openAddEvent = function(calId, namespace, date) {
     
     // Propagate CSS vars to dialog (position:fixed can break inheritance in some templates)
     propagateThemeVars(calId, dialog);
+    
+    // Initialize custom pickers
+    initCustomTimePickers(calId);
+    initCustomDatePickers(calId);
     
     // Make dialog draggable
     setTimeout(() => makeDialogDraggable(calId), 50);
@@ -1449,20 +1483,19 @@ window.editEvent = function(calId, eventId, date, namespace) {
             
             const endDateField = document.getElementById('event-end-date-' + calId);
             endDateField.value = event.endDate || '';
-            // Set min attribute to help date picker open on the start date's month
-            endDateField.setAttribute('min', date);
             
             document.getElementById('event-title-' + calId).value = event.title;
-            document.getElementById('event-time-' + calId).value = event.time || '';
-            document.getElementById('event-end-time-' + calId).value = event.endTime || '';
             document.getElementById('event-color-' + calId).value = event.color || '#3498db';
             document.getElementById('event-desc-' + calId).value = event.description || '';
             document.getElementById('event-is-task-' + calId).checked = event.isTask || false;
             
-            // Update end time options based on start time
-            if (event.time) {
-                updateEndTimeOptions(calId);
-            }
+            // Set time picker values using custom picker API
+            setTimePicker(calId, false, event.time || '');
+            setTimePicker(calId, true, event.endTime || '');
+            
+            // Set date picker values
+            setDatePicker(calId, false, date);
+            setDatePicker(calId, true, event.endDate || '');
             
             // Initialize namespace search
             initNamespaceSearch(calId);
@@ -1493,6 +1526,10 @@ window.editEvent = function(calId, eventId, date, namespace) {
             // Propagate CSS vars to dialog
             propagateThemeVars(calId, dialog);
             
+            // Initialize custom pickers
+            initCustomTimePickers(calId);
+            initCustomDatePickers(calId);
+            
             // Make dialog draggable
             setTimeout(() => makeDialogDraggable(calId), 50);
         }
@@ -1521,6 +1558,9 @@ window.deleteEvent = function(calId, eventId, date, namespace) {
     .then(r => r.json())
     .then(data => {
         if (data.success) {
+            // Announce to screen readers
+            announceToScreenReader('Event deleted');
+            
             // Extract year and month from date
             const [year, month] = date.split('-').map(Number);
             
@@ -1654,6 +1694,9 @@ window.saveEventCompact = function(calId, namespace) {
     .then(r => r.json())
     .then(data => {
         if (data.success) {
+            // Announce to screen readers
+            announceToScreenReader(eventId ? 'Event updated' : 'Event created');
+            
             closeEventDialog(calId);
             
             // For recurring events, do a full page reload to show all occurrences
@@ -1898,16 +1941,95 @@ window.updateMonthlyType = function(calId) {
 if (!window._calendarDelegationInit) {
     window._calendarDelegationInit = true;
 
-    // ESC closes dialogs, popups, tooltips
+    // Keyboard navigation for accessibility
     document.addEventListener('keydown', function(e) {
+        // ESC closes dialogs, popups, tooltips, dropdowns
         if (e.key === 'Escape') {
+            // Close dialogs
             document.querySelectorAll('.event-dialog-compact').forEach(function(d) {
                 if (d.style.display === 'flex') d.style.display = 'none';
             });
+            // Close day popups
             document.querySelectorAll('.day-popup').forEach(function(p) {
                 p.style.display = 'none';
             });
+            // Close custom pickers
+            document.querySelectorAll('.time-dropdown.open, .date-dropdown.open').forEach(function(d) {
+                d.classList.remove('open');
+                d.innerHTML = '';
+            });
+            document.querySelectorAll('.custom-time-picker.open, .custom-date-picker.open').forEach(function(b) {
+                b.classList.remove('open');
+            });
             hideConflictTooltip();
+            return;
+        }
+        
+        // Calendar grid navigation with arrow keys
+        var focusedDay = document.activeElement;
+        if (focusedDay && focusedDay.classList.contains('calendar-day')) {
+            var calGrid = focusedDay.closest('.calendar-grid');
+            if (!calGrid) return;
+            
+            var days = Array.from(calGrid.querySelectorAll('.calendar-day:not(.empty)'));
+            var currentIndex = days.indexOf(focusedDay);
+            if (currentIndex === -1) return;
+            
+            var newIndex = currentIndex;
+            
+            if (e.key === 'ArrowRight') {
+                newIndex = Math.min(currentIndex + 1, days.length - 1);
+                e.preventDefault();
+            } else if (e.key === 'ArrowLeft') {
+                newIndex = Math.max(currentIndex - 1, 0);
+                e.preventDefault();
+            } else if (e.key === 'ArrowDown') {
+                newIndex = Math.min(currentIndex + 7, days.length - 1);
+                e.preventDefault();
+            } else if (e.key === 'ArrowUp') {
+                newIndex = Math.max(currentIndex - 7, 0);
+                e.preventDefault();
+            } else if (e.key === 'Enter' || e.key === ' ') {
+                // Activate the day (click it)
+                focusedDay.click();
+                e.preventDefault();
+                return;
+            }
+            
+            if (newIndex !== currentIndex && days[newIndex]) {
+                days[newIndex].focus();
+            }
+        }
+        
+        // Event item navigation with arrow keys
+        var focusedEvent = document.activeElement;
+        if (focusedEvent && focusedEvent.classList.contains('event-item')) {
+            var eventList = focusedEvent.closest('.event-list-items, .day-popup-events');
+            if (!eventList) return;
+            
+            var events = Array.from(eventList.querySelectorAll('.event-item'));
+            var currentIdx = events.indexOf(focusedEvent);
+            if (currentIdx === -1) return;
+            
+            if (e.key === 'ArrowDown') {
+                var nextIdx = Math.min(currentIdx + 1, events.length - 1);
+                events[nextIdx].focus();
+                e.preventDefault();
+            } else if (e.key === 'ArrowUp') {
+                var prevIdx = Math.max(currentIdx - 1, 0);
+                events[prevIdx].focus();
+                e.preventDefault();
+            } else if (e.key === 'Enter') {
+                // Find and click the edit button
+                var editBtn = focusedEvent.querySelector('.event-action-edit');
+                if (editBtn) editBtn.click();
+                e.preventDefault();
+            } else if (e.key === 'Delete' || e.key === 'Backspace') {
+                // Find and click the delete button
+                var deleteBtn = focusedEvent.querySelector('.event-action-delete');
+                if (deleteBtn) deleteBtn.click();
+                e.preventDefault();
+            }
         }
     });
 
@@ -2045,6 +2167,9 @@ window.toggleTaskComplete = function(calId, eventId, date, namespace, completed)
     .then(r => r.json())
     .then(data => {
         if (data.success) {
+            // Announce to screen readers
+            announceToScreenReader(completed ? 'Task marked complete' : 'Task marked incomplete');
+            
             const [year, month] = date.split('-').map(Number);
             
             // Get the calendar's ORIGINAL namespace setting from the container
@@ -2333,6 +2458,12 @@ window.initNamespaceSearch = function(calId) {
         return; // Elements not found
     }
     
+    // PERFORMANCE FIX: Prevent re-binding event listeners on each dialog open
+    if (searchInput.dataset.initialized === 'true') {
+        return;
+    }
+    searchInput.dataset.initialized = 'true';
+    
     let namespaces = [];
     try {
         namespaces = JSON.parse(dataElement.textContent);
@@ -2408,7 +2539,7 @@ window.initNamespaceSearch = function(calId) {
         hideDropdown();
     }
     
-    // Event listeners
+    // Event listeners - only bound once now
     searchInput.addEventListener('input', function(e) {
         filterNamespaces(e.target.value);
     });
@@ -2462,107 +2593,648 @@ window.initNamespaceSearch = function(calId) {
     });
 };
 
-// Update end time options based on start time selection
+// Legacy function - kept for compatibility, now handled by custom pickers
 window.updateEndTimeOptions = function(calId) {
-    const startTimeSelect = document.getElementById('event-time-' + calId);
-    const endTimeSelect = document.getElementById('event-end-time-' + calId);
-    const startDateField = document.getElementById('event-date-' + calId);
-    const endDateField = document.getElementById('event-end-date-' + calId);
+    updateEndTimeButtonState(calId);
+};
+
+// ============================================================================
+// CUSTOM TIME PICKER - Fast, lightweight time selection
+// ============================================================================
+
+// Time data - generated once, reused for all pickers
+window._calendarTimeData = null;
+window.getTimeData = function() {
+    if (window._calendarTimeData) return window._calendarTimeData;
     
-    if (!startTimeSelect || !endTimeSelect) return;
+    const periods = [
+        { name: 'Morning', hours: [6, 7, 8, 9, 10, 11] },
+        { name: 'Afternoon', hours: [12, 13, 14, 15, 16, 17] },
+        { name: 'Evening', hours: [18, 19, 20, 21, 22, 23] },
+        { name: 'Night', hours: [0, 1, 2, 3, 4, 5] }
+    ];
     
-    const startTime = startTimeSelect.value;
-    const startDate = startDateField ? startDateField.value : '';
-    const endDate = endDateField ? endDateField.value : '';
+    const data = [];
+    periods.forEach(period => {
+        const times = [];
+        period.hours.forEach(hour => {
+            for (let minute = 0; minute < 60; minute += 15) {
+                const value = String(hour).padStart(2, '0') + ':' + String(minute).padStart(2, '0');
+                const displayHour = hour === 0 ? 12 : (hour > 12 ? hour - 12 : hour);
+                const ampm = hour < 12 ? 'AM' : 'PM';
+                const display = displayHour + ':' + String(minute).padStart(2, '0') + ' ' + ampm;
+                const minutes = hour * 60 + minute;
+                times.push({ value, display, minutes });
+            }
+        });
+        data.push({ name: period.name, times });
+    });
     
-    // Check if end date is different from start date (multi-day event)
+    window._calendarTimeData = data;
+    return data;
+};
+
+// Format time value to display string
+window.formatTimeDisplay = function(value) {
+    if (!value) return '';
+    const [hour, minute] = value.split(':').map(Number);
+    const displayHour = hour === 0 ? 12 : (hour > 12 ? hour - 12 : hour);
+    const ampm = hour < 12 ? 'AM' : 'PM';
+    return displayHour + ':' + String(minute).padStart(2, '0') + ' ' + ampm;
+};
+
+// Build dropdown HTML - called only when opening
+window.buildTimeDropdown = function(calId, isEndTime, startTimeValue, isMultiDay) {
+    const data = getTimeData();
+    let html = '';
+    
+    // Calculate start time minutes for filtering end time options
+    let startMinutes = -1;
+    if (isEndTime && startTimeValue && !isMultiDay) {
+        const [h, m] = startTimeValue.split(':').map(Number);
+        startMinutes = h * 60 + m;
+    }
+    
+    // Add "All day" / "Same as start" option
+    const defaultText = isEndTime ? 'Same as start' : 'All day';
+    html += '<div class="time-option" data-value="">' + defaultText + '</div>';
+    
+    data.forEach(period => {
+        html += '<div class="time-dropdown-section">';
+        html += '<div class="time-dropdown-header">' + period.name + '</div>';
+        period.times.forEach(time => {
+            const disabled = (isEndTime && !isMultiDay && startMinutes >= 0 && time.minutes <= startMinutes);
+            const disabledClass = disabled ? ' disabled' : '';
+            html += '<div class="time-option' + disabledClass + '" data-value="' + time.value + '" data-minutes="' + time.minutes + '">' + time.display + '</div>';
+        });
+        html += '</div>';
+    });
+    
+    return html;
+};
+
+// Open time dropdown
+window.openTimeDropdown = function(calId, isEndTime) {
+    const btnId = isEndTime ? 'end-time-picker-btn-' + calId : 'time-picker-btn-' + calId;
+    const dropdownId = isEndTime ? 'end-time-dropdown-' + calId : 'time-dropdown-' + calId;
+    const btn = document.getElementById(btnId);
+    const dropdown = document.getElementById(dropdownId);
+    
+    if (!btn || !dropdown) return;
+    
+    // Close any other open dropdowns first
+    document.querySelectorAll('.time-dropdown.open').forEach(d => {
+        if (d.id !== dropdownId) {
+            d.classList.remove('open');
+            d.innerHTML = '';
+        }
+    });
+    document.querySelectorAll('.custom-time-picker.open').forEach(b => {
+        if (b.id !== btnId) b.classList.remove('open');
+    });
+    
+    // Toggle this dropdown
+    if (dropdown.classList.contains('open')) {
+        dropdown.classList.remove('open');
+        btn.classList.remove('open');
+        dropdown.innerHTML = '';
+        return;
+    }
+    
+    // Get current state
+    const startTimeInput = document.getElementById('event-time-' + calId);
+    const startDateInput = document.getElementById('event-date-' + calId);
+    const endDateInput = document.getElementById('event-end-date-' + calId);
+    
+    const startTime = startTimeInput ? startTimeInput.value : '';
+    const startDate = startDateInput ? startDateInput.value : '';
+    const endDate = endDateInput ? endDateInput.value : '';
     const isMultiDay = endDate && endDate !== startDate;
     
-    // If start time is empty (all day), disable end time and reset
+    // Build and show dropdown
+    dropdown.innerHTML = buildTimeDropdown(calId, isEndTime, startTime, isMultiDay);
+    dropdown.classList.add('open');
+    btn.classList.add('open');
+    
+    // Scroll to appropriate option
+    const currentValue = isEndTime ? 
+        document.getElementById('event-end-time-' + calId).value :
+        document.getElementById('event-time-' + calId).value;
+    
+    if (currentValue) {
+        // Scroll to selected option
+        const selected = dropdown.querySelector('[data-value="' + currentValue + '"]');
+        if (selected) {
+            selected.classList.add('selected');
+            selected.scrollIntoView({ block: 'center', behavior: 'instant' });
+        }
+    } else if (isEndTime && startTime) {
+        // For end time with no selection, scroll to first available option after start time
+        const firstAvailable = dropdown.querySelector('.time-option:not(.disabled):not([data-value=""])');
+        if (firstAvailable) {
+            firstAvailable.scrollIntoView({ block: 'center', behavior: 'instant' });
+        }
+    }
+};
+
+// Select time option
+window.selectTimeOption = function(calId, isEndTime, value) {
+    const inputId = isEndTime ? 'event-end-time-' + calId : 'event-time-' + calId;
+    const btnId = isEndTime ? 'end-time-picker-btn-' + calId : 'time-picker-btn-' + calId;
+    const dropdownId = isEndTime ? 'end-time-dropdown-' + calId : 'time-dropdown-' + calId;
+    
+    const input = document.getElementById(inputId);
+    const btn = document.getElementById(btnId);
+    const dropdown = document.getElementById(dropdownId);
+    
+    if (input) {
+        input.value = value;
+    }
+    
+    if (btn) {
+        const display = btn.querySelector('.time-display');
+        if (display) {
+            if (value) {
+                display.textContent = formatTimeDisplay(value);
+            } else {
+                display.textContent = isEndTime ? 'Same as start' : 'All day';
+            }
+        }
+        btn.classList.remove('open');
+    }
+    
+    if (dropdown) {
+        dropdown.classList.remove('open');
+        dropdown.innerHTML = '';
+    }
+    
+    // If start time changed, update end time button state
+    if (!isEndTime) {
+        updateEndTimeButtonState(calId);
+    }
+};
+
+// Update end time button enabled/disabled state
+window.updateEndTimeButtonState = function(calId) {
+    const startTimeInput = document.getElementById('event-time-' + calId);
+    const endTimeBtn = document.getElementById('end-time-picker-btn-' + calId);
+    const endTimeInput = document.getElementById('event-end-time-' + calId);
+    
+    if (!startTimeInput || !endTimeBtn) return;
+    
+    const startTime = startTimeInput.value;
+    
     if (!startTime) {
-        endTimeSelect.disabled = true;
-        endTimeSelect.value = '';
-        // Show all options again
-        Array.from(endTimeSelect.options).forEach(opt => {
-            opt.disabled = false;
-            opt.style.display = '';
+        // All day - disable end time
+        endTimeBtn.disabled = true;
+        if (endTimeInput) endTimeInput.value = '';
+        const display = endTimeBtn.querySelector('.time-display');
+        if (display) display.textContent = 'Same as start';
+    } else {
+        endTimeBtn.disabled = false;
+    }
+};
+
+// Initialize custom time pickers for a dialog
+window.initCustomTimePickers = function(calId) {
+    const startBtn = document.getElementById('time-picker-btn-' + calId);
+    const endBtn = document.getElementById('end-time-picker-btn-' + calId);
+    const startDropdown = document.getElementById('time-dropdown-' + calId);
+    const endDropdown = document.getElementById('end-time-dropdown-' + calId);
+    
+    // Prevent re-initialization
+    if (startBtn && startBtn.dataset.initialized) return;
+    
+    if (startBtn) {
+        startBtn.dataset.initialized = 'true';
+        startBtn.addEventListener('click', function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            openTimeDropdown(calId, false);
         });
-        return;
     }
     
-    // Enable end time select
-    endTimeSelect.disabled = false;
-    
-    // If multi-day event, allow all end times (event can end at any time on the end date)
-    if (isMultiDay) {
-        Array.from(endTimeSelect.options).forEach(opt => {
-            opt.disabled = false;
-            opt.style.display = '';
+    if (endBtn) {
+        endBtn.addEventListener('click', function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            if (!endBtn.disabled) {
+                openTimeDropdown(calId, true);
+            }
         });
-        return;
     }
     
-    // Same-day event: Convert start time to minutes and filter options
-    const [startHour, startMinute] = startTime.split(':').map(Number);
-    const startMinutes = startHour * 60 + startMinute;
-    
-    // Get current end time value
-    const currentEndTime = endTimeSelect.value;
-    let currentEndMinutes = 0;
-    if (currentEndTime) {
-        const [h, m] = currentEndTime.split(':').map(Number);
-        currentEndMinutes = h * 60 + m;
+    // Handle clicks on time options
+    if (startDropdown) {
+        startDropdown.addEventListener('click', function(e) {
+            const option = e.target.closest('.time-option');
+            if (option && !option.classList.contains('disabled')) {
+                e.stopPropagation();
+                selectTimeOption(calId, false, option.dataset.value);
+            }
+        });
     }
     
-    // Disable/hide options before or equal to start time
-    let firstValidOption = null;
-    Array.from(endTimeSelect.options).forEach(opt => {
-        if (opt.value === '') {
-            // Keep "Same as start" option enabled
-            opt.disabled = false;
-            opt.style.display = '';
+    if (endDropdown) {
+        endDropdown.addEventListener('click', function(e) {
+            const option = e.target.closest('.time-option');
+            if (option && !option.classList.contains('disabled')) {
+                e.stopPropagation();
+                selectTimeOption(calId, true, option.dataset.value);
+            }
+        });
+    }
+    
+    // Handle date changes - update end time options when dates change
+    const startDateInput = document.getElementById('event-date-' + calId);
+    const endDateInput = document.getElementById('event-end-date-' + calId);
+    
+    if (startDateInput && !startDateInput.dataset.initialized) {
+        startDateInput.dataset.initialized = 'true';
+        startDateInput.addEventListener('change', function() {
+            // Just close any open dropdowns - they'll rebuild with correct state when reopened
+            const dropdown = document.getElementById('end-time-dropdown-' + calId);
+            if (dropdown && dropdown.classList.contains('open')) {
+                dropdown.classList.remove('open');
+                dropdown.innerHTML = '';
+            }
+        });
+    }
+    
+    if (endDateInput && !endDateInput.dataset.initialized) {
+        endDateInput.dataset.initialized = 'true';
+        endDateInput.addEventListener('change', function() {
+            const dropdown = document.getElementById('end-time-dropdown-' + calId);
+            if (dropdown && dropdown.classList.contains('open')) {
+                dropdown.classList.remove('open');
+                dropdown.innerHTML = '';
+            }
+        });
+    }
+};
+
+// Close dropdowns when clicking outside
+if (!window._calendarDropdownCloseInit) {
+    window._calendarDropdownCloseInit = true;
+    document.addEventListener('click', function(e) {
+        // Don't close if clicking inside a picker button or dropdown
+        if (e.target.closest('.custom-time-picker') || e.target.closest('.time-dropdown') ||
+            e.target.closest('.custom-date-picker') || e.target.closest('.date-dropdown')) {
             return;
         }
         
-        const [h, m] = opt.value.split(':').map(Number);
-        const optMinutes = h * 60 + m;
+        // Close all open time dropdowns
+        document.querySelectorAll('.time-dropdown.open').forEach(d => {
+            d.classList.remove('open');
+            d.innerHTML = '';
+        });
+        document.querySelectorAll('.custom-time-picker.open').forEach(b => {
+            b.classList.remove('open');
+        });
         
-        if (optMinutes <= startMinutes) {
-            // Disable and hide times at or before start
-            opt.disabled = true;
-            opt.style.display = 'none';
-        } else {
-            // Enable and show times after start
-            opt.disabled = false;
-            opt.style.display = '';
-            if (!firstValidOption) {
-                firstValidOption = opt.value;
+        // Close all open date dropdowns
+        document.querySelectorAll('.date-dropdown.open').forEach(d => {
+            d.classList.remove('open');
+            d.innerHTML = '';
+        });
+        document.querySelectorAll('.custom-date-picker.open').forEach(b => {
+            b.classList.remove('open');
+        });
+    });
+}
+
+// Set time picker value programmatically (for edit mode)
+window.setTimePicker = function(calId, isEndTime, value) {
+    const inputId = isEndTime ? 'event-end-time-' + calId : 'event-time-' + calId;
+    const btnId = isEndTime ? 'end-time-picker-btn-' + calId : 'time-picker-btn-' + calId;
+    
+    const input = document.getElementById(inputId);
+    const btn = document.getElementById(btnId);
+    
+    if (input) {
+        input.value = value || '';
+    }
+    
+    if (btn) {
+        const display = btn.querySelector('.time-display');
+        if (display) {
+            if (value) {
+                display.textContent = formatTimeDisplay(value);
+            } else {
+                display.textContent = isEndTime ? 'Same as start' : 'All day';
             }
         }
-    });
-    
-    // If current end time is now invalid, set a new one
-    if (currentEndTime && currentEndMinutes <= startMinutes) {
-        // Try to set to 1 hour after start
-        let endHour = startHour + 1;
-        let endMinute = startMinute;
         
-        if (endHour >= 24) {
-            endHour = 23;
-            endMinute = 45;
+        // Update disabled state for end time
+        if (isEndTime) {
+            const startTimeInput = document.getElementById('event-time-' + calId);
+            btn.disabled = !startTimeInput || !startTimeInput.value;
+        }
+    }
+};
+
+// ============================================================================
+// CUSTOM DATE PICKER - Fast, lightweight date selection
+// ============================================================================
+
+// Format date for display
+window.formatDateDisplay = function(dateStr) {
+    if (!dateStr) return '';
+    const date = new Date(dateStr + 'T00:00:00');
+    return date.toLocaleDateString('en-US', { 
+        weekday: 'short',
+        month: 'short', 
+        day: 'numeric',
+        year: 'numeric'
+    });
+};
+
+// Build date picker calendar HTML
+window.buildDateCalendar = function(calId, isEndDate, year, month, selectedDate, minDate) {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    
+    const firstDay = new Date(year, month, 1);
+    const lastDay = new Date(year, month + 1, 0);
+    const startDayOfWeek = firstDay.getDay();
+    const daysInMonth = lastDay.getDate();
+    
+    const monthNames = ['January', 'February', 'March', 'April', 'May', 'June',
+                        'July', 'August', 'September', 'October', 'November', 'December'];
+    
+    let html = '<div class="date-picker-calendar">';
+    
+    // Header with navigation
+    html += '<div class="date-picker-header">';
+    html += '<button type="button" class="date-picker-nav" data-action="prev">◀</button>';
+    html += '<span class="date-picker-title">' + monthNames[month] + ' ' + year + '</span>';
+    html += '<button type="button" class="date-picker-nav" data-action="next">▶</button>';
+    html += '</div>';
+    
+    // Weekday headers
+    html += '<div class="date-picker-weekdays">';
+    ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'].forEach(d => {
+        html += '<div class="date-picker-weekday">' + d + '</div>';
+    });
+    html += '</div>';
+    
+    // Days grid
+    html += '<div class="date-picker-days">';
+    
+    // Previous month days
+    const prevMonth = new Date(year, month, 0);
+    const prevMonthDays = prevMonth.getDate();
+    for (let i = startDayOfWeek - 1; i >= 0; i--) {
+        const day = prevMonthDays - i;
+        const dateStr = formatDateValue(year, month - 1, day);
+        html += '<button type="button" class="date-picker-day other-month" data-date="' + dateStr + '">' + day + '</button>';
+    }
+    
+    // Current month days
+    for (let day = 1; day <= daysInMonth; day++) {
+        const dateStr = formatDateValue(year, month, day);
+        const dateObj = new Date(year, month, day);
+        dateObj.setHours(0, 0, 0, 0);
+        
+        let classes = 'date-picker-day';
+        if (dateObj.getTime() === today.getTime()) classes += ' today';
+        if (dateStr === selectedDate) classes += ' selected';
+        
+        // For end date, disable dates before start date
+        if (isEndDate && minDate) {
+            const minDateObj = new Date(minDate + 'T00:00:00');
+            if (dateObj < minDateObj) classes += ' disabled';
         }
         
-        const suggestedEndTime = String(endHour).padStart(2, '0') + ':' + String(endMinute).padStart(2, '0');
+        html += '<button type="button" class="' + classes + '" data-date="' + dateStr + '">' + day + '</button>';
+    }
+    
+    // Next month days to fill grid
+    const totalCells = startDayOfWeek + daysInMonth;
+    const remainingCells = totalCells % 7 === 0 ? 0 : 7 - (totalCells % 7);
+    for (let i = 1; i <= remainingCells; i++) {
+        const dateStr = formatDateValue(year, month + 1, i);
+        html += '<button type="button" class="date-picker-day other-month" data-date="' + dateStr + '">' + i + '</button>';
+    }
+    
+    html += '</div>';
+    
+    // Clear button for end date
+    if (isEndDate) {
+        html += '<button type="button" class="date-picker-clear" data-action="clear">Clear End Date</button>';
+    }
+    
+    html += '</div>';
+    return html;
+};
+
+// Format date value as YYYY-MM-DD
+window.formatDateValue = function(year, month, day) {
+    // Handle month overflow
+    const date = new Date(year, month, day);
+    const y = date.getFullYear();
+    const m = String(date.getMonth() + 1).padStart(2, '0');
+    const d = String(date.getDate()).padStart(2, '0');
+    return y + '-' + m + '-' + d;
+};
+
+// Open date dropdown
+window.openDateDropdown = function(calId, isEndDate) {
+    const btnId = isEndDate ? 'end-date-picker-btn-' + calId : 'date-picker-btn-' + calId;
+    const dropdownId = isEndDate ? 'end-date-dropdown-' + calId : 'date-dropdown-' + calId;
+    const btn = document.getElementById(btnId);
+    const dropdown = document.getElementById(dropdownId);
+    
+    if (!btn || !dropdown) return;
+    
+    // Close any other open dropdowns first
+    document.querySelectorAll('.date-dropdown.open, .time-dropdown.open').forEach(d => {
+        if (d.id !== dropdownId) {
+            d.classList.remove('open');
+            d.innerHTML = '';
+        }
+    });
+    document.querySelectorAll('.custom-date-picker.open, .custom-time-picker.open').forEach(b => {
+        if (b.id !== btnId) b.classList.remove('open');
+    });
+    
+    // Toggle this dropdown
+    if (dropdown.classList.contains('open')) {
+        dropdown.classList.remove('open');
+        btn.classList.remove('open');
+        dropdown.innerHTML = '';
+        return;
+    }
+    
+    // Get current value and min date
+    const inputId = isEndDate ? 'event-end-date-' + calId : 'event-date-' + calId;
+    const input = document.getElementById(inputId);
+    const selectedDate = input ? input.value : '';
+    
+    let minDate = null;
+    if (isEndDate) {
+        const startInput = document.getElementById('event-date-' + calId);
+        minDate = startInput ? startInput.value : null;
+    }
+    
+    // Determine which month to show
+    let year, month;
+    if (selectedDate) {
+        // If there's a selected date, show that month
+        const d = new Date(selectedDate + 'T00:00:00');
+        year = d.getFullYear();
+        month = d.getMonth();
+    } else if (isEndDate && minDate) {
+        // For end date with no value, start on the start date's month
+        const d = new Date(minDate + 'T00:00:00');
+        year = d.getFullYear();
+        month = d.getMonth();
+    } else {
+        // Fallback to current month
+        const now = new Date();
+        year = now.getFullYear();
+        month = now.getMonth();
+    }
+    
+    // Store current view state
+    dropdown.dataset.year = year;
+    dropdown.dataset.month = month;
+    dropdown.dataset.isEnd = isEndDate ? '1' : '0';
+    dropdown.dataset.calId = calId;
+    
+    // Build and show
+    dropdown.innerHTML = buildDateCalendar(calId, isEndDate, year, month, selectedDate, minDate);
+    dropdown.classList.add('open');
+    btn.classList.add('open');
+};
+
+// Select date
+window.selectDate = function(calId, isEndDate, dateStr) {
+    const inputId = isEndDate ? 'event-end-date-' + calId : 'event-date-' + calId;
+    const btnId = isEndDate ? 'end-date-picker-btn-' + calId : 'date-picker-btn-' + calId;
+    const dropdownId = isEndDate ? 'end-date-dropdown-' + calId : 'date-dropdown-' + calId;
+    
+    const input = document.getElementById(inputId);
+    const btn = document.getElementById(btnId);
+    const dropdown = document.getElementById(dropdownId);
+    
+    if (input) {
+        input.value = dateStr || '';
+    }
+    
+    if (btn) {
+        const display = btn.querySelector('.date-display');
+        if (display) {
+            display.textContent = dateStr ? formatDateDisplay(dateStr) : (isEndDate ? 'Optional' : 'Select date');
+        }
+        btn.classList.remove('open');
+    }
+    
+    if (dropdown) {
+        dropdown.classList.remove('open');
+        dropdown.innerHTML = '';
+    }
+};
+
+// Navigate date picker month
+window.navigateDatePicker = function(dropdown, direction) {
+    let year = parseInt(dropdown.dataset.year);
+    let month = parseInt(dropdown.dataset.month);
+    const isEndDate = dropdown.dataset.isEnd === '1';
+    const calId = dropdown.dataset.calId;
+    
+    month += direction;
+    if (month < 0) { month = 11; year--; }
+    if (month > 11) { month = 0; year++; }
+    
+    dropdown.dataset.year = year;
+    dropdown.dataset.month = month;
+    
+    const inputId = isEndDate ? 'event-end-date-' + calId : 'event-date-' + calId;
+    const input = document.getElementById(inputId);
+    const selectedDate = input ? input.value : '';
+    
+    let minDate = null;
+    if (isEndDate) {
+        const startInput = document.getElementById('event-date-' + calId);
+        minDate = startInput ? startInput.value : null;
+    }
+    
+    dropdown.innerHTML = buildDateCalendar(calId, isEndDate, year, month, selectedDate, minDate);
+};
+
+// Initialize custom date pickers for a dialog
+window.initCustomDatePickers = function(calId) {
+    const startBtn = document.getElementById('date-picker-btn-' + calId);
+    const endBtn = document.getElementById('end-date-picker-btn-' + calId);
+    const startDropdown = document.getElementById('date-dropdown-' + calId);
+    const endDropdown = document.getElementById('end-date-dropdown-' + calId);
+    
+    // Prevent re-initialization
+    if (startBtn && startBtn.dataset.initialized) return;
+    
+    if (startBtn) {
+        startBtn.dataset.initialized = 'true';
+        startBtn.addEventListener('click', function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            openDateDropdown(calId, false);
+        });
+    }
+    
+    if (endBtn) {
+        endBtn.addEventListener('click', function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            openDateDropdown(calId, true);
+        });
+    }
+    
+    // Handle clicks inside date dropdowns
+    [startDropdown, endDropdown].forEach((dropdown, idx) => {
+        if (!dropdown) return;
+        const isEnd = idx === 1;
         
-        // Check if suggested time exists and is valid
-        const suggestedOpt = Array.from(endTimeSelect.options).find(opt => opt.value === suggestedEndTime && !opt.disabled);
-        
-        if (suggestedOpt) {
-            endTimeSelect.value = suggestedEndTime;
-        } else if (firstValidOption) {
-            endTimeSelect.value = firstValidOption;
-        } else {
-            endTimeSelect.value = '';
+        dropdown.addEventListener('click', function(e) {
+            e.stopPropagation();
+            
+            const nav = e.target.closest('.date-picker-nav');
+            if (nav) {
+                const direction = nav.dataset.action === 'prev' ? -1 : 1;
+                navigateDatePicker(dropdown, direction);
+                return;
+            }
+            
+            const clear = e.target.closest('.date-picker-clear');
+            if (clear) {
+                selectDate(calId, true, '');
+                return;
+            }
+            
+            const day = e.target.closest('.date-picker-day');
+            if (day && !day.classList.contains('disabled')) {
+                selectDate(calId, isEnd, day.dataset.date);
+            }
+        });
+    });
+};
+
+// Set date picker value programmatically
+window.setDatePicker = function(calId, isEndDate, value) {
+    const inputId = isEndDate ? 'event-end-date-' + calId : 'event-date-' + calId;
+    const btnId = isEndDate ? 'end-date-picker-btn-' + calId : 'date-picker-btn-' + calId;
+    
+    const input = document.getElementById(inputId);
+    const btn = document.getElementById(btnId);
+    
+    if (input) {
+        input.value = value || '';
+    }
+    
+    if (btn) {
+        const display = btn.querySelector('.date-display');
+        if (display) {
+            display.textContent = value ? formatDateDisplay(value) : (isEndDate ? 'Optional' : 'Select date');
         }
     }
 };
@@ -3496,6 +4168,33 @@ window.printStaticCalendar = function(calId) {
     
     printWindow.document.write(printContent);
     printWindow.document.close();
+};
+
+// ============================================================================
+// ACCESSIBILITY - Screen reader announcements
+// ============================================================================
+
+// Create ARIA live region for announcements
+if (!document.getElementById('calendar-aria-live')) {
+    var ariaLive = document.createElement('div');
+    ariaLive.id = 'calendar-aria-live';
+    ariaLive.setAttribute('role', 'status');
+    ariaLive.setAttribute('aria-live', 'polite');
+    ariaLive.setAttribute('aria-atomic', 'true');
+    ariaLive.style.cssText = 'position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0;';
+    document.body.appendChild(ariaLive);
+}
+
+// Announce message to screen readers
+window.announceToScreenReader = function(message) {
+    var ariaLive = document.getElementById('calendar-aria-live');
+    if (ariaLive) {
+        ariaLive.textContent = '';
+        // Small delay to ensure screen reader picks up the change
+        setTimeout(function() {
+            ariaLive.textContent = message;
+        }, 100);
+    }
 };
 
 // End of calendar plugin JavaScript

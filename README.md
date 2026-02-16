@@ -1,4 +1,4 @@
-# DokuWiki Calendar Plugin - Matrix Edition
+# DokuWiki Calendar Plugin
 
 A feature-rich calendar plugin for DokuWiki with multiple themes, Outlook sync, recurring events, and a static presentation mode.
 
@@ -118,6 +118,15 @@ Descriptions support DokuWiki-style formatting:
 - `Escape` - Close dialogs
 - `Enter` - Submit forms (when focused)
 
+## Architecture (v7.0+)
+
+The plugin uses a modular class-based architecture:
+
+- **`classes/FileHandler.php`** - Atomic file operations with locking to prevent data corruption
+- **`classes/EventCache.php`** - Caching layer with 5-minute TTL for improved performance
+- **`classes/RateLimiter.php`** - AJAX rate limiting for security (60 req/min read, 30 req/min write)
+- **`classes/EventManager.php`** - Consolidated event CRUD operations
+
 ## Requirements
 
 - DokuWiki (Hogfather or later recommended)
@@ -137,3 +146,7 @@ atari911 (atari911@gmail.com)
 - [DokuWiki Plugin Page](https://www.dokuwiki.org/plugin:calendar)
 - [GitHub Repository](https://github.com/atari911/dokuwiki-plugin-calendar)
 - [Issue Tracker](https://github.com/atari911/dokuwiki-plugin-calendar/issues)
+
+## Version
+
+7.0.8

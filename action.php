@@ -4,6 +4,7 @@
  *
  * @license GPL 2 http://www.gnu.org/licenses/gpl-2.0.html
  * @author  DokuWiki Community
+ * @version 7.0.8
  */
 
 if (!defined('DOKU_INC')) die();
@@ -13,7 +14,41 @@ if (!defined('CALENDAR_DEBUG')) {
     define('CALENDAR_DEBUG', false);
 }
 
+// Load new class dependencies
+require_once __DIR__ . '/classes/FileHandler.php';
+require_once __DIR__ . '/classes/EventCache.php';
+require_once __DIR__ . '/classes/RateLimiter.php';
+require_once __DIR__ . '/classes/EventManager.php';
+require_once __DIR__ . '/classes/AuditLogger.php';
+require_once __DIR__ . '/classes/GoogleCalendarSync.php';
+
 class action_plugin_calendar extends DokuWiki_Action_Plugin {
+    
+    /** @var CalendarAuditLogger */
+    private $auditLogger = null;
+    
+    /** @var GoogleCalendarSync */
+    private $googleSync = null;
+    
+    /**
+     * Get the audit logger instance
+     */
+    private function getAuditLogger() {
+        if ($this->auditLogger === null) {
+            $this->auditLogger = new CalendarAuditLogger();
+        }
+        return $this->auditLogger;
+    }
+    
+    /**
+     * Get the Google Calendar sync instance
+     */
+    private function getGoogleSync() {
+        if ($this->googleSync === null) {
+            $this->googleSync = new GoogleCalendarSync();
+        }
+        return $this->googleSync;
+    }
     
     /**
      * Log debug message only if CALENDAR_DEBUG is enabled
@@ -26,27 +61,23 @@ class action_plugin_calendar extends DokuWiki_Action_Plugin {
     
     /**
      * Safely read and decode a JSON file with error handling
+     * Uses the new CalendarFileHandler for atomic reads with locking
      * @param string $filepath Path to JSON file
      * @return array Decoded array or empty array on error
      */
     private function safeJsonRead($filepath) {
-        if (!file_exists($filepath)) {
-            return [];
-        }
-        
-        $contents = @file_get_contents($filepath);
-        if ($contents === false) {
-            $this->debugLog("Failed to read file: $filepath");
-            return [];
-        }
-        
-        $decoded = json_decode($contents, true);
-        if (json_last_error() !== JSON_ERROR_NONE) {
-            $this->debugLog("JSON decode error in $filepath: " . json_last_error_msg());
-            return [];
-        }
-        
-        return is_array($decoded) ? $decoded : [];
+        return CalendarFileHandler::readJson($filepath);
+    }
+    
+    /**
+     * Safely write JSON data to file with atomic writes
+     * Uses the new CalendarFileHandler for atomic writes with locking
+     * @param string $filepath Path to JSON file
+     * @param array $data Data to write
+     * @return bool Success status
+     */
+    private function safeJsonWrite($filepath, array $data) {
+        return CalendarFileHandler::writeJson($filepath, $data);
     }
 
     public function register(Doku_Event_Handler $controller) {
@@ -67,7 +98,24 @@ class action_plugin_calendar extends DokuWiki_Action_Plugin {
                          'trim_recurring', 'pause_recurring', 'resume_recurring',
                          'change_start_recurring', 'change_pattern_recurring'];
         
-        if (in_array($action, $writeActions)) {
+        $isWriteAction = in_array($action, $writeActions);
+        
+        // Rate limiting check - apply to all AJAX actions
+        if (!CalendarRateLimiter::check($action, $isWriteAction)) {
+            CalendarRateLimiter::addHeaders($action, $isWriteAction);
+            http_response_code(429);
+            echo json_encode([
+                'success' => false, 
+                'error' => 'Rate limit exceeded. Please wait before making more requests.',
+                'retry_after' => CalendarRateLimiter::getRemaining($action, $isWriteAction)['reset']
+            ]);
+            return;
+        }
+        
+        // Add rate limit headers to all responses
+        CalendarRateLimiter::addHeaders($action, $isWriteAction);
+        
+        if ($isWriteAction) {
             global $INPUT, $INFO;
             
             // Check if user is logged in (at minimum)
@@ -112,6 +160,27 @@ class action_plugin_calendar extends DokuWiki_Action_Plugin {
                 break;
             case 'toggle_task':
                 $this->toggleTaskComplete();
+                break;
+            case 'google_auth_url':
+                $this->getGoogleAuthUrl();
+                break;
+            case 'google_callback':
+                $this->handleGoogleCallback();
+                break;
+            case 'google_status':
+                $this->getGoogleStatus();
+                break;
+            case 'google_calendars':
+                $this->getGoogleCalendars();
+                break;
+            case 'google_import':
+                $this->googleImport();
+                break;
+            case 'google_export':
+                $this->googleExport();
+                break;
+            case 'google_disconnect':
+                $this->googleDisconnect();
                 break;
             case 'cleanup_empty_namespaces':
             case 'trim_all_past_recurring':
@@ -390,7 +459,7 @@ class action_plugin_calendar extends DokuWiki_Action_Plugin {
                         unset($oldEvents[$deleteDate]);
                     }
                     
-                    file_put_contents($oldEventFile, json_encode($oldEvents, JSON_PRETTY_PRINT));
+                    CalendarFileHandler::writeJson($oldEventFile, $oldEvents);
                     $this->debugLog("Calendar saveEvent: DELETED event from old location - namespace:'$oldNamespace', date:'$deleteDate'");
                 } else {
                     $this->debugLog("Calendar saveEvent: No events found on deleteDate='$deleteDate' in old file");
@@ -445,7 +514,7 @@ class action_plugin_calendar extends DokuWiki_Action_Plugin {
             $events[$date][] = $eventData;
         }
         
-        file_put_contents($eventFile, json_encode($events, JSON_PRETTY_PRINT));
+        CalendarFileHandler::writeJson($eventFile, $events);
         
         // If event spans multiple months, add it to the first day of each subsequent month
         if ($endDate && $endDate !== $date) {
@@ -508,11 +577,24 @@ class action_plugin_calendar extends DokuWiki_Action_Plugin {
                     $currentEvents[$firstDayOfMonth][] = $eventDataForMonth;
                 }
                 
-                file_put_contents($currentEventFile, json_encode($currentEvents, JSON_PRETTY_PRINT));
+                CalendarFileHandler::writeJson($currentEventFile, $currentEvents);
                 
                 // Move to next month
                 $currentDate->modify('first day of next month');
             }
+        }
+        
+        // Audit logging
+        $audit = $this->getAuditLogger();
+        if ($eventId && ($dateChanged || $namespaceChanged)) {
+            // Event was moved
+            $audit->logMove($namespace, $oldDate ?: $date, $date, $generatedId, $title);
+        } elseif ($eventId) {
+            // Event was updated
+            $audit->logUpdate($namespace, $date, $generatedId, $title);
+        } else {
+            // New event created
+            $audit->logCreate($namespace, $date, $generatedId, $title);
         }
         
         echo json_encode(['success' => true, 'events' => $events, 'eventId' => $eventData['id']]);
@@ -572,7 +654,7 @@ class action_plugin_calendar extends DokuWiki_Action_Plugin {
                     unset($events[$date]);
                 }
                 
-                file_put_contents($eventFile, json_encode($events, JSON_PRETTY_PRINT));
+                CalendarFileHandler::writeJson($eventFile, $events);
             }
         }
         
@@ -609,7 +691,7 @@ class action_plugin_calendar extends DokuWiki_Action_Plugin {
                             unset($currentEvents[$firstDayOfMonth]);
                         }
                         
-                        file_put_contents($currentEventFile, json_encode($currentEvents, JSON_PRETTY_PRINT));
+                        CalendarFileHandler::writeJson($currentEventFile, $currentEvents);
                     }
                 }
                 
@@ -617,6 +699,11 @@ class action_plugin_calendar extends DokuWiki_Action_Plugin {
                 $currentDate->modify('first day of next month');
             }
         }
+        
+        // Audit logging
+        $audit = $this->getAuditLogger();
+        $eventTitle = $eventToDelete ? ($eventToDelete['title'] ?? '') : '';
+        $audit->logDelete($namespace, $date, $eventId, $eventTitle);
         
         echo json_encode(['success' => true]);
     }
@@ -1069,20 +1156,214 @@ class action_plugin_calendar extends DokuWiki_Action_Plugin {
             $events = json_decode(file_get_contents($eventFile), true);
             
             if (isset($events[$date])) {
+                $eventTitle = '';
                 foreach ($events[$date] as $key => $event) {
                     if ($event['id'] === $eventId) {
                         $events[$date][$key]['completed'] = $completed;
+                        $eventTitle = $event['title'] ?? '';
                         break;
                     }
                 }
                 
-                file_put_contents($eventFile, json_encode($events, JSON_PRETTY_PRINT));
+                CalendarFileHandler::writeJson($eventFile, $events);
+                
+                // Audit logging
+                $audit = $this->getAuditLogger();
+                $audit->logTaskToggle($namespace, $date, $eventId, $eventTitle, $completed);
+                
                 echo json_encode(['success' => true, 'events' => $events]);
                 return;
             }
         }
         
         echo json_encode(['success' => false, 'error' => 'Event not found']);
+    }
+    
+    // ========================================================================
+    // GOOGLE CALENDAR SYNC HANDLERS
+    // ========================================================================
+    
+    /**
+     * Get Google OAuth authorization URL
+     */
+    private function getGoogleAuthUrl() {
+        if (!auth_isadmin()) {
+            echo json_encode(['success' => false, 'error' => 'Admin access required']);
+            return;
+        }
+        
+        $sync = $this->getGoogleSync();
+        
+        if (!$sync->isConfigured()) {
+            echo json_encode(['success' => false, 'error' => 'Google sync not configured. Please enter Client ID and Secret first.']);
+            return;
+        }
+        
+        // Build redirect URI
+        $redirectUri = DOKU_URL . 'lib/exe/ajax.php?call=plugin_calendar&action=google_callback';
+        
+        $authUrl = $sync->getAuthUrl($redirectUri);
+        
+        echo json_encode(['success' => true, 'url' => $authUrl]);
+    }
+    
+    /**
+     * Handle Google OAuth callback
+     */
+    private function handleGoogleCallback() {
+        global $INPUT;
+        
+        $code = $INPUT->str('code');
+        $state = $INPUT->str('state');
+        $error = $INPUT->str('error');
+        
+        // Check for OAuth error
+        if ($error) {
+            $this->showGoogleCallbackResult(false, 'Authorization denied: ' . $error);
+            return;
+        }
+        
+        if (!$code) {
+            $this->showGoogleCallbackResult(false, 'No authorization code received');
+            return;
+        }
+        
+        $sync = $this->getGoogleSync();
+        
+        // Verify state for CSRF protection
+        if (!$sync->verifyState($state)) {
+            $this->showGoogleCallbackResult(false, 'Invalid state parameter');
+            return;
+        }
+        
+        // Exchange code for tokens
+        $redirectUri = DOKU_URL . 'lib/exe/ajax.php?call=plugin_calendar&action=google_callback';
+        $result = $sync->handleCallback($code, $redirectUri);
+        
+        if ($result['success']) {
+            $this->showGoogleCallbackResult(true, 'Successfully connected to Google Calendar!');
+        } else {
+            $this->showGoogleCallbackResult(false, $result['error']);
+        }
+    }
+    
+    /**
+     * Show OAuth callback result page
+     */
+    private function showGoogleCallbackResult($success, $message) {
+        $status = $success ? 'Success!' : 'Error';
+        $color = $success ? '#2ecc71' : '#e74c3c';
+        
+        echo '<!DOCTYPE html>
+<html>
+<head>
+    <title>Google Calendar - ' . $status . '</title>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; 
+               display: flex; align-items: center; justify-content: center; 
+               min-height: 100vh; margin: 0; background: #f5f5f5; }
+        .card { background: white; padding: 40px; border-radius: 12px; 
+                box-shadow: 0 4px 20px rgba(0,0,0,0.1); text-align: center; max-width: 400px; }
+        h1 { color: ' . $color . '; margin: 0 0 16px 0; }
+        p { color: #666; margin: 0 0 24px 0; }
+        button { background: #3498db; color: white; border: none; padding: 12px 24px;
+                 border-radius: 6px; cursor: pointer; font-size: 14px; }
+        button:hover { background: #2980b9; }
+    </style>
+</head>
+<body>
+    <div class="card">
+        <h1>' . ($success ? '✓' : '✕') . ' ' . $status . '</h1>
+        <p>' . htmlspecialchars($message) . '</p>
+        <button onclick="window.close()">Close Window</button>
+    </div>
+    <script>
+        // Notify parent window
+        if (window.opener) {
+            window.opener.postMessage({ type: "google_auth_complete", success: ' . ($success ? 'true' : 'false') . ' }, "*");
+        }
+    </script>
+</body>
+</html>';
+    }
+    
+    /**
+     * Get Google sync status
+     */
+    private function getGoogleStatus() {
+        $sync = $this->getGoogleSync();
+        echo json_encode(['success' => true, 'status' => $sync->getStatus()]);
+    }
+    
+    /**
+     * Get list of Google calendars
+     */
+    private function getGoogleCalendars() {
+        if (!auth_isadmin()) {
+            echo json_encode(['success' => false, 'error' => 'Admin access required']);
+            return;
+        }
+        
+        $sync = $this->getGoogleSync();
+        $result = $sync->getCalendars();
+        echo json_encode($result);
+    }
+    
+    /**
+     * Import events from Google Calendar
+     */
+    private function googleImport() {
+        global $INPUT;
+        
+        if (!auth_isadmin()) {
+            echo json_encode(['success' => false, 'error' => 'Admin access required']);
+            return;
+        }
+        
+        $namespace = $INPUT->str('namespace', '');
+        $startDate = $INPUT->str('startDate', '');
+        $endDate = $INPUT->str('endDate', '');
+        
+        $sync = $this->getGoogleSync();
+        $result = $sync->importEvents($namespace, $startDate ?: null, $endDate ?: null);
+        
+        echo json_encode($result);
+    }
+    
+    /**
+     * Export events to Google Calendar
+     */
+    private function googleExport() {
+        global $INPUT;
+        
+        if (!auth_isadmin()) {
+            echo json_encode(['success' => false, 'error' => 'Admin access required']);
+            return;
+        }
+        
+        $namespace = $INPUT->str('namespace', '');
+        $startDate = $INPUT->str('startDate', '');
+        $endDate = $INPUT->str('endDate', '');
+        
+        $sync = $this->getGoogleSync();
+        $result = $sync->exportEvents($namespace, $startDate ?: null, $endDate ?: null);
+        
+        echo json_encode($result);
+    }
+    
+    /**
+     * Disconnect from Google Calendar
+     */
+    private function googleDisconnect() {
+        if (!auth_isadmin()) {
+            echo json_encode(['success' => false, 'error' => 'Admin access required']);
+            return;
+        }
+        
+        $sync = $this->getGoogleSync();
+        $sync->disconnect();
+        
+        echo json_encode(['success' => true]);
     }
     
     private function createRecurringEvents($namespace, $startDate, $endDate, $title, $time, $endTime,
@@ -1260,7 +1541,7 @@ class action_plugin_calendar extends DokuWiki_Action_Plugin {
                 }
                 
                 $events[$dateKey][] = $eventData;
-                file_put_contents($eventFile, json_encode($events, JSON_PRETTY_PRINT));
+                CalendarFileHandler::writeJson($eventFile, $events);
                 
                 $counter++;
             }
@@ -1439,7 +1720,7 @@ class action_plugin_calendar extends DokuWiki_Action_Plugin {
             
             // Save if modified
             if ($modified) {
-                file_put_contents($file, json_encode($events, JSON_PRETTY_PRINT));
+                CalendarFileHandler::writeJson($file, $events);
             }
         }
     }

@@ -1,5 +1,284 @@
 # Calendar Plugin Changelog
 
+## Version 7.0.8 (2026-02-15) - TIMEZONE FIX
+
+### Bug Fix: Date Shift in Non-UTC Timezones
+Fixed critical bug where events appeared shifted by one day in timezones ahead of UTC (e.g., Europe/Prague UTC+1).
+
+**Root Cause:**
+JavaScript's `toISOString()` converts dates to UTC, so local midnight (00:00) in Prague becomes 23:00 UTC of the *previous day*. When split to get YYYY-MM-DD, this returns the wrong date.
+
+**Fix:**
+Added `formatLocalDate(date)` helper function that formats dates using local time methods (`getFullYear()`, `getMonth()`, `getDate()`) instead of UTC conversion.
+
+**Affected Areas (now fixed):**
+- Multi-day event spanning (line 385)
+- Today string calculation in event list (line 566)
+- Past event detection in event items (line 1022)
+
+### Files Modified
+- `calendar-main.js` - Added `formatLocalDate()` helper, replaced 3 `toISOString().split('T')[0]` calls
+
+---
+
+## Version 7.0.7 (2026-02-15) - GOOGLE CALENDAR SYNC
+
+### Google Calendar Integration
+- Two-way sync with Google Calendar via OAuth 2.0
+- Import events from Google Calendar to DokuWiki
+- Export events from DokuWiki to Google Calendar
+- Support for all-day and timed events
+- Multi-day event handling
+- Color mapping between Google and DokuWiki
+- Duplicate detection prevents re-importing same events
+- Select which Google calendar to sync with
+- Admin panel UI for configuration and sync controls
+
+### Setup Requirements
+- Google Cloud Console project
+- Google Calendar API enabled
+- OAuth 2.0 Web Application credentials
+- Redirect URI configuration
+
+### New Files
+- `classes/GoogleCalendarSync.php` - OAuth and Calendar API integration
+
+### Files Modified
+- `action.php` - Added Google sync action handlers
+- `admin.php` - Added Google sync admin tab
+
+---
+
+## Version 7.0.6 (2026-02-15) - ACCESSIBILITY IMPROVEMENTS
+
+### Screen Reader Support
+- Added ARIA live region for dynamic announcements
+- Announces "Event created", "Event updated", "Event deleted" on actions
+- Announces "Task marked complete/incomplete" on toggle
+- Screen readers receive feedback without visual alerts
+
+### Debug Mode
+- Added `CALENDAR_DEBUG` flag for JavaScript console logging
+- `calendarLog()` and `calendarError()` helper functions
+- Debug output disabled by default
+
+### Code Quality
+- Consistent error handling patterns
+- Better separation of concerns
+
+### Files Modified
+- `calendar-main.js` - ARIA live region, debug helpers, announcements
+
+---
+
+## Version 7.0.5 (2026-02-15) - AUDIT LOGGING & ACCESSIBILITY
+
+### Audit Logging
+- New `AuditLogger.php` class for compliance logging
+- Logs all event modifications: create, update, delete, move, task toggle
+- JSON-formatted log files with timestamps, user info, and IP addresses
+- Automatic log rotation (5MB max, 10 files retained)
+- Log entries include: namespace, date, event ID, title, and change details
+
+### Keyboard Navigation (Accessibility)
+- Arrow keys navigate between calendar days
+- Enter/Space activates focused day (opens popup)
+- Arrow Up/Down navigates between events in popups
+- Enter on event opens edit dialog
+- Delete/Backspace on event triggers delete
+- Escape closes all dialogs, popups, and dropdowns
+- Added `tabindex` and `role` attributes for screen readers
+- Added `aria-label` descriptions for calendar days and events
+
+### CSS Focus States
+- Visible focus indicators on calendar days
+- Focus styles on event items in popups
+- Focus styles on custom date/time pickers
+- Uses `focus-visible` for keyboard-only focus rings
+
+### Files Added
+- `classes/AuditLogger.php` - Compliance audit logging
+
+### Files Modified
+- `action.php` - Integrated audit logging for all event operations
+- `calendar-main.js` - Extended keyboard navigation
+- `syntax.php` - Added accessibility attributes to calendar cells
+- `style.css` - Added focus state styles
+
+---
+
+## Version 7.0.4 (2026-02-15) - CODE CLEANUP
+
+### Code Cleanup
+- Removed unused `calendarDebounce()` and `calendarThrottle()` utility functions
+- Removed duplicate `updateEndTimeOptions()` function definition
+- Removed unused `_calendarSelectOpen` tracking variable
+- Removed orphaned `.input-date` and `.time-select` CSS (no longer using native inputs)
+- Consolidated legacy function calls
+
+### Improvements
+- End date picker now opens to start date's month when no end date is selected
+- End time picker now scrolls to first available time after start time
+
+### Files Modified
+- `calendar-main.js` - Removed ~40 lines of dead code
+- `style.css` - Removed ~25 lines of unused CSS
+
+---
+
+## Version 7.0.3 (2026-02-15) - CUSTOM DATE & TIME PICKERS
+
+### Complete Replacement of Native Browser Controls
+Both date inputs and time selects have been replaced with custom, lightweight pickers to eliminate all browser-related performance issues.
+
+#### Custom Date Picker
+- **Mini calendar grid** - Clean monthly view with day selection
+- **Month navigation** - Previous/next buttons for quick browsing
+- **Visual indicators** - Today highlighted, selected date marked
+- **End date validation** - Cannot select end date before start date
+- **Clear button** - Easy removal of optional end date
+
+#### Custom Time Picker (from v7.0.2)
+- **Period groupings** - Morning, Afternoon, Evening, Night
+- **Lazy loading** - Options built only when dropdown opens
+- **Smart filtering** - End times after start time only
+
+#### Code Cleanup
+- Removed old `setupSelectTracking()` function (was causing conflicts)
+- Removed redundant event listener code
+- Unified dropdown close handling for all picker types
+- No native `<input type="date">` or `<select>` elements in event dialog
+
+### Files Modified
+- `syntax.php` - New date picker HTML structure
+- `calendar-main.js` - Custom date picker JavaScript, cleanup
+- `style.css` - Date picker calendar grid styles
+
+---
+
+## Version 7.0.2 (2026-02-15) - CUSTOM TIME PICKER
+
+### Major Fix: Replaced Native Selects with Custom Time Pickers
+The native `<select>` element with 97 time options was causing browser freezes when opening. This version replaces them with lightweight custom dropdown pickers.
+
+#### New Custom Time Picker Features
+- **Instant opening** - No browser rendering delay
+- **Lazy-loaded options** - Dropdown HTML built only when clicked
+- **Period grouping** - Morning, Afternoon, Evening, Night sections
+- **Smart filtering** - End time options automatically hide times before start time
+- **Visual feedback** - Selected time highlighted, disabled times grayed out
+
+#### Technical Changes
+- Replaced `<select>` elements with `<button>` + `<div>` dropdown
+- Hidden `<input>` stores actual value for form submission
+- Time data pre-computed once, reused for all pickers
+- Event delegation for option clicks
+- Automatic cleanup when clicking outside
+
+#### Removed
+- Native `<select>` time pickers (caused 2600ms+ freezes)
+- `onchange` handlers from date inputs (handled in JS now)
+- Old `setupSelectTracking()` function
+
+### Files Modified
+- `syntax.php` - New time picker HTML structure
+- `calendar-main.js` - Custom time picker JavaScript
+- `style.css` - Time picker dropdown styles
+
+---
+
+## Version 7.0.1 (2026-02-15) - SELECTOR FLICKER FIX
+
+### Bug Fixes
+- **Fixed selector flicker on subsequent clicks** - Time/date selectors no longer flash or lag after first use
+  - New `setupSelectTracking()` prevents DOM updates while selector is open
+  - Tracks mousedown/focus/blur/change events on all form inputs
+  - Uses `requestAnimationFrame` for smooth visual updates
+  - Added state caching to skip redundant DOM manipulation
+
+### CSS Improvements  
+- Changed `transition: all` to specific properties on `.input-sleek` elements
+- Added `transition: none` for select options
+- Prevents browser reflow issues during dropdown rendering
+
+---
+
+## Version 7.0.0 (2026-02-15) - STABILITY & PERFORMANCE RELEASE
+
+### Major Improvements
+
+#### File Locking & Atomic Writes (Critical Stability Fix)
+- **New `CalendarFileHandler` class** with atomic file operations
+- Prevents data corruption from concurrent event saves
+- Uses temp file + atomic rename strategy for safe writes
+- Implements `flock()` for proper file locking during reads/writes
+- Graceful handling of lock acquisition failures with retries
+
+#### Caching Layer (Performance Improvement)
+- **New `CalendarEventCache` class** for event data caching
+- 5-minute TTL reduces unnecessary JSON file reads
+- In-memory caching for current request
+- Automatic cache invalidation on event modifications
+- Cache cleanup for expired entries
+
+#### Rate Limiting (Security Enhancement)
+- **New `CalendarRateLimiter` class** for AJAX endpoint protection
+- 60 requests/minute for read actions
+- 30 requests/minute for write actions (more restrictive)
+- Per-user tracking (falls back to IP for anonymous)
+- Rate limit headers in responses (X-RateLimit-Limit, X-RateLimit-Remaining)
+- Automatic cleanup of old rate limit data
+
+#### Code Refactoring
+- **New `CalendarEventManager` class** consolidating CRUD operations
+- New `classes/` directory for organized code structure
+- Reduced code duplication across files
+- Improved separation of concerns
+- Better maintainability for future development
+
+#### JavaScript Performance Fixes (Dialog Responsiveness)
+- **Fixed slow time selector** - End time dropdown now opens instantly
+  - Replaced `Array.from().forEach()` with direct `options` loop (97 options)
+  - Single-pass algorithm instead of multiple iterations
+  - Uses `hidden` property instead of `style.display` manipulation
+- **Fixed event listener accumulation** - Dialog inputs no longer slow down over time
+  - Added `data-initialized` flag to prevent re-binding listeners
+  - Namespace search only initializes once per calendar
+- **Fixed selector flicker on subsequent clicks**
+  - New `setupSelectTracking()` function prevents DOM updates while selector is open
+  - Tracks mousedown/focus/blur/change events on time and date inputs
+  - Uses `requestAnimationFrame` instead of `setTimeout` for visual updates
+  - Added state caching to skip redundant DOM updates
+- **Fixed CSS transition interference**
+  - Changed `transition: all` to specific properties on form inputs
+  - Added explicit `transition: none` for select options
+  - Prevents browser reflow issues during dropdown rendering
+
+### Branding Changes
+- Removed "Matrix Edition" from plugin name and all references
+- Plugin is now simply "Calendar Plugin"
+- Matrix theme remains available (now called just "Matrix")
+
+### Technical Details
+- All JSON file operations now use atomic writes
+- Event saves protected against race conditions
+- Cache automatically invalidated on namespace/month changes
+- Rate limiter uses probabilistic cleanup (1 in 100 requests)
+
+### Files Added
+- `classes/FileHandler.php` - Atomic file operations with locking
+- `classes/EventCache.php` - Caching layer with TTL
+- `classes/RateLimiter.php` - AJAX rate limiting
+- `classes/EventManager.php` - Consolidated event CRUD operations
+
+### Upgrade Notes
+- No database migration required
+- Cache directory created automatically (`data/cache/calendar/`)
+- Rate limit data stored in `data/cache/calendar/ratelimit/`
+- Existing events and settings preserved
+
+---
+
 ## Version 6.14.2 (2026-02-15) - SYSTEM LOAD TOGGLE
 
 ### Added System Load Bars Toggle

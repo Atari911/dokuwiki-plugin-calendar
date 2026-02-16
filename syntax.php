@@ -297,7 +297,7 @@ class syntax_plugin_calendar extends DokuWiki_Syntax_Plugin {
                     if ($isToday) $classes .= ' cal-today';
                     if ($hasEvents) $classes .= ' cal-has-events';
                     
-                    $html .= '<td class="' . $classes . '" data-date="' . $dateKey . '" onclick="showDayPopup(\'' . $calId . '\', \'' . $dateKey . '\', \'' . $namespace . '\')">';
+                    $html .= '<td class="' . $classes . '" data-date="' . $dateKey . '" tabindex="0" role="gridcell" aria-label="' . date('F j, Y', strtotime($dateKey)) . ($hasEvents ? ', has events' : '') . '" onclick="showDayPopup(\'' . $calId . '\', \'' . $dateKey . '\', \'' . $namespace . '\')">';
                     
                     $dayNumClass = $isToday ? 'day-num day-num-today' : 'day-num';
                     $html .= '<span class="' . $dayNumClass . '">' . $currentDay . '</span>';
@@ -2020,12 +2020,26 @@ class syntax_plugin_calendar extends DokuWiki_Syntax_Plugin {
         
         $html .= '<div class="form-field form-field-half">';
         $html .= '<label class="field-label-compact">📅 Start Date</label>';
-        $html .= '<input type="date" id="event-date-' . $calId . '" name="date" required class="input-sleek input-date input-compact" onchange="updateEndTimeOptions(\'' . $calId . '\')">';
+        $html .= '<div class="date-picker-wrapper">';
+        $html .= '<input type="hidden" id="event-date-' . $calId . '" name="date" required value="">';
+        $html .= '<button type="button" class="custom-date-picker input-sleek input-compact" id="date-picker-btn-' . $calId . '" data-target="event-date-' . $calId . '" data-type="start">';
+        $html .= '<span class="date-display">Select date</span>';
+        $html .= '<span class="date-arrow">▼</span>';
+        $html .= '</button>';
+        $html .= '<div class="date-dropdown" id="date-dropdown-' . $calId . '"></div>';
+        $html .= '</div>';
         $html .= '</div>';
         
         $html .= '<div class="form-field form-field-half">';
         $html .= '<label class="field-label-compact">🏁 End Date</label>';
-        $html .= '<input type="date" id="event-end-date-' . $calId . '" name="endDate" class="input-sleek input-date input-compact" placeholder="Optional" onchange="updateEndTimeOptions(\'' . $calId . '\')">';
+        $html .= '<div class="date-picker-wrapper">';
+        $html .= '<input type="hidden" id="event-end-date-' . $calId . '" name="endDate" value="">';
+        $html .= '<button type="button" class="custom-date-picker input-sleek input-compact" id="end-date-picker-btn-' . $calId . '" data-target="event-end-date-' . $calId . '" data-type="end">';
+        $html .= '<span class="date-display">Optional</span>';
+        $html .= '<span class="date-arrow">▼</span>';
+        $html .= '</button>';
+        $html .= '<div class="date-dropdown" id="end-date-dropdown-' . $calId . '"></div>';
+        $html .= '</div>';
         $html .= '</div>';
         
         $html .= '</div>'; // End row
@@ -2141,57 +2155,26 @@ class syntax_plugin_calendar extends DokuWiki_Syntax_Plugin {
         $html .= '<div class="form-field form-field-half">';
         $html .= '<label class="field-label-compact">🕐 Start Time</label>';
         $html .= '<div class="time-picker-wrapper">';
-        $html .= '<select id="event-time-' . $calId . '" name="time" class="input-sleek input-compact time-select" onchange="updateEndTimeOptions(\'' . $calId . '\')">';
-        $html .= '<option value="">All day</option>';
-        
-        // Generate time options grouped by period
-        $periods = [
-            'Morning' => [6, 7, 8, 9, 10, 11],
-            'Afternoon' => [12, 13, 14, 15, 16, 17],
-            'Evening' => [18, 19, 20, 21, 22, 23],
-            'Night' => [0, 1, 2, 3, 4, 5]
-        ];
-        
-        foreach ($periods as $periodName => $hours) {
-            $html .= '<optgroup label="── ' . $periodName . ' ──">';
-            foreach ($hours as $hour) {
-                for ($minute = 0; $minute < 60; $minute += 15) {
-                    $timeValue = sprintf('%02d:%02d', $hour, $minute);
-                    $displayHour = $hour == 0 ? 12 : ($hour > 12 ? $hour - 12 : $hour);
-                    $ampm = $hour < 12 ? 'AM' : 'PM';
-                    $displayTime = sprintf('%d:%02d %s', $displayHour, $minute, $ampm);
-                    $html .= '<option value="' . $timeValue . '">' . $displayTime . '</option>';
-                }
-            }
-            $html .= '</optgroup>';
-        }
-        
-        $html .= '</select>';
+        // Custom time picker button instead of native select
+        $html .= '<input type="hidden" id="event-time-' . $calId . '" name="time" value="">';
+        $html .= '<button type="button" class="custom-time-picker input-sleek input-compact" id="time-picker-btn-' . $calId . '" data-target="event-time-' . $calId . '" data-type="start">';
+        $html .= '<span class="time-display">All day</span>';
+        $html .= '<span class="time-arrow">▼</span>';
+        $html .= '</button>';
+        $html .= '<div class="time-dropdown" id="time-dropdown-' . $calId . '"></div>';
         $html .= '</div>';
         $html .= '</div>';
         
         $html .= '<div class="form-field form-field-half">';
         $html .= '<label class="field-label-compact">🕐 End Time</label>';
         $html .= '<div class="time-picker-wrapper">';
-        $html .= '<select id="event-end-time-' . $calId . '" name="endTime" class="input-sleek input-compact time-select">';
-        $html .= '<option value="">Same as start</option>';
-        
-        // Generate time options grouped by period (same as start time)
-        foreach ($periods as $periodName => $hours) {
-            $html .= '<optgroup label="── ' . $periodName . ' ──">';
-            foreach ($hours as $hour) {
-                for ($minute = 0; $minute < 60; $minute += 15) {
-                    $timeValue = sprintf('%02d:%02d', $hour, $minute);
-                    $displayHour = $hour == 0 ? 12 : ($hour > 12 ? $hour - 12 : $hour);
-                    $ampm = $hour < 12 ? 'AM' : 'PM';
-                    $displayTime = sprintf('%d:%02d %s', $displayHour, $minute, $ampm);
-                    $html .= '<option value="' . $timeValue . '">' . $displayTime . '</option>';
-                }
-            }
-            $html .= '</optgroup>';
-        }
-        
-        $html .= '</select>';
+        // Custom end time picker
+        $html .= '<input type="hidden" id="event-end-time-' . $calId . '" name="endTime" value="">';
+        $html .= '<button type="button" class="custom-time-picker input-sleek input-compact" id="end-time-picker-btn-' . $calId . '" data-target="event-end-time-' . $calId . '" data-type="end" disabled>';
+        $html .= '<span class="time-display">Same as start</span>';
+        $html .= '<span class="time-arrow">▼</span>';
+        $html .= '</button>';
+        $html .= '<div class="time-dropdown" id="end-time-dropdown-' . $calId . '"></div>';
         $html .= '</div>';
         $html .= '</div>';
         

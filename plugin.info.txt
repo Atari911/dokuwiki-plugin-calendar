@@ -3,6 +3,6 @@ author   atari911
 email    atari911@gmail.com
 date     2026-02-15
 name     Calendar Plugin
-desc     Themed calendar with sidebar widget, Outlook sync, static calendar view. 
+desc     Feature-rich calendar with multiple themes, Outlook sync, Google Calendar sync, recurring events, and static presentation mode
 url      https://www.dokuwiki.org/plugin:calendar
-version  6.14.2
+version  7.0.8
