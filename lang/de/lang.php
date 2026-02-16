@@ -405,3 +405,93 @@ $lang['print_calendar'] = 'Kalender drucken';
 $lang['no_events_scheduled'] = 'Keine Termine für diesen Monat geplant.';
 $lang['calendar_label'] = 'Kalender';
 $lang['details'] = 'Details';
+
+// Google Calendar Sync (v7.0.7)
+$lang['tab_google'] = 'Google Sync';
+$lang['google_sync'] = 'Google Kalender Synchronisierung';
+$lang['google_status'] = 'Status';
+$lang['google_connected'] = 'Verbunden';
+$lang['google_not_configured'] = 'Nicht konfiguriert';
+$lang['google_not_authenticated'] = 'Nicht authentifiziert';
+$lang['google_setup_instructions'] = 'Einrichtungsanleitung';
+$lang['google_step1'] = 'Gehen Sie zur Google Cloud Console';
+$lang['google_step2'] = 'Erstellen Sie ein neues Projekt (oder wählen Sie ein bestehendes)';
+$lang['google_step3'] = 'Aktivieren Sie die Google Calendar API';
+$lang['google_step4'] = 'Gehen Sie zu Anmeldedaten → Anmeldedaten erstellen → OAuth 2.0-Client-ID';
+$lang['google_step5'] = 'Anwendungstyp: Webanwendung';
+$lang['google_step6'] = 'Autorisierte Weiterleitungs-URI hinzufügen';
+$lang['google_step7'] = 'Client-ID und Client-Secret unten kopieren';
+$lang['google_client_id'] = 'Client-ID';
+$lang['google_client_secret'] = 'Client-Secret';
+$lang['google_save_credentials'] = 'Anmeldedaten speichern';
+$lang['google_credentials_saved'] = 'Google API Anmeldedaten erfolgreich gespeichert!';
+$lang['google_authentication'] = 'Authentifizierung';
+$lang['google_connect'] = 'Google Kalender verbinden';
+$lang['google_disconnect'] = 'Trennen';
+$lang['google_select_calendar'] = 'Kalender auswählen';
+$lang['google_loading_calendars'] = 'Kalender werden geladen...';
+$lang['google_sync_events'] = 'Termine synchronisieren';
+$lang['google_import'] = 'Von Google importieren';
+$lang['google_import_desc'] = 'Termine von Google Kalender nach DokuWiki importieren.';
+$lang['google_export'] = 'Nach Google exportieren';
+$lang['google_export_desc'] = 'Termine von DokuWiki nach Google Kalender exportieren.';
+$lang['google_import_events'] = 'Termine importieren';
+$lang['google_export_events'] = 'Termine exportieren';
+$lang['google_importing'] = 'Termine werden importiert...';
+$lang['google_exporting'] = 'Termine werden exportiert...';
+$lang['google_import_success'] = '%d Termine importiert, %d übersprungen (Duplikate)';
+$lang['google_export_success'] = '%d Termine exportiert, %d übersprungen';
+$lang['google_auth_success'] = 'Erfolgreich mit Google Kalender verbunden!';
+$lang['google_auth_error'] = 'Autorisierungsfehler';
+$lang['google_primary'] = 'Primär';
+$lang['google_namespace_optional'] = 'Namensraum (optional)';
+
+// Accessibility (v7.0.5, v7.0.6)
+$lang['aria_calendar_day'] = 'Kalendertag';
+$lang['aria_has_events'] = 'hat Termine';
+$lang['aria_event_deleted'] = 'Termin gelöscht';
+$lang['aria_event_created'] = 'Termin erstellt';
+$lang['aria_event_updated'] = 'Termin aktualisiert';
+$lang['aria_task_complete'] = 'Aufgabe als erledigt markiert';
+$lang['aria_task_incomplete'] = 'Aufgabe als unerledigt markiert';
+$lang['aria_navigate_prev'] = 'Vorheriger Monat';
+$lang['aria_navigate_next'] = 'Nächster Monat';
+$lang['aria_close_dialog'] = 'Dialog schließen';
+$lang['aria_event_list'] = 'Terminliste';
+
+// Audit Logging (v7.0.5)
+$lang['audit_log'] = 'Audit-Protokoll';
+$lang['audit_action'] = 'Aktion';
+$lang['audit_user'] = 'Benutzer';
+$lang['audit_timestamp'] = 'Zeitstempel';
+$lang['audit_details'] = 'Details';
+$lang['audit_create'] = 'Erstellt';
+$lang['audit_update'] = 'Aktualisiert';
+$lang['audit_delete'] = 'Gelöscht';
+$lang['audit_move'] = 'Verschoben';
+$lang['audit_task_toggle'] = 'Aufgabe umgeschaltet';
+$lang['audit_view_log'] = 'Audit-Protokoll anzeigen';
+$lang['audit_clear_log'] = 'Audit-Protokoll löschen';
+$lang['audit_no_entries'] = 'Keine Audit-Einträge gefunden';
+
+// Custom Date/Time Pickers (v7.0.2, v7.0.3)
+$lang['select_date'] = 'Datum auswählen';
+$lang['select_time'] = 'Zeit auswählen';
+$lang['optional'] = 'Optional';
+$lang['same_as_start'] = 'Wie Startzeit';
+$lang['clear_end_date'] = 'Enddatum löschen';
+$lang['time_morning'] = 'Morgen';
+$lang['time_afternoon'] = 'Nachmittag';
+$lang['time_evening'] = 'Abend';
+$lang['time_night'] = 'Nacht';
+
+// Error messages
+$lang['error_not_configured'] = 'Nicht konfiguriert';
+$lang['error_not_authenticated'] = 'Nicht authentifiziert';
+$lang['error_admin_required'] = 'Administratorzugang erforderlich';
+$lang['error_missing_fields'] = 'Erforderliche Felder fehlen';
+$lang['error_invalid_date'] = 'Ungültiges Datumsformat';
+$lang['error_event_not_found'] = 'Termin nicht gefunden';
+$lang['error_sync_failed'] = 'Synchronisierung fehlgeschlagen';
+$lang['error_save_failed'] = 'Speichern fehlgeschlagen';
+$lang['error_delete_failed'] = 'Löschen fehlgeschlagen';

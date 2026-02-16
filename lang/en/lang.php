@@ -404,3 +404,93 @@ $lang['print_calendar'] = 'Print Calendar';
 $lang['no_events_scheduled'] = 'No events scheduled for this month.';
 $lang['calendar_label'] = 'Calendar';
 $lang['details'] = 'Details';
+
+// Google Calendar Sync (v7.0.7)
+$lang['tab_google'] = 'Google Sync';
+$lang['google_sync'] = 'Google Calendar Sync';
+$lang['google_status'] = 'Status';
+$lang['google_connected'] = 'Connected';
+$lang['google_not_configured'] = 'Not Configured';
+$lang['google_not_authenticated'] = 'Not Authenticated';
+$lang['google_setup_instructions'] = 'Setup Instructions';
+$lang['google_step1'] = 'Go to Google Cloud Console';
+$lang['google_step2'] = 'Create a new project (or select existing)';
+$lang['google_step3'] = 'Enable the Google Calendar API';
+$lang['google_step4'] = 'Go to Credentials → Create Credentials → OAuth 2.0 Client ID';
+$lang['google_step5'] = 'Application type: Web application';
+$lang['google_step6'] = 'Add Authorized redirect URI';
+$lang['google_step7'] = 'Copy Client ID and Client Secret below';
+$lang['google_client_id'] = 'Client ID';
+$lang['google_client_secret'] = 'Client Secret';
+$lang['google_save_credentials'] = 'Save Credentials';
+$lang['google_credentials_saved'] = 'Google API credentials saved successfully!';
+$lang['google_authentication'] = 'Authentication';
+$lang['google_connect'] = 'Connect Google Calendar';
+$lang['google_disconnect'] = 'Disconnect';
+$lang['google_select_calendar'] = 'Select Calendar';
+$lang['google_loading_calendars'] = 'Loading calendars...';
+$lang['google_sync_events'] = 'Sync Events';
+$lang['google_import'] = 'Import from Google';
+$lang['google_import_desc'] = 'Import events from Google Calendar to DokuWiki.';
+$lang['google_export'] = 'Export to Google';
+$lang['google_export_desc'] = 'Export events from DokuWiki to Google Calendar.';
+$lang['google_import_events'] = 'Import Events';
+$lang['google_export_events'] = 'Export Events';
+$lang['google_importing'] = 'Importing events...';
+$lang['google_exporting'] = 'Exporting events...';
+$lang['google_import_success'] = 'Imported %d events, %d skipped (duplicates)';
+$lang['google_export_success'] = 'Exported %d events, %d skipped';
+$lang['google_auth_success'] = 'Successfully connected to Google Calendar!';
+$lang['google_auth_error'] = 'Authorization error';
+$lang['google_primary'] = 'Primary';
+$lang['google_namespace_optional'] = 'Namespace (optional)';
+
+// Accessibility (v7.0.5, v7.0.6)
+$lang['aria_calendar_day'] = 'Calendar day';
+$lang['aria_has_events'] = 'has events';
+$lang['aria_event_deleted'] = 'Event deleted';
+$lang['aria_event_created'] = 'Event created';
+$lang['aria_event_updated'] = 'Event updated';
+$lang['aria_task_complete'] = 'Task marked complete';
+$lang['aria_task_incomplete'] = 'Task marked incomplete';
+$lang['aria_navigate_prev'] = 'Previous month';
+$lang['aria_navigate_next'] = 'Next month';
+$lang['aria_close_dialog'] = 'Close dialog';
+$lang['aria_event_list'] = 'Event list';
+
+// Audit Logging (v7.0.5)
+$lang['audit_log'] = 'Audit Log';
+$lang['audit_action'] = 'Action';
+$lang['audit_user'] = 'User';
+$lang['audit_timestamp'] = 'Timestamp';
+$lang['audit_details'] = 'Details';
+$lang['audit_create'] = 'Created';
+$lang['audit_update'] = 'Updated';
+$lang['audit_delete'] = 'Deleted';
+$lang['audit_move'] = 'Moved';
+$lang['audit_task_toggle'] = 'Task toggled';
+$lang['audit_view_log'] = 'View Audit Log';
+$lang['audit_clear_log'] = 'Clear Audit Log';
+$lang['audit_no_entries'] = 'No audit entries found';
+
+// Custom Date/Time Pickers (v7.0.2, v7.0.3)
+$lang['select_date'] = 'Select date';
+$lang['select_time'] = 'Select time';
+$lang['optional'] = 'Optional';
+$lang['same_as_start'] = 'Same as start';
+$lang['clear_end_date'] = 'Clear End Date';
+$lang['time_morning'] = 'Morning';
+$lang['time_afternoon'] = 'Afternoon';
+$lang['time_evening'] = 'Evening';
+$lang['time_night'] = 'Night';
+
+// Error messages
+$lang['error_not_configured'] = 'Not configured';
+$lang['error_not_authenticated'] = 'Not authenticated';
+$lang['error_admin_required'] = 'Admin access required';
+$lang['error_missing_fields'] = 'Missing required fields';
+$lang['error_invalid_date'] = 'Invalid date format';
+$lang['error_event_not_found'] = 'Event not found';
+$lang['error_sync_failed'] = 'Sync failed';
+$lang['error_save_failed'] = 'Save failed';
+$lang['error_delete_failed'] = 'Delete failed';

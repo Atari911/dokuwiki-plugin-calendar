@@ -28,7 +28,7 @@ A feature-rich calendar plugin for DokuWiki with multiple themes, Outlook sync, 
 - **Light** - Clean white/gray
 
 ### Sync & Backup
-- Outlook sync
+- Outlook/ICS calendar sync
 - Full event backup/restore
 - Config import/export
 
