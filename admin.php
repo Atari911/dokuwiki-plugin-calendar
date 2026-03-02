@@ -6964,6 +6964,8 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
             $this->saveWeekStartDay($weekStart);
             $this->saveItineraryCollapsed($itineraryCollapsed === 'yes');
             $this->saveShowSystemLoad($showSystemLoad === 'yes');
+            $searchDefault = $INPUT->str('search_default', 'month');
+            $this->saveSearchDefault($searchDefault);
             echo '<div style="background:#d4edda; border:1px solid #c3e6cb; color:#155724; padding:12px; border-radius:4px; margin-bottom:20px;">';
             echo '✓ Theme and settings saved successfully! Refresh any page with the sidebar to see changes.';
             echo '</div>';
@@ -6973,6 +6975,7 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
         $currentWeekStart = $this->getWeekStartDay();
         $currentItineraryCollapsed = $this->getItineraryCollapsed();
         $currentShowSystemLoad = $this->getShowSystemLoad();
+        $currentSearchDefault = $this->getSearchDefault();
         
         echo '<h2 style="margin:0 0 20px 0; color:' . $colors['text'] . ';">🎨 Sidebar Widget Settings</h2>';
         echo '<p style="color:' . $colors['text'] . '; margin-bottom:20px;">Customize the appearance and behavior of the sidebar calendar widget.</p>';
@@ -7047,6 +7050,30 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
         echo '<div>';
         echo '<div style="font-weight:bold; color:' . $colors['text'] . '; margin-bottom:3px;">Hide</div>';
         echo '<div style="font-size:11px; color:' . $colors['text'] . ';">Disable system monitoring</div>';
+        echo '</div>';
+        echo '</label>';
+        echo '</div>';
+        echo '</div>';
+        
+        // Default Search Scope Section
+        echo '<div style="background:' . $colors['bg'] . '; border:1px solid ' . $colors['border'] . '; border-radius:6px; padding:20px; margin-bottom:30px;">';
+        echo '<h3 style="margin:0 0 15px 0; color:' . $colors['text'] . '; font-size:16px;">🔍 ' . $this->getLang('search_default_title') . '</h3>';
+        echo '<p style="color:' . $colors['text'] . '; margin-bottom:15px; font-size:13px;">' . $this->getLang('search_default_desc') . '</p>';
+        
+        echo '<div style="display:flex; gap:15px;">';
+        echo '<label style="flex:1; padding:12px; border:2px solid ' . ($currentSearchDefault === 'month' ? '#00cc07' : $colors['border']) . '; border-radius:4px; background:' . ($currentSearchDefault === 'month' ? 'rgba(0, 204, 7, 0.05)' : $colors['bg']) . '; cursor:pointer; display:flex; align-items:center;">';
+        echo '<input type="radio" name="search_default" value="month" ' . ($currentSearchDefault === 'month' ? 'checked' : '') . ' style="margin-right:10px; width:18px; height:18px;">';
+        echo '<div>';
+        echo '<div style="font-weight:bold; color:' . $colors['text'] . '; margin-bottom:3px;">📅 ' . $this->getLang('search_default_month') . '</div>';
+        echo '<div style="font-size:11px; color:' . $colors['text'] . ';">' . $this->getLang('search_default_month_desc') . '</div>';
+        echo '</div>';
+        echo '</label>';
+        
+        echo '<label style="flex:1; padding:12px; border:2px solid ' . ($currentSearchDefault === 'all' ? '#00cc07' : $colors['border']) . '; border-radius:4px; background:' . ($currentSearchDefault === 'all' ? 'rgba(0, 204, 7, 0.05)' : $colors['bg']) . '; cursor:pointer; display:flex; align-items:center;">';
+        echo '<input type="radio" name="search_default" value="all" ' . ($currentSearchDefault === 'all' ? 'checked' : '') . ' style="margin-right:10px; width:18px; height:18px;">';
+        echo '<div>';
+        echo '<div style="font-weight:bold; color:' . $colors['text'] . '; margin-bottom:3px;">🌐 ' . $this->getLang('search_default_all') . '</div>';
+        echo '<div style="font-size:11px; color:' . $colors['text'] . ';">' . $this->getLang('search_default_all_desc') . '</div>';
         echo '</div>';
         echo '</label>';
         echo '</div>';
@@ -7210,6 +7237,34 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
         $configFile = DOKU_INC . 'data/meta/calendar_show_system_load.txt';
         file_put_contents($configFile, $show ? 'yes' : 'no');
         return true;
+    }
+    
+    /**
+     * Get default search scope (month or all)
+     */
+    private function getSearchDefault() {
+        $configFile = DOKU_INC . 'data/meta/calendar_search_default.txt';
+        if (file_exists($configFile)) {
+            $value = trim(file_get_contents($configFile));
+            if (in_array($value, ['month', 'all'])) {
+                return $value;
+            }
+        }
+        return 'month'; // Default to month search
+    }
+    
+    /**
+     * Save default search scope
+     */
+    private function saveSearchDefault($scope) {
+        $configFile = DOKU_INC . 'data/meta/calendar_search_default.txt';
+        $validScopes = ['month', 'all'];
+        
+        if (in_array($scope, $validScopes)) {
+            file_put_contents($configFile, $scope);
+            return true;
+        }
+        return false;
     }
     
     /**

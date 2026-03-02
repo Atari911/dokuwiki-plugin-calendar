@@ -494,3 +494,11 @@ $lang['error_event_not_found'] = 'Event not found';
 $lang['error_sync_failed'] = 'Sync failed';
 $lang['error_save_failed'] = 'Save failed';
 $lang['error_delete_failed'] = 'Delete failed';
+
+// Search Default Setting
+$lang['search_default_title'] = 'Default Search Scope';
+$lang['search_default_desc'] = 'Choose whether the event search bar defaults to searching the current month or the entire calendar:';
+$lang['search_default_month'] = 'This Month';
+$lang['search_default_month_desc'] = 'Search only events in the currently displayed month';
+$lang['search_default_all'] = 'All Dates';
+$lang['search_default_all_desc'] = 'Search across all events in the entire calendar';

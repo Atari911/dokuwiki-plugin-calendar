@@ -484,3 +484,11 @@ $lang['error_event_not_found'] = 'Událost nenalezena';
 $lang['error_sync_failed'] = 'Synchronizace selhala';
 $lang['error_save_failed'] = 'Uložení selhalo';
 $lang['error_delete_failed'] = 'Smazání selhalo';
+
+// Search Default Setting
+$lang['search_default_title'] = 'Výchozí rozsah vyhledávání';
+$lang['search_default_desc'] = 'Vyberte, zda vyhledávací pole standardně prohledává aktuální měsíc nebo celý kalendář:';
+$lang['search_default_month'] = 'Tento měsíc';
+$lang['search_default_month_desc'] = 'Prohledávat pouze události v aktuálně zobrazeném měsíci';
+$lang['search_default_all'] = 'Všechna data';
+$lang['search_default_all_desc'] = 'Prohledávat všechny události v celém kalendáři';

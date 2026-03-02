@@ -1,5 +1,32 @@
 # Calendar Plugin Changelog
 
+## Version 7.0.9 (2026-03-01) - DEFAULT SEARCH SCOPE SETTING
+
+### New Feature: Default Search Scope
+Added admin setting (Themes tab) to configure whether the event search bar defaults to searching the current month or the entire calendar.
+
+**Options:**
+- **This Month** (default) — Search only events in the currently displayed month (📅 icon)
+- **All Dates** — Search across all events in the entire calendar (🌐 icon)
+
+Users can still toggle the search scope at any time using the search mode button next to the search bar. This setting controls only the initial default state.
+
+### Localization
+- Added localized strings for English, German, and Czech
+
+### Files Modified
+- `admin.php` — Added search scope setting UI in Themes tab, save/load methods
+- `syntax.php` — Added `getSearchDefault()` method; inline and panel search bars now initialize from admin setting
+- `lang/en/lang.php` — Added search default scope strings
+- `lang/de/lang.php` — Added German translations
+- `lang/cs/lang.php` — Added Czech translations
+- `plugin.info.txt` — Version bump to 7.0.9
+
+### Configuration
+Setting is stored in `data/meta/calendar_search_default.txt` (values: `month` or `all`)
+
+---
+
 ## Version 7.0.8 (2026-02-15) - TIMEZONE FIX
 
 ### Bug Fix: Date Shift in Non-UTC Timezones

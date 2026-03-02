@@ -495,3 +495,11 @@ $lang['error_event_not_found'] = 'Termin nicht gefunden';
 $lang['error_sync_failed'] = 'Synchronisierung fehlgeschlagen';
 $lang['error_save_failed'] = 'Speichern fehlgeschlagen';
 $lang['error_delete_failed'] = 'Löschen fehlgeschlagen';
+
+// Search Default Setting
+$lang['search_default_title'] = 'Standard-Suchbereich';
+$lang['search_default_desc'] = 'Wählen Sie, ob die Suchleiste standardmäßig den aktuellen Monat oder den gesamten Kalender durchsucht:';
+$lang['search_default_month'] = 'Dieser Monat';
+$lang['search_default_month_desc'] = 'Nur Termine im aktuell angezeigten Monat durchsuchen';
+$lang['search_default_all'] = 'Alle Termine';
+$lang['search_default_all_desc'] = 'Über alle Termine im gesamten Kalender suchen';

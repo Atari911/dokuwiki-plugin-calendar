@@ -386,10 +386,15 @@ class syntax_plugin_calendar extends DokuWiki_Syntax_Plugin {
         $html .= '</div>';
         
         // Search bar in header
+        $searchDefault = $this->getSearchDefault();
+        $searchAllClass = $searchDefault === 'all' ? ' all-dates' : '';
+        $searchIcon = $searchDefault === 'all' ? '🌐' : '📅';
+        $searchTitle = $searchDefault === 'all' ? 'Searching all dates' : 'Search this month only';
+        $searchPlaceholder = $searchDefault === 'all' ? 'Search all dates...' : '🔍 Search...';
         $html .= '<div class="event-search-container-inline">';
-        $html .= '<input type="text" class="event-search-input-inline" id="event-search-' . $calId . '" placeholder="🔍 Search..." oninput="filterEvents(\'' . $calId . '\', this.value)">';
+        $html .= '<input type="text" class="event-search-input-inline" id="event-search-' . $calId . '" placeholder="' . htmlspecialchars($searchPlaceholder) . '" oninput="filterEvents(\'' . $calId . '\', this.value)">';
         $html .= '<button class="event-search-clear-inline" id="search-clear-' . $calId . '" onclick="clearEventSearch(\'' . $calId . '\')" style="display:none;">✕</button>';
-        $html .= '<button class="event-search-mode-inline" id="search-mode-' . $calId . '" onclick="toggleSearchMode(\'' . $calId . '\', \'' . $namespace . '\')" title="Search this month only">📅</button>';
+        $html .= '<button class="event-search-mode-inline' . $searchAllClass . '" id="search-mode-' . $calId . '" onclick="toggleSearchMode(\'' . $calId . '\', \'' . $namespace . '\')" title="' . htmlspecialchars($searchTitle) . '">' . $searchIcon . '</button>';
         $html .= '</div>';
         
         $html .= '<button class="add-event-compact" onclick="openAddEvent(\'' . $calId . '\', \'' . $namespace . '\')">+ Add</button>';
@@ -1272,11 +1277,16 @@ class syntax_plugin_calendar extends DokuWiki_Syntax_Plugin {
         $html .= '</div>';
         
         // Row 2: Search and add button
+        $searchDefault = $this->getSearchDefault();
+        $searchAllClass = $searchDefault === 'all' ? ' all-dates' : '';
+        $searchIcon = $searchDefault === 'all' ? '🌐' : '📅';
+        $searchTitle = $searchDefault === 'all' ? 'Searching all dates' : 'Search this month only';
+        $searchPlaceholder = $searchDefault === 'all' ? 'Search all dates...' : 'Search this month...';
         $html .= '<div class="panel-header-row-2">';
         $html .= '<div class="panel-search-box">';
-        $html .= '<input type="text" class="panel-search-input" id="event-search-' . $calId . '" placeholder="Search this month..." oninput="filterEvents(\'' . $calId . '\', this.value)">';
+        $html .= '<input type="text" class="panel-search-input" id="event-search-' . $calId . '" placeholder="' . htmlspecialchars($searchPlaceholder) . '" oninput="filterEvents(\'' . $calId . '\', this.value)">';
         $html .= '<button class="panel-search-clear" id="search-clear-' . $calId . '" onclick="clearEventSearch(\'' . $calId . '\')" style="display:none;">✕</button>';
-        $html .= '<button class="panel-search-mode" id="search-mode-' . $calId . '" onclick="toggleSearchMode(\'' . $calId . '\', \'' . $namespace . '\')" title="Search this month only">📅</button>';
+        $html .= '<button class="panel-search-mode' . $searchAllClass . '" id="search-mode-' . $calId . '" onclick="toggleSearchMode(\'' . $calId . '\', \'' . $namespace . '\')" title="' . htmlspecialchars($searchTitle) . '">' . $searchIcon . '</button>';
         $html .= '</div>';
         $html .= '<button class="panel-add-btn" onclick="openAddEventPanel(\'' . $calId . '\', \'' . $namespace . '\')">+ Add</button>';
         $html .= '</div>';
@@ -4174,5 +4184,19 @@ class syntax_plugin_calendar extends DokuWiki_Syntax_Plugin {
             return trim(file_get_contents($configFile)) !== 'no';
         }
         return true; // Default to showing
+    }
+    
+    /**
+     * Get default search scope (month or all)
+     */
+    private function getSearchDefault() {
+        $configFile = DOKU_INC . 'data/meta/calendar_search_default.txt';
+        if (file_exists($configFile)) {
+            $value = trim(file_get_contents($configFile));
+            if (in_array($value, ['month', 'all'])) {
+                return $value;
+            }
+        }
+        return 'month'; // Default to month search
     }
 }
