@@ -4,7 +4,7 @@
  * 
  * @license GPL 2 http://www.gnu.org/licenses/gpl-2.0.html
  * @author  DokuWiki Community
- * @version 7.0.8
+ * @version 7.2.6
  */
 
 if(!defined('DOKU_INC')) die();
@@ -18,10 +18,29 @@ require_once __DIR__ . '/classes/EventManager.php';
 class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
     
     /**
+     * Get the meta directory path (farm-safe)
+     * Uses $conf['metadir'] instead of hardcoded DOKU_INC . 'data/meta/'
+     */
+    private function metaDir() {
+        global $conf;
+        return rtrim($conf['metadir'], '/') . '/';
+    }
+    
+    /**
+     * Get sync config file path (farm-safe)
+     * Checks per-animal metadir first, falls back to shared plugin dir
+     */
+    private function syncConfigPath() {
+        $perAnimal = $this->metaDir() . 'calendar/sync_config.php';
+        if (file_exists($perAnimal)) return $perAnimal;
+        return DOKU_PLUGIN . 'calendar/sync_config.php';
+    }
+    
+    /**
      * Get the path to the sync log file (in data directory, not plugin directory)
      */
     private function getSyncLogPath() {
-        $dataDir = DOKU_INC . 'data/meta/calendar/';
+        $dataDir = $this->metaDir() . 'calendar/';
         if (!is_dir($dataDir)) {
             @mkdir($dataDir, 0755, true);
         }
@@ -32,7 +51,7 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
      * Get the path to the sync state file (in data directory, not plugin directory)
      */
     private function getSyncStatePath() {
-        $dataDir = DOKU_INC . 'data/meta/calendar/';
+        $dataDir = $this->metaDir() . 'calendar/';
         if (!is_dir($dataDir)) {
             mkdir($dataDir, 0755, true);
         }
@@ -88,6 +107,12 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
         global $INPUT;
         
         $action = $INPUT->str('action');
+        
+        // CSRF protection: all POST actions require a valid security token
+        if ($action && !checkSecurityToken()) {
+            msg('Security token expired. Please try again.', -1);
+            return;
+        }
         
         if ($action === 'clear_cache') {
             $this->clearCache();
@@ -208,7 +233,7 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
         }
         
         // Load current config
-        $configFile = DOKU_PLUGIN . 'calendar/sync_config.php';
+        $configFile = $this->syncConfigPath();
         $config = [];
         if (file_exists($configFile)) {
             $config = include $configFile;
@@ -235,6 +260,7 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
         echo '</div>';
         
         echo '<form method="post" action="?do=admin&page=calendar" style="max-width:900px;">';
+        echo formSecurityToken(false);
         echo '<input type="hidden" name="action" value="save_config">';
         
         // Azure Credentials
@@ -418,7 +444,7 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
         echo '<script>
         async function exportConfig() {
             try {
-                const response = await fetch("?do=admin&page=calendar&action=export_config&call=ajax", {
+                const response = await fetch("?do=admin&page=calendar&action=export_config&call=ajax&sectok=" + JSINFO.sectok, {
                     method: "POST"
                 });
                 const data = await response.json();
@@ -458,7 +484,7 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
                 const formData = new FormData();
                 formData.append("encrypted_config", encrypted);
                 
-                const response = await fetch("?do=admin&page=calendar&action=import_config&call=ajax", {
+                const response = await fetch("?do=admin&page=calendar&action=import_config&call=ajax&sectok=" + JSINFO.sectok, {
                     method: "POST",
                     body: formData
                 });
@@ -559,7 +585,7 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
             // Create abort controller for this sync
             syncAbortController = new AbortController();
             
-            fetch("?do=admin&page=calendar&action=run_sync&call=ajax", {
+            fetch("?do=admin&page=calendar&action=run_sync&call=ajax&sectok=" + JSINFO.sectok, {
                 method: "POST",
                 signal: syncAbortController.signal
             })
@@ -608,7 +634,7 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
             status.style.color = "#ff9800";
             
             // First, send stop signal to server
-            fetch("?do=admin&page=calendar&action=stop_sync&call=ajax", {
+            fetch("?do=admin&page=calendar&action=stop_sync&call=ajax&sectok=" + JSINFO.sectok, {
                 method: "POST"
             })
             .then(response => response.json())
@@ -667,7 +693,7 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
         function refreshLog() {
             if (isPaused) return;
             
-            fetch("?do=admin&page=calendar&action=get_log&call=ajax")
+            fetch("?do=admin&page=calendar&action=get_log&call=ajax&sectok=" + JSINFO.sectok)
                 .then(response => response.json())
                 .then(data => {
                     const logContent = document.getElementById("logContent");
@@ -699,7 +725,7 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
                 return;
             }
             
-            fetch("?do=admin&page=calendar&action=clear_log&call=ajax", {
+            fetch("?do=admin&page=calendar&action=clear_log&call=ajax&sectok=" + JSINFO.sectok, {
                 method: "POST"
             })
                 .then(response => response.json())
@@ -798,6 +824,7 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
         
         // Rescan button
         echo '<form method="post" action="?do=admin&page=calendar&tab=manage" style="display:inline;">';
+        echo formSecurityToken(false);
         echo '<input type="hidden" name="action" value="rescan_events">';
         echo '<button type="submit" style="background:#00cc07; color:white; border:none; padding:8px 16px; border-radius:3px; cursor:pointer; font-size:12px; display:flex; align-items:center; gap:6px;">';
         echo '<span>🔄</span><span>' . $this->getLang('rescan_events') . '</span>';
@@ -806,6 +833,7 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
         
         // Export button
         echo '<form method="post" action="?do=admin&page=calendar&tab=manage" style="display:inline;">';
+        echo formSecurityToken(false);
         echo '<input type="hidden" name="action" value="export_all_events">';
         echo '<button type="submit" style="background:#7b1fa2; color:white; border:none; padding:8px 16px; border-radius:3px; cursor:pointer; font-size:12px; display:flex; align-items:center; gap:6px;">';
         echo '<span>💾</span><span>' . $this->getLang('export_all_events') . '</span>';
@@ -814,6 +842,7 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
         
         // Import button (with file upload)
         echo '<form method="post" action="?do=admin&page=calendar&tab=manage" enctype="multipart/form-data" style="display:inline;" onsubmit="return confirm(\'' . $this->getLang('import_confirm') . '\')">';
+        echo formSecurityToken(false);
         echo '<input type="hidden" name="action" value="import_all_events">';
         echo '<label style="background:#7b1fa2; color:white; border:none; padding:8px 16px; border-radius:3px; cursor:pointer; font-size:12px; display:inline-flex; align-items:center; gap:6px;">';
         echo '<span>📁</span><span>' . $this->getLang('import_events') . '</span>';
@@ -852,7 +881,7 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
         echo '</div>';
         
         // Important Namespaces Section
-        $configFile = DOKU_PLUGIN . 'calendar/sync_config.php';
+        $configFile = $this->syncConfigPath();
         $importantConfig = [];
         if (file_exists($configFile)) {
             $importantConfig = include $configFile;
@@ -873,6 +902,7 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
         echo '</div>';
         
         echo '<form method="post" action="?do=admin&page=calendar&tab=manage" style="display:flex; gap:8px; align-items:center;">';
+        echo formSecurityToken(false);
         echo '<input type="hidden" name="action" value="save_important_namespaces">';
         echo '<input type="text" name="important_namespaces" value="' . hsc($importantNsValue) . '" style="flex:1; padding:6px; border:1px solid ' . $colors['border'] . '; border-radius:3px; font-size:12px;" placeholder="important,urgent,priority">';
         echo '<button type="submit" style="background:#00cc07; color:white; padding:6px 16px; border:none; border-radius:3px; cursor:pointer; font-size:12px; font-weight:bold; white-space:nowrap;">' . $this->getLang('save') . '</button>';
@@ -886,6 +916,7 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
         echo '<p style="color:' . $colors['text'] . '; font-size:11px; margin:0 0 12px;">' . $this->getLang('cleanup_desc') . '</p>';
         
         echo '<form method="post" action="?do=admin&page=calendar&tab=manage" id="cleanupForm">';
+        echo formSecurityToken(false);
         echo '<input type="hidden" name="action" value="cleanup_events">';
         
         // Compact options layout
@@ -1069,6 +1100,7 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
         
         // Control bar
         echo '<form method="post" action="?do=admin&page=calendar&tab=manage" id="moveForm">';
+        echo formSecurityToken(false);
         echo '<input type="hidden" name="action" value="move_selected_events" id="formAction">';
         echo '<div style="background:#2d2d2d; color:white; padding:6px 10px; border-radius:3px; margin-bottom:8px; display:flex; gap:8px; align-items:center; font-size:12px;">';
         echo '<button type="button" onclick="selectAll()" style="background:#00cc07; color:white; border:none; padding:4px 8px; border-radius:2px; cursor:pointer; font-size:11px;">☑ ' . $this->getLang('select_all') . '</button>';
@@ -1715,6 +1747,12 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
             form.method = "POST";
             form.action = "?do=admin&page=calendar&tab=manage";
             
+            var sectokInput = document.createElement("input");
+            sectokInput.type = "hidden";
+            sectokInput.name = "sectok";
+            sectokInput.value = JSINFO.sectok;
+            form.appendChild(sectokInput);
+            
             const actionInput = document.createElement("input");
             actionInput.type = "hidden";
             actionInput.name = "action";
@@ -1751,6 +1789,12 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
             form.method = "POST";
             form.action = "?do=admin&page=calendar&tab=manage";
             
+            var sectokInput = document.createElement("input");
+            sectokInput.type = "hidden";
+            sectokInput.name = "sectok";
+            sectokInput.value = JSINFO.sectok;
+            form.appendChild(sectokInput);
+            
             const actionInput = document.createElement("input");
             actionInput.type = "hidden";
             actionInput.name = "action";
@@ -1780,6 +1824,12 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
             const form = document.createElement("form");
             form.method = "POST";
             form.action = "?do=admin&page=calendar&tab=manage";
+            
+            var sectokInput = document.createElement("input");
+            sectokInput.type = "hidden";
+            sectokInput.name = "sectok";
+            sectokInput.value = JSINFO.sectok;
+            form.appendChild(sectokInput);
             const actionInput = document.createElement("input");
             actionInput.type = "hidden";
             actionInput.name = "action";
@@ -1803,6 +1853,12 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
             const form = document.createElement("form");
             form.method = "POST";
             form.action = "?do=admin&page=calendar&tab=manage";
+            
+            var sectokInput = document.createElement("input");
+            sectokInput.type = "hidden";
+            sectokInput.name = "sectok";
+            sectokInput.value = JSINFO.sectok;
+            form.appendChild(sectokInput);
             const actionInput = document.createElement("input");
             actionInput.type = "hidden";
             actionInput.name = "action";
@@ -1858,6 +1914,12 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
                 const form = document.createElement("form");
                 form.method = "POST";
                 form.action = "?do=admin&page=calendar&tab=manage";
+            
+            var sectokInput = document.createElement("input");
+            sectokInput.type = "hidden";
+            sectokInput.name = "sectok";
+            sectokInput.value = JSINFO.sectok;
+            form.appendChild(sectokInput);
                 
                 const actionInput = document.createElement("input");
                 actionInput.type = "hidden";
@@ -1891,6 +1953,12 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
                 const form = document.createElement("form");
                 form.method = "POST";
                 form.action = "?do=admin&page=calendar&tab=manage";
+            
+            var sectokInput = document.createElement("input");
+            sectokInput.type = "hidden";
+            sectokInput.name = "sectok";
+            sectokInput.value = JSINFO.sectok;
+            form.appendChild(sectokInput);
                 const actionInput = document.createElement("input");
                 actionInput.type = "hidden";
                 actionInput.name = "action";
@@ -2157,6 +2225,12 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
                 const form = document.createElement("form");
                 form.method = "POST";
                 form.action = "?do=admin&page=calendar&tab=manage";
+            
+            var sectokInput = document.createElement("input");
+            sectokInput.type = "hidden";
+            sectokInput.name = "sectok";
+            sectokInput.value = JSINFO.sectok;
+            form.appendChild(sectokInput);
                 
                 const actionInput = document.createElement("input");
                 actionInput.type = "hidden";
@@ -2206,6 +2280,12 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
             const form = document.createElement("form");
             form.method = "POST";
             form.action = "?do=admin&page=calendar&tab=manage";
+            
+            var sectokInput = document.createElement("input");
+            sectokInput.type = "hidden";
+            sectokInput.name = "sectok";
+            sectokInput.value = JSINFO.sectok;
+            form.appendChild(sectokInput);
             const actionInput = document.createElement("input");
             actionInput.type = "hidden";
             actionInput.name = "action";
@@ -2303,6 +2383,7 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
         echo '<p style="color:' . $colors['text'] . '; font-size:13px; margin:0 0 10px;">Upload a calendar plugin ZIP file to update. Your configuration will be preserved.</p>';
         
         echo '<form method="post" action="?do=admin&page=calendar&tab=update" enctype="multipart/form-data" id="uploadForm">';
+        echo formSecurityToken(false);
         echo '<input type="hidden" name="action" value="upload_update">';
         echo '<div style="margin:10px 0;">';
         echo '<input type="file" name="plugin_zip" accept=".zip" required style="padding:8px; border:1px solid ' . $colors['border'] . '; border-radius:3px; font-size:13px; width:100%;">';
@@ -2321,6 +2402,7 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
         
         // Clear Cache button (next to Upload button)
         echo '<form method="post" action="?do=admin&page=calendar&tab=update" style="display:inline; margin:0;">';
+        echo formSecurityToken(false);
         echo '<input type="hidden" name="action" value="clear_cache">';
         echo '<input type="hidden" name="tab" value="update">';
         echo '<button type="submit" onclick="return confirm(\'Clear all DokuWiki cache? This will refresh all plugin files.\')" style="background:#ff9800; color:white; padding:10px 20px; border:none; border-radius:3px; cursor:pointer; font-size:14px; font-weight:bold;">🗑️ Clear Cache</button>';
@@ -2558,6 +2640,7 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
         
         // Manual backup button
         echo '<form method="post" action="?do=admin&page=calendar&tab=update" style="margin:0;">';
+        echo formSecurityToken(false);
         echo '<input type="hidden" name="action" value="create_manual_backup">';
         echo '<button type="submit" onclick="return confirm(\'Create a backup of the current plugin version?\')" style="background:#00cc07; color:white; padding:6px 12px; border:none; border-radius:3px; cursor:pointer; font-size:12px; font-weight:bold;">💾 Create Backup Now</button>';
         echo '</form>';
@@ -2723,6 +2806,12 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
             form.method = "POST";
             form.action = "?do=admin&page=calendar&tab=update";
             
+            var sectokInput = document.createElement("input");
+            sectokInput.type = "hidden";
+            sectokInput.name = "sectok";
+            sectokInput.value = JSINFO.sectok;
+            form.appendChild(sectokInput);
+            
             const actionInput = document.createElement("input");
             actionInput.type = "hidden";
             actionInput.name = "action";
@@ -2758,6 +2847,12 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
             form.method = "POST";
             form.action = "?do=admin&page=calendar&tab=update";
             
+            var sectokInput = document.createElement("input");
+            sectokInput.type = "hidden";
+            sectokInput.name = "sectok";
+            sectokInput.value = JSINFO.sectok;
+            form.appendChild(sectokInput);
+            
             const actionInput = document.createElement("input");
             actionInput.type = "hidden";
             actionInput.name = "action";
@@ -2786,7 +2881,7 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
         global $INPUT;
         
         // Load existing config to preserve all settings
-        $configFile = DOKU_PLUGIN . 'calendar/sync_config.php';
+        $configFile = $this->syncConfigPath();
         $existingConfig = [];
         if (file_exists($configFile)) {
             $existingConfig = include $configFile;
@@ -2858,8 +2953,9 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
     }
     
     private function clearCache() {
-        // Clear DokuWiki cache
-        $cacheDir = DOKU_INC . 'data/cache';
+        // Clear DokuWiki cache (farm-safe)
+        global $conf;
+        $cacheDir = $conf['cachedir'];
         
         if (is_dir($cacheDir)) {
             $this->recursiveDelete($cacheDir, false);
@@ -2888,7 +2984,7 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
     }
     
     private function findRecurringEvents() {
-        $dataDir = DOKU_INC . 'data/meta/';
+        $dataDir = $this->metaDir();
         $recurring = [];
         $allEvents = []; // Track all events to detect patterns
         $flaggedSeries = []; // Track events with recurring flag by recurringId
@@ -3146,7 +3242,7 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
             $calendarDir = $nsDir . '/calendar';
             if (is_dir($calendarDir)) {
                 // Derive namespace from path relative to meta dir
-                $metaDir = DOKU_INC . 'data/meta/';
+                $metaDir = $this->metaDir();
                 $relPath = str_replace($metaDir, '', $nsDir);
                 $ns = str_replace('/', ':', trim($relPath, '/'));
                 $callback($calendarDir, $ns);
@@ -3379,7 +3475,7 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
         global $INPUT;
         $dryRun = $INPUT->bool('dry_run', false);
         
-        $metaDir = DOKU_INC . 'data/meta/';
+        $metaDir = $this->metaDir();
         $details = [];
         $removedDirs = 0;
         $removedCalDirs = 0;
@@ -3490,7 +3586,7 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
         global $INPUT;
         $dryRun = $INPUT->bool('dry_run', false);
         $today = date('Y-m-d');
-        $dataDir = DOKU_INC . 'data/meta/';
+        $dataDir = $this->metaDir();
         $calendarDirs = [];
         
         if (is_dir($dataDir . 'calendar')) {
@@ -3562,7 +3658,7 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
      * Helper: find all events matching a title in a namespace's calendar dir
      */
     private function getRecurringSeriesEvents($title, $namespace) {
-        $dataDir = DOKU_INC . 'data/meta/';
+        $dataDir = $this->metaDir();
         if ($namespace !== '') {
             $dataDir .= str_replace(':', '/', $namespace) . '/';
         }
@@ -3624,7 +3720,7 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
         $lastDate = new DateTime($lastEvent['date']);
         $template = $lastEvent['event'];
         
-        $dataDir = DOKU_INC . 'data/meta/';
+        $dataDir = $this->metaDir();
         if ($namespace !== '') {
             $dataDir .= str_replace(':', '/', $namespace) . '/';
         }
@@ -3757,7 +3853,7 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
         $namespace = $INPUT->str('namespace');
         
         // Search for both paused and non-paused versions
-        $dataDir = DOKU_INC . 'data/meta/';
+        $dataDir = $this->metaDir();
         if ($namespace !== '') {
             $dataDir .= str_replace(':', '/', $namespace) . '/';
         }
@@ -3835,7 +3931,7 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
             return;
         }
         
-        $dataDir = DOKU_INC . 'data/meta/';
+        $dataDir = $this->metaDir();
         if ($namespace !== '') {
             $dataDir .= str_replace(':', '/', $namespace) . '/';
         }
@@ -3923,7 +4019,7 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
             return;
         }
         
-        $dataDir = DOKU_INC . 'data/meta/';
+        $dataDir = $this->metaDir();
         if ($namespace !== '') {
             $dataDir .= str_replace(':', '/', $namespace) . '/';
         }
@@ -3996,7 +4092,7 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
     }
     
     private function getEventsByNamespace() {
-        $dataDir = DOKU_INC . 'data/meta/';
+        $dataDir = $this->metaDir();
         $result = [];
         
         // Check root calendar directory first (blank/default namespace)
@@ -4117,7 +4213,7 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
     }
     
     private function getAllNamespaces() {
-        $dataDir = DOKU_INC . 'data/meta/';
+        $dataDir = $this->metaDir();
         $namespaces = [];
         
         // Check root calendar directory first
@@ -4143,7 +4239,7 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
     }
     
     private function searchEvents($search, $filterNamespace) {
-        $dataDir = DOKU_INC . 'data/meta/';
+        $dataDir = $this->metaDir();
         $results = [];
         
         $search = strtolower(trim($search));
@@ -4192,7 +4288,7 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
         $namespace = $INPUT->str('namespace');
         
         // Collect ALL calendar directories
-        $dataDir = DOKU_INC . 'data/meta/';
+        $dataDir = $this->metaDir();
         $calendarDirs = [];
         if (is_dir($dataDir . 'calendar')) {
             $calendarDirs[] = $dataDir . 'calendar';
@@ -4275,7 +4371,7 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
         }
         
         // Collect ALL calendar directories to search
-        $dataDir = DOKU_INC . 'data/meta/';
+        $dataDir = $this->metaDir();
         $calendarDirs = [];
         
         // Root calendar dir
@@ -4420,8 +4516,8 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
                 
                 // Recreate with new pattern
                 $targetDir = ($newNamespace === '') 
-                    ? DOKU_INC . 'data/meta/calendar' 
-                    : DOKU_INC . 'data/meta/' . str_replace(':', '/', $newNamespace) . '/calendar';
+                    ? $this->metaDir() . 'calendar' 
+                    : $this->metaDir() . str_replace(':', '/', $newNamespace) . '/calendar';
                 if (!is_dir($targetDir)) mkdir($targetDir, 0755, true);
                 
                 $baseId = isset($template['recurringId']) ? $template['recurringId'] : md5($newTitle . $newNamespace);
@@ -4601,9 +4697,9 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
             
             // Determine old file path
             if ($namespace === '') {
-                $oldFile = DOKU_INC . 'data/meta/calendar/' . $month . '.json';
+                $oldFile = $this->metaDir() . 'calendar/' . $month . '.json';
             } else {
-                $oldFile = DOKU_INC . 'data/meta/' . $namespace . '/calendar/' . $month . '.json';
+                $oldFile = $this->metaDir() . $namespace . '/calendar/' . $month . '.json';
             }
             
             if (!file_exists($oldFile)) continue;
@@ -4639,10 +4735,10 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
             
             // Determine new file path
             if ($targetNamespace === '') {
-                $newFile = DOKU_INC . 'data/meta/calendar/' . $month . '.json';
+                $newFile = $this->metaDir() . 'calendar/' . $month . '.json';
                 $newDir = dirname($newFile);
             } else {
-                $newFile = DOKU_INC . 'data/meta/' . $targetNamespace . '/calendar/' . $month . '.json';
+                $newFile = $this->metaDir() . $targetNamespace . '/calendar/' . $month . '.json';
                 $newDir = dirname($newFile);
             }
             
@@ -4679,9 +4775,9 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
         
         // Determine old file path
         if ($namespace === '') {
-            $oldFile = DOKU_INC . 'data/meta/calendar/' . $month . '.json';
+            $oldFile = $this->metaDir() . 'calendar/' . $month . '.json';
         } else {
-            $oldFile = DOKU_INC . 'data/meta/' . $namespace . '/calendar/' . $month . '.json';
+            $oldFile = $this->metaDir() . $namespace . '/calendar/' . $month . '.json';
         }
         
         if (!file_exists($oldFile)) {
@@ -4727,10 +4823,10 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
         
         // Determine new file path
         if ($targetNamespace === '') {
-            $newFile = DOKU_INC . 'data/meta/calendar/' . $month . '.json';
+            $newFile = $this->metaDir() . 'calendar/' . $month . '.json';
             $newDir = dirname($newFile);
         } else {
-            $newFile = DOKU_INC . 'data/meta/' . $targetNamespace . '/calendar/' . $month . '.json';
+            $newFile = $this->metaDir() . $targetNamespace . '/calendar/' . $month . '.json';
             $newDir = dirname($newFile);
         }
         
@@ -4771,7 +4867,7 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
         
         // Convert namespace to directory path
         $namespacePath = str_replace(':', '/', $namespaceName);
-        $calendarDir = DOKU_INC . 'data/meta/' . $namespacePath . '/calendar';
+        $calendarDir = $this->metaDir() . $namespacePath . '/calendar';
         
         // Check if already exists
         if (is_dir($calendarDir)) {
@@ -4824,11 +4920,11 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
         
         // Determine calendar directory
         if ($namespace === '') {
-            $calendarDir = DOKU_INC . 'data/meta/calendar';
+            $calendarDir = $this->metaDir() . 'calendar';
             $namespaceDir = null; // Don't delete root
         } else {
-            $calendarDir = DOKU_INC . 'data/meta/' . $namespacePath . '/calendar';
-            $namespaceDir = DOKU_INC . 'data/meta/' . $namespacePath;
+            $calendarDir = $this->metaDir() . $namespacePath . '/calendar';
+            $namespaceDir = $this->metaDir() . $namespacePath;
         }
         
         // Check if directory exists
@@ -4869,7 +4965,7 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
             // Try to remove parent directories if they're empty
             // This handles nested namespaces like work:projects:alpha
             $currentDir = dirname($calendarDir);
-            $metaDir = DOKU_INC . 'data/meta';
+            $metaDir = rtrim($this->metaDir(), '/');
             
             while ($currentDir !== $metaDir && $currentDir !== dirname($metaDir)) {
                 if (is_dir($currentDir)) {
@@ -4930,15 +5026,15 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
         
         // Determine source and destination directories
         if ($oldNamespace === '') {
-            $sourceDir = DOKU_INC . 'data/meta/calendar';
+            $sourceDir = $this->metaDir() . 'calendar';
         } else {
-            $sourceDir = DOKU_INC . 'data/meta/' . $oldPath . '/calendar';
+            $sourceDir = $this->metaDir() . $oldPath . '/calendar';
         }
         
         if ($newNamespace === '') {
-            $targetDir = DOKU_INC . 'data/meta/calendar';
+            $targetDir = $this->metaDir() . 'calendar';
         } else {
-            $targetDir = DOKU_INC . 'data/meta/' . $newPath . '/calendar';
+            $targetDir = $this->metaDir() . $newPath . '/calendar';
         }
         
         // Check if source exists
@@ -4984,7 +5080,7 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
         // Clean up old directory structure if empty
         if ($oldNamespace !== '') {
             $currentDir = dirname($sourceDir);
-            $metaDir = DOKU_INC . 'data/meta';
+            $metaDir = rtrim($this->metaDir(), '/');
             
             while ($currentDir !== $metaDir && $currentDir !== dirname($metaDir)) {
                 if (is_dir($currentDir)) {
@@ -5023,9 +5119,9 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
             
             // Determine file path
             if ($namespace === '') {
-                $file = DOKU_INC . 'data/meta/calendar/' . $month . '.json';
+                $file = $this->metaDir() . 'calendar/' . $month . '.json';
             } else {
-                $file = DOKU_INC . 'data/meta/' . $namespace . '/calendar/' . $month . '.json';
+                $file = $this->metaDir() . $namespace . '/calendar/' . $month . '.json';
             }
             
             if (!file_exists($file)) continue;
@@ -5064,7 +5160,7 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
     private function saveImportantNamespaces() {
         global $INPUT;
         
-        $configFile = DOKU_PLUGIN . 'calendar/sync_config.php';
+        $configFile = $this->syncConfigPath();
         $config = [];
         if (file_exists($configFile)) {
             $config = include $configFile;
@@ -5081,7 +5177,7 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
     }
     
     private function clearStatsCache() {
-        $cacheFile = DOKU_PLUGIN . 'calendar/.event_stats_cache';
+        $cacheFile = $this->metaDir() . 'calendar/.event_stats_cache';
         if (file_exists($cacheFile)) {
             unlink($cacheFile);
         }
@@ -5198,7 +5294,7 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
             header('Content-Type: application/json');
             
             $syncScript = DOKU_PLUGIN . 'calendar/sync_outlook.php';
-            $abortFile = DOKU_PLUGIN . 'calendar/.sync_abort';
+            $abortFile = $this->metaDir() . 'calendar/.sync_abort';
             
             // Remove any existing abort flag
             if (file_exists($abortFile)) {
@@ -5299,7 +5395,7 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
         if ($INPUT->str('call') === 'ajax') {
             header('Content-Type: application/json');
             
-            $abortFile = DOKU_PLUGIN . 'calendar/.sync_abort';
+            $abortFile = $this->metaDir() . 'calendar/.sync_abort';
             
             // Create abort flag file
             if (file_put_contents($abortFile, date('Y-m-d H:i:s')) !== false) {
@@ -5909,7 +6005,7 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
             header('Content-Type: application/json');
             
             try {
-                $configFile = DOKU_PLUGIN . 'calendar/sync_config.php';
+                $configFile = $this->syncConfigPath();
                 
                 if (!file_exists($configFile)) {
                     echo json_encode([
@@ -6016,7 +6112,7 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
                 }
                 
                 // Write to config file
-                $configFile = DOKU_PLUGIN . 'calendar/sync_config.php';
+                $configFile = $this->syncConfigPath();
                 
                 // Backup existing config
                 if (file_exists($configFile)) {
@@ -6146,8 +6242,8 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
             'last_scan' => ''
         ];
         
-        $metaDir = DOKU_INC . 'data/meta/';
-        $cacheFile = DOKU_PLUGIN . 'calendar/.event_stats_cache';
+        $metaDir = $this->metaDir();
+        $cacheFile = $this->metaDir() . 'calendar/.event_stats_cache';
         
         // Check if we have cached stats (less than 5 minutes old)
         if (file_exists($cacheFile)) {
@@ -6242,7 +6338,7 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
     }
     
     private function exportAllEvents() {
-        $metaDir = DOKU_INC . 'data/meta/';
+        $metaDir = $this->metaDir();
         $allEvents = [];
         
         // Collect all events
@@ -6343,7 +6439,7 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
         
         // Import events
         foreach ($importData['namespaces'] as $namespace => $files) {
-            $metaDir = DOKU_INC . 'data/meta/';
+            $metaDir = $this->metaDir();
             if ($namespace) {
                 $metaDir .= str_replace(':', '/', $namespace) . '/';
             }
@@ -6426,7 +6522,7 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
         $debug['delete_completed'] = $INPUT->bool('delete_completed', false);
         $debug['delete_past'] = $INPUT->bool('delete_past', false);
         
-        $dataDir = DOKU_INC . 'data/meta/';
+        $dataDir = $this->metaDir();
         $debug['data_dir'] = $dataDir;
         $debug['data_dir_exists'] = is_dir($dataDir);
         
@@ -6518,7 +6614,7 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
         global $INPUT;
         
         $eventsToDelete = [];
-        $dataDir = DOKU_INC . 'data/meta/';
+        $dataDir = $this->metaDir();
         
         $debug = [];
         $debug['scanned_dirs'] = [];
@@ -6723,6 +6819,7 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
         echo '<h3 style="color:' . $colors['text'] . ';margin:0 0 16px 0;">API Credentials</h3>';
         
         echo '<form method="post" action="?do=admin&page=calendar&tab=google">';
+        echo formSecurityToken(false);
         echo '<input type="hidden" name="action" value="save_google_config">';
         
         echo '<div style="margin-bottom:16px;">';
@@ -6854,6 +6951,7 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
             .then(data => {
                 if (data.success && data.calendars) {
                     var html = "<form method=\"post\" action=\"?do=admin&page=calendar&tab=google\">";
+                    html += "<input type=\"hidden\" name=\"sectok\" value=\"" + JSINFO.sectok + "\">";
                     html += "<input type=\"hidden\" name=\"action\" value=\"select_google_calendar\">";
                     html += "<select name=\"selected_calendar\" style=\"width:100%;padding:10px;border:1px solid #ddd;border-radius:6px;margin-bottom:12px;\">";
                     
@@ -6959,11 +7057,9 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
             $theme = $INPUT->str('theme', 'matrix');
             $weekStart = $INPUT->str('week_start', 'monday');
             $itineraryCollapsed = $INPUT->str('itinerary_collapsed', 'no');
-            $showSystemLoad = $INPUT->str('show_system_load', 'yes');
             $this->saveSidebarTheme($theme);
             $this->saveWeekStartDay($weekStart);
             $this->saveItineraryCollapsed($itineraryCollapsed === 'yes');
-            $this->saveShowSystemLoad($showSystemLoad === 'yes');
             $searchDefault = $INPUT->str('search_default', 'month');
             $this->saveSearchDefault($searchDefault);
             echo '<div style="background:#d4edda; border:1px solid #c3e6cb; color:#155724; padding:12px; border-radius:4px; margin-bottom:20px;">';
@@ -6974,13 +7070,13 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
         $currentTheme = $this->getSidebarTheme();
         $currentWeekStart = $this->getWeekStartDay();
         $currentItineraryCollapsed = $this->getItineraryCollapsed();
-        $currentShowSystemLoad = $this->getShowSystemLoad();
         $currentSearchDefault = $this->getSearchDefault();
         
         echo '<h2 style="margin:0 0 20px 0; color:' . $colors['text'] . ';">🎨 Sidebar Widget Settings</h2>';
         echo '<p style="color:' . $colors['text'] . '; margin-bottom:20px;">Customize the appearance and behavior of the sidebar calendar widget.</p>';
         
         echo '<form method="post" action="?do=admin&page=calendar&tab=themes">';
+        echo formSecurityToken(false);
         echo '<input type="hidden" name="action" value="save_theme">';
         
         // Week Start Day Section
@@ -7026,30 +7122,6 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
         echo '<div>';
         echo '<div style="font-weight:bold; color:' . $colors['text'] . '; margin-bottom:3px;">Collapsed</div>';
         echo '<div style="font-size:11px; color:' . $colors['text'] . ';">Hide itinerary sections by default (click bar to expand)</div>';
-        echo '</div>';
-        echo '</label>';
-        echo '</div>';
-        echo '</div>';
-        
-        // System Load Bars Section
-        echo '<div style="background:' . $colors['bg'] . '; border:1px solid ' . $colors['border'] . '; border-radius:6px; padding:20px; margin-bottom:30px;">';
-        echo '<h3 style="margin:0 0 15px 0; color:' . $colors['text'] . '; font-size:16px;">📊 System Load Bars</h3>';
-        echo '<p style="color:' . $colors['text'] . '; margin-bottom:15px; font-size:13px;">Show or hide the CPU/Memory load indicator bars in the event panel:</p>';
-        
-        echo '<div style="display:flex; gap:15px;">';
-        echo '<label style="flex:1; padding:12px; border:2px solid ' . ($currentShowSystemLoad ? '#00cc07' : $colors['border']) . '; border-radius:4px; background:' . ($currentShowSystemLoad ? 'rgba(0, 204, 7, 0.05)' : $colors['bg']) . '; cursor:pointer; display:flex; align-items:center;">';
-        echo '<input type="radio" name="show_system_load" value="yes" ' . ($currentShowSystemLoad ? 'checked' : '') . ' style="margin-right:10px; width:18px; height:18px;">';
-        echo '<div>';
-        echo '<div style="font-weight:bold; color:' . $colors['text'] . '; margin-bottom:3px;">Show</div>';
-        echo '<div style="font-size:11px; color:' . $colors['text'] . ';">Display CPU/Memory load bars</div>';
-        echo '</div>';
-        echo '</label>';
-        
-        echo '<label style="flex:1; padding:12px; border:2px solid ' . (!$currentShowSystemLoad ? '#00cc07' : $colors['border']) . '; border-radius:4px; background:' . (!$currentShowSystemLoad ? 'rgba(0, 204, 7, 0.05)' : $colors['bg']) . '; cursor:pointer; display:flex; align-items:center;">';
-        echo '<input type="radio" name="show_system_load" value="no" ' . (!$currentShowSystemLoad ? 'checked' : '') . ' style="margin-right:10px; width:18px; height:18px;">';
-        echo '<div>';
-        echo '<div style="font-weight:bold; color:' . $colors['text'] . '; margin-bottom:3px;">Hide</div>';
-        echo '<div style="font-size:11px; color:' . $colors['text'] . ';">Disable system monitoring</div>';
         echo '</div>';
         echo '</label>';
         echo '</div>';
@@ -7150,7 +7222,7 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
      * Get current sidebar theme
      */
     private function getSidebarTheme() {
-        $configFile = DOKU_INC . 'data/meta/calendar_theme.txt';
+        $configFile = $this->metaDir() . 'calendar_theme.txt';
         if (file_exists($configFile)) {
             return trim(file_get_contents($configFile));
         }
@@ -7161,7 +7233,7 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
      * Save sidebar theme
      */
     private function saveSidebarTheme($theme) {
-        $configFile = DOKU_INC . 'data/meta/calendar_theme.txt';
+        $configFile = $this->metaDir() . 'calendar_theme.txt';
         $validThemes = ['matrix', 'purple', 'professional', 'pink', 'wiki'];
         
         if (in_array($theme, $validThemes)) {
@@ -7175,7 +7247,7 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
      * Get week start day
      */
     private function getWeekStartDay() {
-        $configFile = DOKU_INC . 'data/meta/calendar_week_start.txt';
+        $configFile = $this->metaDir() . 'calendar_week_start.txt';
         if (file_exists($configFile)) {
             $start = trim(file_get_contents($configFile));
             if (in_array($start, ['monday', 'sunday'])) {
@@ -7189,7 +7261,7 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
      * Save week start day
      */
     private function saveWeekStartDay($weekStart) {
-        $configFile = DOKU_INC . 'data/meta/calendar_week_start.txt';
+        $configFile = $this->metaDir() . 'calendar_week_start.txt';
         $validStarts = ['monday', 'sunday'];
         
         if (in_array($weekStart, $validStarts)) {
@@ -7203,7 +7275,7 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
      * Get itinerary collapsed default state
      */
     private function getItineraryCollapsed() {
-        $configFile = DOKU_INC . 'data/meta/calendar_itinerary_collapsed.txt';
+        $configFile = $this->metaDir() . 'calendar_itinerary_collapsed.txt';
         if (file_exists($configFile)) {
             return trim(file_get_contents($configFile)) === 'yes';
         }
@@ -7214,28 +7286,8 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
      * Save itinerary collapsed default state
      */
     private function saveItineraryCollapsed($collapsed) {
-        $configFile = DOKU_INC . 'data/meta/calendar_itinerary_collapsed.txt';
+        $configFile = $this->metaDir() . 'calendar_itinerary_collapsed.txt';
         file_put_contents($configFile, $collapsed ? 'yes' : 'no');
-        return true;
-    }
-    
-    /**
-     * Get system load bars visibility setting
-     */
-    private function getShowSystemLoad() {
-        $configFile = DOKU_INC . 'data/meta/calendar_show_system_load.txt';
-        if (file_exists($configFile)) {
-            return trim(file_get_contents($configFile)) !== 'no';
-        }
-        return true; // Default to showing
-    }
-    
-    /**
-     * Save system load bars visibility setting
-     */
-    private function saveShowSystemLoad($show) {
-        $configFile = DOKU_INC . 'data/meta/calendar_show_system_load.txt';
-        file_put_contents($configFile, $show ? 'yes' : 'no');
         return true;
     }
     
@@ -7243,7 +7295,7 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
      * Get default search scope (month or all)
      */
     private function getSearchDefault() {
-        $configFile = DOKU_INC . 'data/meta/calendar_search_default.txt';
+        $configFile = $this->metaDir() . 'calendar_search_default.txt';
         if (file_exists($configFile)) {
             $value = trim(file_get_contents($configFile));
             if (in_array($value, ['month', 'all'])) {
@@ -7257,7 +7309,7 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
      * Save default search scope
      */
     private function saveSearchDefault($scope) {
-        $configFile = DOKU_INC . 'data/meta/calendar_search_default.txt';
+        $configFile = $this->metaDir() . 'calendar_search_default.txt';
         $validScopes = ['month', 'all'];
         
         if (in_array($scope, $validScopes)) {
@@ -7276,11 +7328,15 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
         // Get current template name
         $template = $conf['template'];
         
-        // Try multiple possible locations for style.ini
+        // Try multiple possible locations for style.ini (farm-safe)
         $possiblePaths = [
-            DOKU_INC . 'conf/tpl/' . $template . '/style.ini',
             DOKU_INC . 'lib/tpl/' . $template . '/style.ini',
         ];
+        // Add farm-specific conf override path if available
+        if (!empty($conf['savedir'])) {
+            array_unshift($possiblePaths, $conf['savedir'] . '/tpl/' . $template . '/style.ini');
+        }
+        array_unshift($possiblePaths, DOKU_INC . 'conf/tpl/' . $template . '/style.ini');
         
         $styleIni = null;
         foreach ($possiblePaths as $path) {

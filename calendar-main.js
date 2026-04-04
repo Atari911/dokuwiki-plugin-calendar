@@ -136,12 +136,17 @@ window.filterCalendarByNamespace = function(calId, namespace) {
 // Navigate to different month
 window.navCalendar = function(calId, year, month, namespace) {
     
+    // Read exclude list from container data attribute
+    const container = document.getElementById(calId);
+    const exclude = container ? (container.dataset.exclude || '') : '';
+    
     const params = new URLSearchParams({
         call: 'plugin_calendar',
         action: 'load_month',
         year: year,
         month: month,
         namespace: namespace,
+        exclude: exclude,
         _: new Date().getTime() // Cache buster
     });
     
@@ -1727,12 +1732,17 @@ window.saveEventCompact = function(calId, namespace) {
 
 // Reload calendar data without page refresh
 window.reloadCalendarData = function(calId, year, month, namespace) {
+    // Read exclude list from container data attribute
+    const container = document.getElementById(calId);
+    const exclude = container ? (container.dataset.exclude || '') : '';
+    
     const params = new URLSearchParams({
         call: 'plugin_calendar',
         action: 'load_month',
         year: year,
         month: month,
         namespace: namespace,
+        exclude: exclude,
         _: new Date().getTime() // Cache buster
     });
     
@@ -2049,12 +2059,17 @@ if (!window._calendarDelegationInit) {
 
 // Event panel navigation
 window.navEventPanel = function(calId, year, month, namespace) {
+    // Read exclude list from container data attribute
+    const container = document.getElementById(calId);
+    const exclude = container ? (container.dataset.exclude || '') : '';
+    
     const params = new URLSearchParams({
         call: 'plugin_calendar',
         action: 'load_month',
         year: year,
         month: month,
         namespace: namespace,
+        exclude: exclude,
         _: new Date().getTime() // Cache buster
     });
     
@@ -3617,6 +3632,7 @@ window.searchAllDates = function(calId, searchTerm) {
     // Get namespace from container
     const container = document.getElementById(calId);
     const namespace = container ? (container.dataset.namespace || '') : '';
+    const exclude = container ? (container.dataset.exclude || '') : '';
     
     // Hide normal event items
     eventList.querySelectorAll('.event-compact-item').forEach(item => {
@@ -3643,6 +3659,7 @@ window.searchAllDates = function(calId, searchTerm) {
         action: 'search_all',
         search: searchTerm,
         namespace: namespace,
+        exclude: exclude,
         _: new Date().getTime()
     });
     
@@ -4175,15 +4192,24 @@ window.printStaticCalendar = function(calId) {
 // ============================================================================
 
 // Create ARIA live region for announcements
-if (!document.getElementById('calendar-aria-live')) {
-    var ariaLive = document.createElement('div');
-    ariaLive.id = 'calendar-aria-live';
-    ariaLive.setAttribute('role', 'status');
-    ariaLive.setAttribute('aria-live', 'polite');
-    ariaLive.setAttribute('aria-atomic', 'true');
-    ariaLive.style.cssText = 'position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0;';
-    document.body.appendChild(ariaLive);
-}
+(function() {
+    function createAriaLive() {
+        if (document.getElementById('calendar-aria-live')) return;
+        if (!document.body) {
+            // Body not ready yet (script loaded in <head>), wait for it
+            document.addEventListener('DOMContentLoaded', createAriaLive);
+            return;
+        }
+        var ariaLive = document.createElement('div');
+        ariaLive.id = 'calendar-aria-live';
+        ariaLive.setAttribute('role', 'status');
+        ariaLive.setAttribute('aria-live', 'polite');
+        ariaLive.setAttribute('aria-atomic', 'true');
+        ariaLive.style.cssText = 'position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0;';
+        document.body.appendChild(ariaLive);
+    }
+    createAriaLive();
+})();
 
 // Announce message to screen readers
 window.announceToScreenReader = function(message) {

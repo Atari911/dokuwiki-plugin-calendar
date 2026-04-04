@@ -492,3 +492,6 @@ $lang['search_default_month'] = 'Tento měsíc';
 $lang['search_default_month_desc'] = 'Prohledávat pouze události v aktuálně zobrazeném měsíci';
 $lang['search_default_all'] = 'Všechna data';
 $lang['search_default_all_desc'] = 'Prohledávat všechny události v celém kalendáři';
+
+// Exclude Namespaces
+$lang['exclude_desc'] = 'Vyloučené jmenné prostory jsou v tomto zobrazení kalendáře skryty';

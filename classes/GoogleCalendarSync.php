@@ -13,7 +13,7 @@
  * 
  * @license GPL 2 http://www.gnu.org/licenses/gpl-2.0.html
  * @author  DokuWiki Community
- * @version 7.0.8
+ * @version 7.2.6
  */
 
 if (!defined('DOKU_INC')) die();
@@ -463,9 +463,10 @@ class GoogleCalendarSync {
      * Save an imported event to the calendar JSON file
      */
     private function saveImportedEvent($namespace, $date, $eventData) {
+        global $conf;
         list($year, $month, $day) = explode('-', $date);
         
-        $dataDir = DOKU_INC . 'data/meta/';
+        $dataDir = $conf['metadir'] . '/';
         if ($namespace) {
             $dataDir .= str_replace(':', '/', $namespace) . '/';
         }
@@ -624,9 +625,10 @@ class GoogleCalendarSync {
      * Get local calendar events
      */
     private function getLocalEvents($namespace, $startDate, $endDate) {
+        global $conf;
         $events = [];
         
-        $dataDir = DOKU_INC . 'data/meta/';
+        $dataDir = $conf['metadir'] . '/';
         if ($namespace) {
             $dataDir .= str_replace(':', '/', $namespace) . '/';
         }

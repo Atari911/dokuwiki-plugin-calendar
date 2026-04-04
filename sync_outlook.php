@@ -39,11 +39,39 @@ $filterNamespace = isset($options['namespace']) ? $options['namespace'] : null;
 $scriptDir = __DIR__;
 $dokuwikiRoot = dirname(dirname(dirname($scriptDir))); // Go up to dokuwiki root
 
-// Load configuration
+// Determine meta directory
+// Parse DokuWiki's local.php for custom metadir/savedir (farm-safe, no include)
+$metaDir = $dokuwikiRoot . '/data/meta';
+$localConf = $dokuwikiRoot . '/conf/local.php';
+if (file_exists($localConf)) {
+    $localContent = file_get_contents($localConf);
+    // Look for $conf['metadir'] = '...';
+    if (preg_match("/\\$conf\['metadir'\]\s*=\s*'([^']+)'/", $localContent, $m)) {
+        $metaDir = rtrim($m[1], '/');
+    } elseif (preg_match("/\\$conf\['savedir'\]\s*=\s*'([^']+)'/", $localContent, $m)) {
+        $candidateMetaDir = rtrim($m[1], '/') . '/meta';
+        if (is_dir($candidateMetaDir)) {
+            $metaDir = $candidateMetaDir;
+        }
+    }
+}
+
+// Load sync configuration
+// Priority: plugin directory first (original/working location), per-wiki override second
 $configFile = $scriptDir . '/sync_config.php';
+$perWikiConfig = $metaDir . '/calendar/sync_config.php';
+// Per-wiki config only takes priority if it exists (explicit opt-in for farm setups)
+if (file_exists($perWikiConfig)) {
+    $configFile = $perWikiConfig;
+}
 if (!file_exists($configFile)) {
     die("ERROR: Configuration file not found: $configFile\n" .
         "Please copy sync_config.php and add your credentials.\n");
+}
+
+// Debug: show which config file is being used
+if ($verbose) {
+    echo "[CONFIG] Loading: $configFile\n";
 }
 
 $config = require $configFile;
@@ -54,7 +82,7 @@ if (empty($config['tenant_id']) || strpos($config['tenant_id'], 'YOUR_') !== fal
 }
 
 // Files - store in DokuWiki data directory (writable), not plugin directory
-$dataDir = $dokuwikiRoot . '/data/meta/calendar/';
+$dataDir = $metaDir . '/calendar/';
 if (!is_dir($dataDir)) {
     mkdir($dataDir, 0755, true);
 }
@@ -248,7 +276,8 @@ class MicrosoftGraphClient {
 // =============================================================================
 
 function loadDokuWikiEvents($dokuwikiRoot, $filterNamespace = null) {
-    $metaDir = $dokuwikiRoot . '/data/meta';
+    // Use the global $metaDir set at script startup (respects conf overrides)
+    global $metaDir;
     $allEvents = [];
     
     if (!is_dir($metaDir)) {

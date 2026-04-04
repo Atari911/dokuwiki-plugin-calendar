@@ -3,6 +3,8 @@
  * 
  * This file dynamically loads calendar-main.js which contains the actual functionality.
  * This approach avoids DokuWiki's automatic file concatenation which was causing conflicts.
+ *
+ * @version 7.2.6
  */
 
 (function() {
@@ -19,8 +21,8 @@
     var base = (typeof DOKU_BASE !== 'undefined') ? DOKU_BASE : '/';
     script.src = base + 'lib/plugins/calendar/calendar-main.js';
     
-    // Add cache buster to ensure fresh load
-    script.src += '?v=' + Date.now();
+    // Version-based cache key (updated on each release, avoids per-request cache busting)
+    script.src += '?v=7.2.6';
     
     document.head.appendChild(script);
 })();

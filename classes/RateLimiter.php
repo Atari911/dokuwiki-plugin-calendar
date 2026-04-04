@@ -7,7 +7,7 @@
  * 
  * @license GPL 2 http://www.gnu.org/licenses/gpl-2.0.html
  * @author  DokuWiki Community
- * @version 7.0.8
+ * @version 7.2.6
  */
 
 if (!defined('DOKU_INC')) die();
@@ -38,7 +38,8 @@ class CalendarRateLimiter {
      * @return string Directory path
      */
     private static function getRateDir() {
-        $dir = DOKU_INC . 'data/' . self::RATE_DIR;
+        global $conf;
+        $dir = rtrim($conf['cachedir'], '/') . '/calendar/ratelimit/';
         if (!is_dir($dir)) {
             @mkdir($dir, 0755, true);
         }

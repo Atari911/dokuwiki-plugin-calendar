@@ -502,3 +502,6 @@ $lang['search_default_month'] = 'This Month';
 $lang['search_default_month_desc'] = 'Search only events in the currently displayed month';
 $lang['search_default_all'] = 'All Dates';
 $lang['search_default_all_desc'] = 'Search across all events in the entire calendar';
+
+// Exclude Namespaces
+$lang['exclude_desc'] = 'Excluded namespaces are hidden from this calendar view';

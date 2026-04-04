@@ -1,29 +1,93 @@
 # Calendar Plugin Changelog
 
-## Version 7.0.9 (2026-03-01) - DEFAULT SEARCH SCOPE SETTING
+## Version 7.2.6 (2026-04-03)
 
-### New Feature: Default Search Scope
-Added admin setting (Themes tab) to configure whether the event search bar defaults to searching the current month or the entire calendar.
+Major release focused on DokuWiki farm compatibility, security hardening, and new features.
 
-**Options:**
-- **This Month** (default) — Search only events in the currently displayed month (📅 icon)
-- **All Dates** — Search across all events in the entire calendar (🌐 icon)
+### New Features
 
-Users can still toggle the search scope at any time using the search mode button next to the search bar. This setting controls only the initial default state.
+**Namespace Exclude Parameter**
+- `{{calendar namespace=* exclude=journal}}` — hide specific namespaces from wildcard views
+- `{{calendar namespace=* exclude="journal;drafts"}}` — exclude multiple (semicolon-separated)
+- Supports exact and prefix matching: `exclude=journal` also hides `journal:daily`, `journal:notes`
+- Works with `{{calendar}}`, `{{eventpanel}}`, and `{{eventlist}}`
+- Preserved across AJAX navigation and all-dates search
 
-### Localization
-- Added localized strings for English, German, and Czech
+**Default Search Scope Setting**
+- New admin setting (Themes tab) to default the search bar to "This Month" or "All Dates"
+- Users can still toggle per-session with the 📅/🌐 button
+- Stored in `data/meta/calendar_search_default.txt`
 
-### Files Modified
-- `admin.php` — Added search scope setting UI in Themes tab, save/load methods
-- `syntax.php` — Added `getSearchDefault()` method; inline and panel search bars now initialize from admin setting
-- `lang/en/lang.php` — Added search default scope strings
-- `lang/de/lang.php` — Added German translations
-- `lang/cs/lang.php` — Added Czech translations
-- `plugin.info.txt` — Version bump to 7.0.9
+### DokuWiki Farm Compatibility
 
-### Configuration
-Setting is stored in `data/meta/calendar_search_default.txt` (values: `month` or `all`)
+**Data Path Migration**
+- Replaced 77 hardcoded `DOKU_INC . 'data/meta/'` references with `$conf['metadir']` across 8 files
+- Cache paths now use `$conf['cachedir']` (EventCache, RateLimiter, clearCache)
+- All temp files (`.event_stats_cache`, `.sync_abort`) moved from shared plugin dir to per-animal data dir
+- Added `metaDir()` helper to syntax, action, and admin plugin classes
+
+**Per-Animal Sync Credentials**
+- `sync_config.php` now checked in `$conf['metadir']/calendar/` first (per-animal), falls back to `DOKU_PLUGIN` (shared)
+- Added `syncConfigPath()` helper with fallback logic
+- Google OAuth tokens already stored per-animal in `$conf['metadir']`
+
+**CLI Sync Safety**
+- `sync_outlook.php` bootstraps DokuWiki with `NOSESSION` for CLI safety
+- Defensive fallback for `$conf['metadir']` when not set
+- Cron jobs should run as `www-data`, not root, to avoid file ownership issues
+
+### Security Hardening
+
+**ACL Enforcement on All AJAX Endpoints**
+- Read operations (`load_month`, `get_event`, `get_static_calendar`, `search_all`) verify `AUTH_READ`
+- Write operations (`save_event`, `delete_event`, `toggle_task`) verify `AUTH_EDIT`
+- Wildcard/multi-namespace views silently filter out namespaces the user cannot access
+- Applied to both server-side rendering (syntax.php) and AJAX paths (action.php)
+
+**CSRF Protection on Admin Panel**
+- Added `checkSecurityToken()` validation to the admin `handle()` method
+- Added `formSecurityToken()` to all 12 HTML forms
+- Added `JSINFO.sectok` hidden input to all 11 JavaScript-generated forms
+
+**Removed System Stats Endpoint**
+- Deleted `get_system_stats.php` — exposed CPU, memory, load averages, uptime, and top processes via `shell_exec('ps aux')` and `/proc/meminfo` through a directly-accessible PHP endpoint
+- Removed admin UI section, CSS, and save/load methods
+- System load inline JS remains but never executes (`getShowSystemLoad()` returns `false`)
+
+### Bug Fixes
+
+**Weekly Recurring Events on Sunday Created 365 Daily Events**
+- PHP's string `'0'` is falsy — when Sunday (day index 0) was the only selected weekday, the `$weekDays` array was empty, and every day matched
+- Fixed: strict comparison `($weekDaysStr !== '')` instead of truthy check
+
+**Memory Exhaustion on Large Wikis (namespace=*)**
+- Replaced recursive `findSubNamespaces` (which scanned every directory in `data/meta/`) with `findCalendarNamespaces` using iterative `glob()` to locate `calendar/` directories directly
+- On a wiki with 5,000 pages: old approach scanned 5,000+ dirs; new approach runs ~10 glob calls
+
+**Page Load Crash: "Cannot read properties of null"**
+- ARIA live region creation ran before `document.body` existed (script loaded in `<head>`)
+- Wrapped in deferred function that waits for `DOMContentLoaded`
+
+**JS Cache Busting**
+- `script.js` was using `Date.now()` as cache buster, forcing fresh HTTP requests on every page load
+- Changed to version-based `?v=7.2.1`
+
+### Housekeeping
+- Updated `@version` docblocks across all PHP files
+- Added localized strings (EN/DE/CS) for exclude and search scope features
+- Template `style.ini` lookups now check `$conf['savedir']` for farm-specific overrides
+
+### Migration Notes
+
+**From 7.0.x (non-farm):** No action needed — paths resolve to the same location.
+
+**Farm setups:** Calendar data stays in the master wiki's `data/meta/`. Move per-animal data manually:
+```bash
+mv /path/to/master/data/meta/calendar/ /path/to/animal/data/meta/calendar/
+mv /path/to/master/data/meta/calendar_*.txt /path/to/animal/data/meta/
+```
+
+**Cleanup:** The file `calendar_show_system_load.txt` in your data directory can be safely deleted.
 
 ---
 

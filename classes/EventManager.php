@@ -7,7 +7,7 @@
  * 
  * @license GPL 2 http://www.gnu.org/licenses/gpl-2.0.html
  * @author  DokuWiki Community
- * @version 7.0.8
+ * @version 7.2.6
  */
 
 if (!defined('DOKU_INC')) die();
@@ -28,7 +28,8 @@ class CalendarEventManager {
      */
     private static function getBaseDir() {
         if (self::$baseDir === null) {
-            self::$baseDir = DOKU_INC . 'data/meta/';
+            global $conf;
+            self::$baseDir = rtrim($conf['metadir'], '/') . '/';
         }
         return self::$baseDir;
     }

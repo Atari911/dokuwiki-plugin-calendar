@@ -11,6 +11,39 @@ if (!defined('DOKU_INC')) die();
 
 class syntax_plugin_calendar extends DokuWiki_Syntax_Plugin {
     
+    /**
+     * Get the meta directory path (farm-safe)
+     * Uses $conf['metadir'] instead of hardcoded DOKU_INC . 'data/meta/'
+     */
+    private function metaDir() {
+        global $conf;
+        return rtrim($conf['metadir'], '/') . '/';
+    }
+    
+    /**
+     * Check if the current user has read access to a namespace
+     *
+     * @param string $namespace Namespace to check (empty = root)
+     * @return bool True if user has at least AUTH_READ
+     */
+    private function checkNamespaceRead($namespace) {
+        if (empty($namespace) || $namespace === '*') return true;
+        $ns = str_replace(['*', ';'], '', $namespace);
+        if (empty($ns)) return true;
+        $perm = auth_quickaclcheck($ns . ':*');
+        return ($perm >= AUTH_READ);
+    }
+    
+    /**
+     * Get sync config file path (farm-safe)
+     * Checks per-animal metadir first, falls back to shared plugin dir
+     */
+    private function syncConfigPath() {
+        $perAnimal = $this->metaDir() . 'calendar/sync_config.php';
+        if (file_exists($perAnimal)) return $perAnimal;
+        return DOKU_PLUGIN . 'calendar/sync_config.php';
+    }
+    
     public function getType() {
         return 'substition';
     }
@@ -119,6 +152,8 @@ class syntax_plugin_calendar extends DokuWiki_Syntax_Plugin {
         $year = (int)$data['year'];
         $month = (int)$data['month'];
         $namespace = $data['namespace'];
+        $exclude = isset($data['exclude']) ? $data['exclude'] : '';
+        $excludeList = $this->parseExcludeList($exclude);
         
         // Get theme - prefer inline theme= parameter, fall back to admin default
         $theme = !empty($data['theme']) ? $data['theme'] : $this->getSidebarTheme();
@@ -132,7 +167,7 @@ class syntax_plugin_calendar extends DokuWiki_Syntax_Plugin {
         $isMultiNamespace = !empty($namespace) && (strpos($namespace, ';') !== false || strpos($namespace, '*') !== false);
         
         if ($isMultiNamespace) {
-            $events = $this->loadEventsMultiNamespace($namespace, $year, $month);
+            $events = $this->loadEventsMultiNamespace($namespace, $year, $month, $excludeList);
         } else {
             $events = $this->loadEvents($namespace, $year, $month);
         }
@@ -155,7 +190,7 @@ class syntax_plugin_calendar extends DokuWiki_Syntax_Plugin {
         }
         
         // Get important namespaces from config for highlighting
-        $configFile = DOKU_PLUGIN . 'calendar/sync_config.php';
+        $configFile = $this->syncConfigPath();
         $importantNsList = ['important']; // default
         if (file_exists($configFile)) {
             $config = include $configFile;
@@ -165,7 +200,7 @@ class syntax_plugin_calendar extends DokuWiki_Syntax_Plugin {
         }
         
         // Container - all styling via CSS variables
-        $html = '<div class="calendar-compact-container ' . $themeClass . '" id="' . $calId . '" data-namespace="' . htmlspecialchars($namespace) . '" data-original-namespace="' . htmlspecialchars($namespace) . '" data-year="' . $year . '" data-month="' . $month . '" data-theme="' . $theme . '" data-theme-styles="' . htmlspecialchars(json_encode($themeStyles)) . '" data-important-namespaces="' . htmlspecialchars(json_encode($importantNsList)) . '">';
+        $html = '<div class="calendar-compact-container ' . $themeClass . '" id="' . $calId . '" data-namespace="' . htmlspecialchars($namespace) . '" data-original-namespace="' . htmlspecialchars($namespace) . '" data-exclude="' . htmlspecialchars($exclude) . '" data-year="' . $year . '" data-month="' . $month . '" data-theme="' . $theme . '" data-theme-styles="' . htmlspecialchars(json_encode($themeStyles)) . '" data-important-namespaces="' . htmlspecialchars(json_encode($importantNsList)) . '">';
         
         // Inject CSS variables for this calendar instance - all theming flows from here
         $html .= '<style>
@@ -425,6 +460,8 @@ class syntax_plugin_calendar extends DokuWiki_Syntax_Plugin {
         $year = (int)$data['year'];
         $month = (int)$data['month'];
         $namespace = isset($data['namespace']) ? $data['namespace'] : '';
+        $exclude = isset($data['exclude']) ? $data['exclude'] : '';
+        $excludeList = $this->parseExcludeList($exclude);
         $customTitle = isset($data['title']) ? $data['title'] : '';
         $noprint = isset($data['noprint']) && $data['noprint'];
         $locked = isset($data['locked']) && $data['locked'];
@@ -447,7 +484,7 @@ class syntax_plugin_calendar extends DokuWiki_Syntax_Plugin {
         // Load events - check for multi-namespace or wildcard
         $isMultiNamespace = !empty($namespace) && (strpos($namespace, ';') !== false || strpos($namespace, '*') !== false);
         if ($isMultiNamespace) {
-            $events = $this->loadEventsMultiNamespace($namespace, $year, $month);
+            $events = $this->loadEventsMultiNamespace($namespace, $year, $month, $excludeList);
         } else {
             $events = $this->loadEvents($namespace, $year, $month);
         }
@@ -465,7 +502,7 @@ class syntax_plugin_calendar extends DokuWiki_Syntax_Plugin {
         $themeClass = 'static-theme-' . $theme;
         
         // Build HTML
-        $html = '<div class="calendar-static ' . $themeClass . '" id="' . $calId . '" data-year="' . $year . '" data-month="' . $month . '" data-namespace="' . hsc($namespace) . '" data-locked="' . ($locked ? '1' : '0') . '">';
+        $html = '<div class="calendar-static ' . $themeClass . '" id="' . $calId . '" data-year="' . $year . '" data-month="' . $month . '" data-namespace="' . hsc($namespace) . '" data-exclude="' . hsc($exclude) . '" data-locked="' . ($locked ? '1' : '0') . '">';
         
         // Screen view: Calendar Grid
         $html .= '<div class="static-screen-view">';
@@ -694,7 +731,7 @@ class syntax_plugin_calendar extends DokuWiki_Syntax_Plugin {
      * Get list of important namespaces from config
      */
     private function getImportantNamespaces() {
-        $configFile = DOKU_PLUGIN . 'calendar/sync_config.php';
+        $configFile = $this->syncConfigPath();
         $importantNsList = ['important']; // default
         if (file_exists($configFile)) {
             $config = include $configFile;
@@ -719,7 +756,7 @@ class syntax_plugin_calendar extends DokuWiki_Syntax_Plugin {
         }
         
         // Get important namespaces from config
-        $configFile = DOKU_PLUGIN . 'calendar/sync_config.php';
+        $configFile = $this->syncConfigPath();
         $importantNsList = ['important']; // default
         if (file_exists($configFile)) {
             $config = include $configFile;
@@ -1154,6 +1191,8 @@ class syntax_plugin_calendar extends DokuWiki_Syntax_Plugin {
         $year = (int)$data['year'];
         $month = (int)$data['month'];
         $namespace = $data['namespace'];
+        $exclude = isset($data['exclude']) ? $data['exclude'] : '';
+        $excludeList = $this->parseExcludeList($exclude);
         $height = isset($data['height']) ? $data['height'] : '400px';
         
         // Validate height format (must be px, em, rem, vh, or %)
@@ -1168,7 +1207,7 @@ class syntax_plugin_calendar extends DokuWiki_Syntax_Plugin {
         $isMultiNamespace = !empty($namespace) && (strpos($namespace, ';') !== false || strpos($namespace, '*') !== false);
         
         if ($isMultiNamespace) {
-            $events = $this->loadEventsMultiNamespace($namespace, $year, $month);
+            $events = $this->loadEventsMultiNamespace($namespace, $year, $month, $excludeList);
         } else {
             $events = $this->loadEvents($namespace, $year, $month);
         }
@@ -1194,7 +1233,7 @@ class syntax_plugin_calendar extends DokuWiki_Syntax_Plugin {
         $btnTextColor = ($theme === 'professional') ? '#fff' : $themeStyles['bg'];
         
         // Get important namespaces from config for highlighting
-        $configFile = DOKU_PLUGIN . 'calendar/sync_config.php';
+        $configFile = $this->syncConfigPath();
         $importantNsList = ['important']; // default
         if (file_exists($configFile)) {
             $config = include $configFile;
@@ -1203,7 +1242,7 @@ class syntax_plugin_calendar extends DokuWiki_Syntax_Plugin {
             }
         }
         
-        $html = '<div class="event-panel-standalone" id="' . $calId . '" data-height="' . htmlspecialchars($height) . '" data-namespace="' . htmlspecialchars($namespace) . '" data-original-namespace="' . htmlspecialchars($namespace) . '" data-theme="' . $theme . '" data-theme-styles="' . htmlspecialchars(json_encode($themeStyles)) . '" data-important-namespaces="' . htmlspecialchars(json_encode($importantNsList)) . '">';
+        $html = '<div class="event-panel-standalone" id="' . $calId . '" data-height="' . htmlspecialchars($height) . '" data-namespace="' . htmlspecialchars($namespace) . '" data-original-namespace="' . htmlspecialchars($namespace) . '" data-exclude="' . htmlspecialchars($exclude) . '" data-theme="' . $theme . '" data-theme-styles="' . htmlspecialchars(json_encode($themeStyles)) . '" data-important-namespaces="' . htmlspecialchars(json_encode($importantNsList)) . '">';
         
         // Inject CSS variables for this panel instance - same as main calendar
         $html .= '<style>
@@ -1313,6 +1352,8 @@ class syntax_plugin_calendar extends DokuWiki_Syntax_Plugin {
         if (empty($namespace)) {
             $namespace = '*';
         }
+        $exclude = isset($data['exclude']) ? $data['exclude'] : '';
+        $excludeList = $this->parseExcludeList($exclude);
         $daterange = $data['daterange'];
         $date = $data['date'];
         $range = isset($data['range']) ? strtolower($data['range']) : '';
@@ -1391,7 +1432,7 @@ class syntax_plugin_calendar extends DokuWiki_Syntax_Plugin {
                 
                 if (!isset($loadedMonths[$monthKey])) {
                     if ($isMultiNamespace) {
-                        $loadedMonths[$monthKey] = $this->loadEventsMultiNamespace($namespace, $year, $month);
+                        $loadedMonths[$monthKey] = $this->loadEventsMultiNamespace($namespace, $year, $month, $excludeList);
                     } else {
                         $loadedMonths[$monthKey] = $this->loadEvents($namespace, $year, $month);
                     }
@@ -1456,7 +1497,7 @@ class syntax_plugin_calendar extends DokuWiki_Syntax_Plugin {
             
             if (!isset($loadedMonths[$monthKey])) {
                 if ($isMultiNamespace) {
-                    $loadedMonths[$monthKey] = $this->loadEventsMultiNamespace($namespace, $year, $month);
+                    $loadedMonths[$monthKey] = $this->loadEventsMultiNamespace($namespace, $year, $month, $excludeList);
                 } else {
                     $loadedMonths[$monthKey] = $this->loadEvents($namespace, $year, $month);
                 }
@@ -1507,7 +1548,7 @@ class syntax_plugin_calendar extends DokuWiki_Syntax_Plugin {
             $containerStyle .= ' border-radius:4px;';
         }
         
-        $html = '<div class="eventlist-simple ' . $themeClass . '" id="' . $calId . '" style="' . $containerStyle . '" data-show-system-load="' . ($this->getShowSystemLoad() ? 'yes' : 'no') . '">';
+        $html = '<div class="eventlist-simple ' . $themeClass . '" id="' . $calId . '" style="' . $containerStyle . '" data-exclude="' . htmlspecialchars($exclude) . '">';
         
         // Inject CSS variables for this eventlist instance
         $html .= '<style>
@@ -1553,31 +1594,6 @@ class syntax_plugin_calendar extends DokuWiki_Syntax_Plugin {
             $html .= '<span class="eventlist-today-date">' . $displayDate . '</span>';
             $html .= '</div>';
             
-            // Three CPU/Memory bars (all update live) - only if enabled
-            $showSystemLoad = $this->getShowSystemLoad();
-            if ($showSystemLoad) {
-                $html .= '<div class="eventlist-stats-container">';
-                
-                // 5-minute load average (green, updates every 2 seconds)
-                $html .= '<div class="eventlist-cpu-bar" style="background:' . $themeStyles['cell_today_bg'] . ' !important;" onmouseover="showTooltip_' . $calId . '(\'green\')" onmouseout="hideTooltip_' . $calId . '(\'green\')">';
-                $html .= '<div class="eventlist-cpu-fill" id="cpu-5min-' . $calId . '" style="width: 0%; background:' . $themeStyles['text_bright'] . ' !important;"></div>';
-                $html .= '<div class="system-tooltip" id="tooltip-green-' . $calId . '" style="display:none;"></div>';
-                $html .= '</div>';
-                
-                // Real-time CPU (purple, updates with 5-sec average)
-                $html .= '<div class="eventlist-cpu-bar eventlist-cpu-realtime" style="background:' . $themeStyles['cell_today_bg'] . ' !important;" onmouseover="showTooltip_' . $calId . '(\'purple\')" onmouseout="hideTooltip_' . $calId . '(\'purple\')">';
-                $html .= '<div class="eventlist-cpu-fill eventlist-cpu-fill-purple" id="cpu-realtime-' . $calId . '" style="width: 0%; background:' . $themeStyles['border'] . ' !important;"></div>';
-                $html .= '<div class="system-tooltip" id="tooltip-purple-' . $calId . '" style="display:none;"></div>';
-                $html .= '</div>';
-                
-                // Real-time Memory (orange, updates)
-                $html .= '<div class="eventlist-cpu-bar eventlist-mem-realtime" style="background:' . $themeStyles['cell_today_bg'] . ' !important;" onmouseover="showTooltip_' . $calId . '(\'orange\')" onmouseout="hideTooltip_' . $calId . '(\'orange\')">';
-                $html .= '<div class="eventlist-cpu-fill eventlist-cpu-fill-orange" id="mem-realtime-' . $calId . '" style="width: 0%; background:' . $themeStyles['text_primary'] . ' !important;"></div>';
-                $html .= '<div class="system-tooltip" id="tooltip-orange-' . $calId . '" style="display:none;"></div>';
-                $html .= '</div>';
-                
-                $html .= '</div>';
-            }
             $html .= '</div>';
             
             // Add JavaScript to update clock and weather
@@ -1685,184 +1701,6 @@ class syntax_plugin_calendar extends DokuWiki_Syntax_Plugin {
     // Update weather immediately and every 10 minutes
     updateWeather();
     setInterval(updateWeather, 600000);
-    
-    // Check if system load bars are enabled
-    const container = document.getElementById("' . $calId . '");
-    const showSystemLoad = container && container.dataset.showSystemLoad !== "no";
-    
-    if (showSystemLoad) {
-    // CPU load history for 4-second rolling average
-    const cpuHistory = [];
-    const CPU_HISTORY_SIZE = 2; // 2 samples × 2 seconds = 4 seconds
-    
-    // Store latest system stats for tooltips
-    let latestStats = {
-        load: {"1min": 0, "5min": 0, "15min": 0},
-        uptime: "",
-        memory_details: {},
-        top_processes: []
-    };
-    
-    // Tooltip functions
-    window["showTooltip_' . $calId . '"] = function(color) {
-        const tooltip = document.getElementById("tooltip-" + color + "-' . $calId . '");
-        if (!tooltip) {
-            console.log("Tooltip element not found for color:", color);
-            return;
-        }
-        
-        
-        let content = "";
-        
-        if (color === "green") {
-            // Green bar: Load averages and uptime
-            content = "<div class=\"tooltip-title\">CPU Load Average</div>";
-            content += "<div>1 min: " + (latestStats.load["1min"] || "N/A") + "</div>";
-            content += "<div>5 min: " + (latestStats.load["5min"] || "N/A") + "</div>";
-            content += "<div>15 min: " + (latestStats.load["15min"] || "N/A") + "</div>";
-            if (latestStats.uptime) {
-                content += "<div style=\"margin-top:3px; padding-top:2px; border-top:1px solid ' . $themeStyles['text_bright'] . ';\">Uptime: " + latestStats.uptime + "</div>";
-            }
-            tooltip.style.setProperty("border-color", "' . $themeStyles['text_bright'] . '", "important");
-            tooltip.style.setProperty("color", "' . $themeStyles['text_bright'] . '", "important");
-            tooltip.style.setProperty("-webkit-text-fill-color", "' . $themeStyles['text_bright'] . '", "important");
-        } else if (color === "purple") {
-            // Purple bar: Load averages (short-term) and top processes
-            content = "<div class=\"tooltip-title\">CPU Load (Short-term)</div>";
-            content += "<div>1 min: " + (latestStats.load["1min"] || "N/A") + "</div>";
-            content += "<div>5 min: " + (latestStats.load["5min"] || "N/A") + "</div>";
-            if (latestStats.top_processes && latestStats.top_processes.length > 0) {
-                content += "<div style=\"margin-top:3px; padding-top:2px; border-top:1px solid ' . $themeStyles['border'] . ';\" class=\"tooltip-title\">Top Processes</div>";
-                latestStats.top_processes.slice(0, 5).forEach(proc => {
-                    content += "<div>" + proc.cpu + " " + proc.command + "</div>";
-                });
-            }
-            tooltip.style.setProperty("border-color", "' . $themeStyles['border'] . '", "important");
-            tooltip.style.setProperty("color", "' . $themeStyles['border'] . '", "important");
-            tooltip.style.setProperty("-webkit-text-fill-color", "' . $themeStyles['border'] . '", "important");
-        } else if (color === "orange") {
-            // Orange bar: Memory details and top processes
-            content = "<div class=\"tooltip-title\">Memory Usage</div>";
-            if (latestStats.memory_details && latestStats.memory_details.total) {
-                content += "<div>Total: " + latestStats.memory_details.total + "</div>";
-                content += "<div>Used: " + latestStats.memory_details.used + "</div>";
-                content += "<div>Available: " + latestStats.memory_details.available + "</div>";
-                if (latestStats.memory_details.cached) {
-                    content += "<div>Cached: " + latestStats.memory_details.cached + "</div>";
-                }
-            } else {
-                content += "<div>Loading...</div>";
-            }
-            if (latestStats.top_processes && latestStats.top_processes.length > 0) {
-                content += "<div style=\"margin-top:3px; padding-top:2px; border-top:1px solid ' . $themeStyles['text_primary'] . ';\" class=\"tooltip-title\">Top Processes</div>";
-                latestStats.top_processes.slice(0, 5).forEach(proc => {
-                    content += "<div>" + proc.cpu + " " + proc.command + "</div>";
-                });
-            }
-            tooltip.style.setProperty("border-color", "' . $themeStyles['text_primary'] . '", "important");
-            tooltip.style.setProperty("color", "' . $themeStyles['text_primary'] . '", "important");
-            tooltip.style.setProperty("-webkit-text-fill-color", "' . $themeStyles['text_primary'] . '", "important");
-        }
-        
-        tooltip.innerHTML = content;
-        tooltip.style.setProperty("display", "block");
-        tooltip.style.setProperty("background", "' . $themeStyles['bg'] . '", "important");
-        
-        // Position tooltip using fixed positioning above the bar
-        const bar = tooltip.parentElement;
-        const barRect = bar.getBoundingClientRect();
-        const tooltipRect = tooltip.getBoundingClientRect();
-        
-        // Center horizontally on the bar
-        const left = barRect.left + (barRect.width / 2) - (tooltipRect.width / 2);
-        // Position above the bar with 8px gap
-        const top = barRect.top - tooltipRect.height - 8;
-        
-        tooltip.style.left = left + "px";
-        tooltip.style.top = top + "px";
-    };
-    
-    window["hideTooltip_' . $calId . '"] = function(color) {
-        const tooltip = document.getElementById("tooltip-" + color + "-' . $calId . '");
-        if (tooltip) {
-            tooltip.style.display = "none";
-        }
-    };
-    
-    // Update CPU and memory bars every 2 seconds
-    function updateSystemStats() {
-        // Fetch real system stats from server
-        fetch("' . DOKU_BASE . 'lib/plugins/calendar/get_system_stats.php")
-            .then(response => response.json())
-            .then(data => {
-                
-                // Store data for tooltips
-                latestStats = {
-                    load: data.load || {"1min": 0, "5min": 0, "15min": 0},
-                    uptime: data.uptime || "",
-                    memory_details: data.memory_details || {},
-                    top_processes: data.top_processes || []
-                };
-                
-                
-                // Update green bar (5-minute average) - updates live now!
-                const greenBar = document.getElementById("cpu-5min-' . $calId . '");
-                if (greenBar) {
-                    greenBar.style.width = Math.min(100, data.cpu_5min) + "%";
-                }
-                
-                // Add current CPU to history for purple bar
-                cpuHistory.push(data.cpu);
-                if (cpuHistory.length > CPU_HISTORY_SIZE) {
-                    cpuHistory.shift(); // Remove oldest
-                }
-                
-                // Calculate 5-second average for CPU
-                const cpuAverage = cpuHistory.reduce((sum, val) => sum + val, 0) / cpuHistory.length;
-                
-                // Update CPU bar (purple) with 5-second average
-                const cpuBar = document.getElementById("cpu-realtime-' . $calId . '");
-                if (cpuBar) {
-                    cpuBar.style.width = Math.min(100, cpuAverage) + "%";
-                }
-                
-                // Update memory bar (orange) with real data
-                const memBar = document.getElementById("mem-realtime-' . $calId . '");
-                if (memBar) {
-                    memBar.style.width = Math.min(100, data.memory) + "%";
-                }
-            })
-            .catch(error => {
-                console.log("System stats error:", error);
-                // Fallback to client-side estimates on error
-                const cpuFallback = Math.random() * 100;
-                cpuHistory.push(cpuFallback);
-                if (cpuHistory.length > CPU_HISTORY_SIZE) {
-                    cpuHistory.shift();
-                }
-                const cpuAverage = cpuHistory.reduce((sum, val) => sum + val, 0) / cpuHistory.length;
-                
-                const greenBar = document.getElementById("cpu-5min-' . $calId . '");
-                if (greenBar) greenBar.style.width = Math.min(100, cpuFallback) + "%";
-                
-                const cpuBar = document.getElementById("cpu-realtime-' . $calId . '");
-                if (cpuBar) cpuBar.style.width = Math.min(100, cpuAverage) + "%";
-                
-                let memoryUsage = 0;
-                if (performance.memory) {
-                    memoryUsage = (performance.memory.usedJSHeapSize / performance.memory.jsHeapSizeLimit) * 100;
-                } else {
-                    memoryUsage = Math.random() * 100;
-                }
-                const memBar = document.getElementById("mem-realtime-' . $calId . '");
-                if (memBar) memBar.style.width = Math.min(100, memoryUsage) + "%";
-            });
-    }
-    
-    // Update immediately and then every 2 seconds
-    updateSystemStats();
-    setInterval(updateSystemStats, 2000);
-    } // End showSystemLoad check
 })();
 </script>';
         }
@@ -2409,7 +2247,7 @@ class syntax_plugin_calendar extends DokuWiki_Syntax_Plugin {
     }
     
     private function loadEvents($namespace, $year, $month) {
-        $dataDir = DOKU_INC . 'data/meta/';
+        $dataDir = $this->metaDir();
         if ($namespace) {
             $dataDir .= str_replace(':', '/', $namespace) . '/';
         }
@@ -2425,16 +2263,16 @@ class syntax_plugin_calendar extends DokuWiki_Syntax_Plugin {
         return array();
     }
     
-    private function loadEventsMultiNamespace($namespaces, $year, $month) {
+    private function loadEventsMultiNamespace($namespaces, $year, $month, $excludeList = []) {
         // Check for wildcard pattern (namespace:*)
         if (preg_match('/^(.+):\*$/', $namespaces, $matches)) {
             $baseNamespace = $matches[1];
-            return $this->loadEventsWildcard($baseNamespace, $year, $month);
+            return $this->loadEventsWildcard($baseNamespace, $year, $month, $excludeList);
         }
         
         // Check for root wildcard (just *)
         if ($namespaces === '*') {
-            return $this->loadEventsWildcard('', $year, $month);
+            return $this->loadEventsWildcard('', $year, $month, $excludeList);
         }
         
         // Parse namespace list (semicolon separated)
@@ -2446,6 +2284,12 @@ class syntax_plugin_calendar extends DokuWiki_Syntax_Plugin {
         foreach ($namespaceList as $ns) {
             $ns = trim($ns);
             if (empty($ns)) continue;
+            
+            // Skip excluded namespaces
+            if ($this->isNamespaceExcluded($ns, $excludeList)) continue;
+            
+            // ACL check: skip namespaces user cannot read
+            if (!$this->checkNamespaceRead($ns)) continue;
             
             $events = $this->loadEvents($ns, $year, $month);
             
@@ -2464,18 +2308,17 @@ class syntax_plugin_calendar extends DokuWiki_Syntax_Plugin {
         return $allEvents;
     }
     
-    private function loadEventsWildcard($baseNamespace, $year, $month) {
-        // Find all subdirectories under the base namespace
-        $dataDir = DOKU_INC . 'data/meta/';
+    private function loadEventsWildcard($baseNamespace, $year, $month, $excludeList = []) {
+        $metaDir = $this->metaDir();
+        $dataDir = $metaDir;
         if ($baseNamespace) {
             $dataDir .= str_replace(':', '/', $baseNamespace) . '/';
         }
         
         $allEvents = array();
         
-        // First, load events from the base namespace itself
+        // Load events from the base namespace itself
         if (empty($baseNamespace)) {
-            // Root wildcard - load from root calendar
             $events = $this->loadEvents('', $year, $month);
             foreach ($events as $dateKey => $dayEvents) {
                 if (!isset($allEvents[$dateKey])) {
@@ -2487,37 +2330,66 @@ class syntax_plugin_calendar extends DokuWiki_Syntax_Plugin {
                 }
             }
         } else {
-            $events = $this->loadEvents($baseNamespace, $year, $month);
-            foreach ($events as $dateKey => $dayEvents) {
-                if (!isset($allEvents[$dateKey])) {
-                    $allEvents[$dateKey] = array();
-                }
-                foreach ($dayEvents as $event) {
-                    $event['_namespace'] = $baseNamespace;
-                    $allEvents[$dateKey][] = $event;
+            if (!$this->isNamespaceExcluded($baseNamespace, $excludeList) && $this->checkNamespaceRead($baseNamespace)) {
+                $events = $this->loadEvents($baseNamespace, $year, $month);
+                foreach ($events as $dateKey => $dayEvents) {
+                    if (!isset($allEvents[$dateKey])) {
+                        $allEvents[$dateKey] = array();
+                    }
+                    foreach ($dayEvents as $event) {
+                        $event['_namespace'] = $baseNamespace;
+                        $allEvents[$dateKey][] = $event;
+                    }
                 }
             }
         }
         
-        // Recursively find all subdirectories
-        $this->findSubNamespaces($dataDir, $baseNamespace, $year, $month, $allEvents);
+        // Find all calendar directories efficiently using iterative glob
+        // This avoids recursing into every directory in data/meta (thousands on large wikis)
+        $this->findCalendarNamespaces($dataDir, $metaDir, $year, $month, $allEvents, $excludeList);
         
         return $allEvents;
     }
     
-    private function findSubNamespaces($dir, $baseNamespace, $year, $month, &$allEvents) {
-        if (!is_dir($dir)) return;
+    /**
+     * Find namespaces with calendar data using iterative glob
+     * Searches for 'calendar/' directories at increasing depth without
+     * scanning every directory in data/meta
+     */
+    private function findCalendarNamespaces($baseDir, $metaDir, $year, $month, &$allEvents, $excludeList = []) {
+        if (!is_dir($baseDir)) return;
         
-        $items = scandir($dir);
-        foreach ($items as $item) {
-            if ($item === '.' || $item === '..') continue;
+        // Use glob at increasing depths to find 'calendar' directories
+        // This is vastly more efficient than recursive scandir on large wikis
+        $maxDepth = 10;
+        $metaDirLen = strlen($metaDir);
+        
+        for ($depth = 1; $depth <= $maxDepth; $depth++) {
+            $pattern = $baseDir . str_repeat('*/', $depth) . 'calendar';
+            $calDirs = glob($pattern, GLOB_ONLYDIR);
             
-            $path = $dir . $item;
-            if (is_dir($path) && $item !== 'calendar') {
-                // This is a namespace directory
-                $namespace = $baseNamespace ? $baseNamespace . ':' . $item : $item;
+            if (empty($calDirs)) {
+                // No calendar dirs at this depth or deeper - stop early
+                // (only if we also found none at previous depths)
+                if ($depth > 3) break;
+                continue;
+            }
+            
+            foreach ($calDirs as $calDir) {
+                // Derive namespace from the parent directory of 'calendar/'
+                $nsDir = dirname($calDir);
+                $relPath = substr($nsDir, $metaDirLen);
+                $namespace = str_replace('/', ':', trim($relPath, '/'));
                 
-                // Load events from this namespace
+                // Skip the root namespace (already handled above)
+                if (empty($namespace)) continue;
+                
+                // Skip excluded namespaces
+                if ($this->isNamespaceExcluded($namespace, $excludeList)) continue;
+                
+                // ACL check
+                if (!$this->checkNamespaceRead($namespace)) continue;
+                
                 $events = $this->loadEvents($namespace, $year, $month);
                 foreach ($events as $dateKey => $dayEvents) {
                     if (!isset($allEvents[$dateKey])) {
@@ -2528,15 +2400,12 @@ class syntax_plugin_calendar extends DokuWiki_Syntax_Plugin {
                         $allEvents[$dateKey][] = $event;
                     }
                 }
-                
-                // Recurse into subdirectories
-                $this->findSubNamespaces($path . '/', $namespace, $year, $month, $allEvents);
             }
         }
     }
     
     private function getAllNamespaces() {
-        $dataDir = DOKU_INC . 'data/meta/';
+        $dataDir = $this->metaDir();
         $namespaces = [];
         
         // Scan for namespaces that have calendar data
@@ -2585,7 +2454,7 @@ class syntax_plugin_calendar extends DokuWiki_Syntax_Plugin {
         }
         
         // Get important namespaces from config
-        $configFile = DOKU_PLUGIN . 'calendar/sync_config.php';
+        $configFile = $this->syncConfigPath();
         $importantNsList = ['important']; // default
         if (file_exists($configFile)) {
             $config = include $configFile;
@@ -2835,98 +2704,6 @@ class syntax_plugin_calendar extends DokuWiki_Syntax_Plugin {
         // CRITICAL: Add ALL JavaScript FIRST before any HTML that uses it
         $html .= '<script>
 (function() {
-    // Shared state for system stats and tooltips
-    const sharedState_' . $jsCalId . ' = {
-        latestStats: {
-            load: {"1min": 0, "5min": 0, "15min": 0},
-            uptime: "",
-            memory_details: {},
-            top_processes: []
-        },
-        cpuHistory: [],
-        CPU_HISTORY_SIZE: 2
-    };
-    
-    // Tooltip functions - MUST be defined before HTML uses them
-    window["showTooltip_' . $jsCalId . '"] = function(color) {
-        const tooltip = document.getElementById("tooltip-" + color + "-' . $calId . '");
-        if (!tooltip) {
-            console.log("Tooltip element not found for color:", color);
-            return;
-        }
-        
-        const latestStats = sharedState_' . $jsCalId . '.latestStats;
-        let content = "";
-        
-        if (color === "green") {
-            content = "<div class=\\"tooltip-title\\">CPU Load Average</div>";
-            content += "<div>1 min: " + (latestStats.load["1min"] || "N/A") + "</div>";
-            content += "<div>5 min: " + (latestStats.load["5min"] || "N/A") + "</div>";
-            content += "<div>15 min: " + (latestStats.load["15min"] || "N/A") + "</div>";
-            if (latestStats.uptime) {
-                content += "<div style=\\"margin-top:3px; padding-top:2px; border-top:1px solid ' . $themeStyles['text_bright'] . ';\\">Uptime: " + latestStats.uptime + "</div>";
-            }
-            tooltip.style.setProperty("border-color", "' . $themeStyles['text_bright'] . '", "important");
-            tooltip.style.setProperty("color", "' . $themeStyles['text_bright'] . '", "important");
-            tooltip.style.setProperty("-webkit-text-fill-color", "' . $themeStyles['text_bright'] . '", "important");
-        } else if (color === "purple") {
-            content = "<div class=\\"tooltip-title\\">CPU Load (Short-term)</div>";
-            content += "<div>1 min: " + (latestStats.load["1min"] || "N/A") + "</div>";
-            content += "<div>5 min: " + (latestStats.load["5min"] || "N/A") + "</div>";
-            if (latestStats.top_processes && latestStats.top_processes.length > 0) {
-                content += "<div style=\\"margin-top:3px; padding-top:2px; border-top:1px solid ' . $themeStyles['border'] . ';\\" class=\\"tooltip-title\\">Top Processes</div>";
-                latestStats.top_processes.slice(0, 5).forEach(proc => {
-                    content += "<div>" + proc.cpu + " " + proc.command + "</div>";
-                });
-            }
-            tooltip.style.setProperty("border-color", "' . $themeStyles['border'] . '", "important");
-            tooltip.style.setProperty("color", "' . $themeStyles['border'] . '", "important");
-            tooltip.style.setProperty("-webkit-text-fill-color", "' . $themeStyles['border'] . '", "important");
-        } else if (color === "orange") {
-            content = "<div class=\\"tooltip-title\\">Memory Usage</div>";
-            if (latestStats.memory_details && latestStats.memory_details.total) {
-                content += "<div>Total: " + latestStats.memory_details.total + "</div>";
-                content += "<div>Used: " + latestStats.memory_details.used + "</div>";
-                content += "<div>Available: " + latestStats.memory_details.available + "</div>";
-                if (latestStats.memory_details.cached) {
-                    content += "<div>Cached: " + latestStats.memory_details.cached + "</div>";
-                }
-            } else {
-                content += "<div>Loading...</div>";
-            }
-            if (latestStats.top_processes && latestStats.top_processes.length > 0) {
-                content += "<div style=\\"margin-top:3px; padding-top:2px; border-top:1px solid ' . $themeStyles['text_primary'] . ';\\" class=\\"tooltip-title\\">Top Processes</div>";
-                latestStats.top_processes.slice(0, 5).forEach(proc => {
-                    content += "<div>" + proc.cpu + " " + proc.command + "</div>";
-                });
-            }
-            tooltip.style.setProperty("border-color", "' . $themeStyles['text_primary'] . '", "important");
-            tooltip.style.setProperty("color", "' . $themeStyles['text_primary'] . '", "important");
-            tooltip.style.setProperty("-webkit-text-fill-color", "' . $themeStyles['text_primary'] . '", "important");
-        }
-        
-        tooltip.innerHTML = content;
-        tooltip.style.setProperty("display", "block");
-        tooltip.style.setProperty("background", "' . $themeStyles['bg'] . '", "important");
-        
-        const bar = tooltip.parentElement;
-        const barRect = bar.getBoundingClientRect();
-        const tooltipRect = tooltip.getBoundingClientRect();
-        
-        const left = barRect.left + (barRect.width / 2) - (tooltipRect.width / 2);
-        const top = barRect.top - tooltipRect.height - 8;
-        
-        tooltip.style.left = left + "px";
-        tooltip.style.top = top + "px";
-    };
-    
-    window["hideTooltip_' . $jsCalId . '"] = function(color) {
-        const tooltip = document.getElementById("tooltip-" + color + "-' . $calId . '");
-        if (tooltip) {
-            tooltip.style.display = "none";
-        }
-    };
-    
     // Update clock every second
     function updateClock() {
         const now = new Date();
@@ -3005,48 +2782,6 @@ class syntax_plugin_calendar extends DokuWiki_Syntax_Plugin {
     // Update weather immediately and every 10 minutes
     updateWeather();
     setInterval(updateWeather, 600000);
-    
-    // Update system stats and tooltips data
-    function updateSystemStats() {
-        fetch("' . DOKU_BASE . 'lib/plugins/calendar/get_system_stats.php")
-            .then(response => response.json())
-            .then(data => {
-                sharedState_' . $jsCalId . '.latestStats = {
-                    load: data.load || {"1min": 0, "5min": 0, "15min": 0},
-                    uptime: data.uptime || "",
-                    memory_details: data.memory_details || {},
-                    top_processes: data.top_processes || []
-                };
-                
-                const greenBar = document.getElementById("cpu-5min-' . $calId . '");
-                if (greenBar) {
-                    greenBar.style.width = Math.min(100, data.cpu_5min) + "%";
-                }
-                
-                sharedState_' . $jsCalId . '.cpuHistory.push(data.cpu);
-                if (sharedState_' . $jsCalId . '.cpuHistory.length > sharedState_' . $jsCalId . '.CPU_HISTORY_SIZE) {
-                    sharedState_' . $jsCalId . '.cpuHistory.shift();
-                }
-                
-                const cpuAverage = sharedState_' . $jsCalId . '.cpuHistory.reduce((sum, val) => sum + val, 0) / sharedState_' . $jsCalId . '.cpuHistory.length;
-                
-                const cpuBar = document.getElementById("cpu-realtime-' . $calId . '");
-                if (cpuBar) {
-                    cpuBar.style.width = Math.min(100, cpuAverage) + "%";
-                }
-                
-                const memBar = document.getElementById("mem-realtime-' . $calId . '");
-                if (memBar) {
-                    memBar.style.width = Math.min(100, data.memory) + "%";
-                }
-            })
-            .catch(error => {
-                console.log("System stats error:", error);
-            });
-    }
-    
-    updateSystemStats();
-    setInterval(updateSystemStats, 2000);
 })();
 </script>';
         
@@ -3061,32 +2796,6 @@ class syntax_plugin_calendar extends DokuWiki_Syntax_Plugin {
         $html .= '<span class="eventlist-weather"><span id="weather-icon-' . $calId . '">🌤️</span> <span id="weather-temp-' . $calId . '" style="color:' . $themeStyles['text_primary'] . ';">--°</span></span>';
         $html .= '<span class="eventlist-today-date" style="color:' . $themeStyles['text_dim'] . ';">' . $displayDate . '</span>';
         $html .= '</div>';
-        
-        // Three CPU/Memory bars (all update live) - only if enabled
-        $showSystemLoad = $this->getShowSystemLoad();
-        if ($showSystemLoad) {
-            $html .= '<div class="eventlist-stats-container">';
-            
-            // 5-minute load average (green, updates every 2 seconds)
-            $html .= '<div class="eventlist-cpu-bar" style="background:' . $themeStyles['cell_today_bg'] . ' !important;" onmouseover="showTooltip_' . $jsCalId . '(\'green\')" onmouseout="hideTooltip_' . $jsCalId . '(\'green\')">';
-            $html .= '<div class="eventlist-cpu-fill" id="cpu-5min-' . $calId . '" style="width: 0%; background:' . $themeStyles['text_bright'] . ' !important;"></div>';
-            $html .= '<div class="system-tooltip" id="tooltip-green-' . $calId . '" style="display:none;"></div>';
-            $html .= '</div>';
-            
-            // Real-time CPU (purple, updates with 5-sec average)
-            $html .= '<div class="eventlist-cpu-bar eventlist-cpu-realtime" style="background:' . $themeStyles['cell_today_bg'] . ' !important;" onmouseover="showTooltip_' . $jsCalId . '(\'purple\')" onmouseout="hideTooltip_' . $jsCalId . '(\'purple\')">';
-            $html .= '<div class="eventlist-cpu-fill eventlist-cpu-fill-purple" id="cpu-realtime-' . $calId . '" style="width: 0%; background:' . $themeStyles['border'] . ' !important;"></div>';
-            $html .= '<div class="system-tooltip" id="tooltip-purple-' . $calId . '" style="display:none;"></div>';
-            $html .= '</div>';
-            
-            // Real-time Memory (orange, updates)
-            $html .= '<div class="eventlist-cpu-bar eventlist-mem-realtime" style="background:' . $themeStyles['cell_today_bg'] . ' !important;" onmouseover="showTooltip_' . $jsCalId . '(\'orange\')" onmouseout="hideTooltip_' . $jsCalId . '(\'orange\')">';
-            $html .= '<div class="eventlist-cpu-fill eventlist-cpu-fill-orange" id="mem-realtime-' . $calId . '" style="width: 0%; background:' . $themeStyles['text_primary'] . ' !important;"></div>';
-            $html .= '<div class="system-tooltip" id="tooltip-orange-' . $calId . '" style="display:none;"></div>';
-            $html .= '</div>';
-            
-            $html .= '</div>';
-        }
         $html .= '</div>';
         
         // Get today's date for default event date
@@ -3919,7 +3628,7 @@ class syntax_plugin_calendar extends DokuWiki_Syntax_Plugin {
      * Get current sidebar theme
      */
     private function getSidebarTheme() {
-        $configFile = DOKU_INC . 'data/meta/calendar_theme.txt';
+        $configFile = $this->metaDir() . 'calendar_theme.txt';
         if (file_exists($configFile)) {
             $theme = trim(file_get_contents($configFile));
             if (in_array($theme, ['matrix', 'purple', 'professional', 'pink', 'wiki'])) {
@@ -3938,11 +3647,15 @@ class syntax_plugin_calendar extends DokuWiki_Syntax_Plugin {
         // Get current template name
         $template = $conf['template'];
         
-        // Try multiple possible locations for style.ini
+        // Try multiple possible locations for style.ini (farm-safe)
         $possiblePaths = [
-            DOKU_INC . 'conf/tpl/' . $template . '/style.ini',
             DOKU_INC . 'lib/tpl/' . $template . '/style.ini',
         ];
+        // Add farm-specific conf override path if available
+        if (!empty($conf['savedir'])) {
+            array_unshift($possiblePaths, $conf['savedir'] . '/tpl/' . $template . '/style.ini');
+        }
+        array_unshift($possiblePaths, DOKU_INC . 'conf/tpl/' . $template . '/style.ini');
         
         $styleIni = null;
         foreach ($possiblePaths as $path) {
@@ -4154,7 +3867,7 @@ class syntax_plugin_calendar extends DokuWiki_Syntax_Plugin {
      * Get week start day preference
      */
     private function getWeekStartDay() {
-        $configFile = DOKU_INC . 'data/meta/calendar_week_start.txt';
+        $configFile = $this->metaDir() . 'calendar_week_start.txt';
         if (file_exists($configFile)) {
             $start = trim(file_get_contents($configFile));
             if (in_array($start, ['monday', 'sunday'])) {
@@ -4168,7 +3881,7 @@ class syntax_plugin_calendar extends DokuWiki_Syntax_Plugin {
      * Get itinerary collapsed default state
      */
     private function getItineraryCollapsed() {
-        $configFile = DOKU_INC . 'data/meta/calendar_itinerary_collapsed.txt';
+        $configFile = $this->metaDir() . 'calendar_itinerary_collapsed.txt';
         if (file_exists($configFile)) {
             return trim(file_get_contents($configFile)) === 'yes';
         }
@@ -4176,21 +3889,10 @@ class syntax_plugin_calendar extends DokuWiki_Syntax_Plugin {
     }
     
     /**
-     * Get system load bars visibility setting
-     */
-    private function getShowSystemLoad() {
-        $configFile = DOKU_INC . 'data/meta/calendar_show_system_load.txt';
-        if (file_exists($configFile)) {
-            return trim(file_get_contents($configFile)) !== 'no';
-        }
-        return true; // Default to showing
-    }
-    
-    /**
      * Get default search scope (month or all)
      */
     private function getSearchDefault() {
-        $configFile = DOKU_INC . 'data/meta/calendar_search_default.txt';
+        $configFile = $this->metaDir() . 'calendar_search_default.txt';
         if (file_exists($configFile)) {
             $value = trim(file_get_contents($configFile));
             if (in_array($value, ['month', 'all'])) {
@@ -4198,5 +3900,31 @@ class syntax_plugin_calendar extends DokuWiki_Syntax_Plugin {
             }
         }
         return 'month'; // Default to month search
+    }
+    
+    /**
+     * Parse exclude parameter into an array of namespace strings
+     * Supports semicolon-separated list: "journal;drafts;personal:private"
+     */
+    private function parseExcludeList($exclude) {
+        if (empty($exclude)) return [];
+        return array_filter(array_map('trim', explode(';', $exclude)), function($v) {
+            return $v !== '';
+        });
+    }
+    
+    /**
+     * Check if a namespace should be excluded
+     * Matches exact names and prefixes (e.g., exclude "journal" also excludes "journal:sub")
+     */
+    private function isNamespaceExcluded($namespace, $excludeList) {
+        if (empty($excludeList) || $namespace === '') return false;
+        foreach ($excludeList as $excluded) {
+            // Exact match
+            if ($namespace === $excluded) return true;
+            // Prefix match: "journal" excludes "journal:sub:deep"
+            if (strpos($namespace, $excluded . ':') === 0) return true;
+        }
+        return false;
     }
 }

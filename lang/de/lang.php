@@ -503,3 +503,6 @@ $lang['search_default_month'] = 'Dieser Monat';
 $lang['search_default_month_desc'] = 'Nur Termine im aktuell angezeigten Monat durchsuchen';
 $lang['search_default_all'] = 'Alle Termine';
 $lang['search_default_all_desc'] = 'Über alle Termine im gesamten Kalender suchen';
+
+// Exclude Namespaces
+$lang['exclude_desc'] = 'Ausgeschlossene Namensräume werden in dieser Kalenderansicht ausgeblendet';

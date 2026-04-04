@@ -4,7 +4,7 @@
  *
  * @license GPL 2 http://www.gnu.org/licenses/gpl-2.0.html
  * @author  DokuWiki Community
- * @version 7.0.8
+ * @version 7.2.6
  */
 
 if (!defined('DOKU_INC')) die();
@@ -23,6 +23,43 @@ require_once __DIR__ . '/classes/AuditLogger.php';
 require_once __DIR__ . '/classes/GoogleCalendarSync.php';
 
 class action_plugin_calendar extends DokuWiki_Action_Plugin {
+    
+    /**
+     * Get the meta directory path (farm-safe)
+     * Uses $conf['metadir'] instead of hardcoded DOKU_INC . 'data/meta/'
+     */
+    private function metaDir() {
+        global $conf;
+        return rtrim($conf['metadir'], '/') . '/';
+    }
+    
+    /**
+     * Check if the current user has read access to a namespace
+     * Uses DokuWiki's ACL system for farm-safe permission checks
+     *
+     * @param string $namespace Namespace to check (empty = root)
+     * @return bool True if user has at least AUTH_READ
+     */
+    private function checkNamespaceRead($namespace) {
+        if (empty($namespace) || $namespace === '*') return true;
+        // Strip wildcards and semicolons for ACL check
+        $ns = str_replace(['*', ';'], '', $namespace);
+        if (empty($ns)) return true;
+        $perm = auth_quickaclcheck($ns . ':*');
+        return ($perm >= AUTH_READ);
+    }
+    
+    /**
+     * Check if the current user has edit access to a namespace
+     *
+     * @param string $namespace Namespace to check (empty = root)
+     * @return bool True if user has at least AUTH_EDIT
+     */
+    private function checkNamespaceEdit($namespace) {
+        if (empty($namespace)) return true;
+        $perm = auth_quickaclcheck($namespace . ':*');
+        return ($perm >= AUTH_EDIT);
+    }
     
     /** @var CalendarAuditLogger */
     private $auditLogger = null;
@@ -235,7 +272,7 @@ class action_plugin_calendar extends DokuWiki_Action_Plugin {
         if ($recurrenceInterval > 99) $recurrenceInterval = 99;
         
         $weekDaysStr = $INPUT->str('weekDays', '');
-        $weekDays = $weekDaysStr ? array_map('intval', explode(',', $weekDaysStr)) : [];
+        $weekDays = ($weekDaysStr !== '') ? array_map('intval', explode(',', $weekDaysStr)) : [];
         
         $monthlyType = $INPUT->str('monthlyType', 'dayOfMonth');
         $monthDay = $INPUT->int('monthDay', 0);
@@ -289,6 +326,12 @@ class action_plugin_calendar extends DokuWiki_Action_Plugin {
         // Validate namespace (prevent path traversal)
         if ($namespace && !preg_match('/^[a-zA-Z0-9_:;*-]*$/', $namespace)) {
             echo json_encode(['success' => false, 'error' => 'Invalid namespace format']);
+            return;
+        }
+        
+        // ACL check: verify edit access to the target namespace
+        if (!$this->checkNamespaceEdit($namespace)) {
+            echo json_encode(['success' => false, 'error' => 'You do not have permission to edit events in this namespace']);
             return;
         }
         
@@ -399,7 +442,7 @@ class action_plugin_calendar extends DokuWiki_Action_Plugin {
         list($year, $month, $day) = explode('-', $date);
         
         // NEW namespace directory (where we'll save)
-        $dataDir = DOKU_INC . 'data/meta/';
+        $dataDir = $this->metaDir();
         if ($namespace) {
             $dataDir .= str_replace(':', '/', $namespace) . '/';
         }
@@ -430,7 +473,7 @@ class action_plugin_calendar extends DokuWiki_Action_Plugin {
         
         if ($namespaceChanged || $dateChanged) {
             // Construct OLD data directory using OLD namespace
-            $oldDataDir = DOKU_INC . 'data/meta/';
+            $oldDataDir = $this->metaDir();
             if ($oldNamespace) {
                 $oldDataDir .= str_replace(':', '/', $oldNamespace) . '/';
             }
@@ -618,9 +661,15 @@ class action_plugin_calendar extends DokuWiki_Action_Plugin {
         // Use the found namespace
         $namespace = $storedNamespace;
         
+        // ACL check: verify edit access to delete events
+        if (!$this->checkNamespaceEdit($namespace)) {
+            echo json_encode(['success' => false, 'error' => 'You do not have permission to delete events in this namespace']);
+            return;
+        }
+        
         list($year, $month, $day) = explode('-', $date);
         
-        $dataDir = DOKU_INC . 'data/meta/';
+        $dataDir = $this->metaDir();
         if ($namespace) {
             $dataDir .= str_replace(':', '/', $namespace) . '/';
         }
@@ -726,9 +775,15 @@ class action_plugin_calendar extends DokuWiki_Action_Plugin {
         // Use the found namespace
         $namespace = $storedNamespace;
         
+        // ACL check: verify read access to the event's namespace
+        if (!$this->checkNamespaceRead($namespace)) {
+            echo json_encode(['success' => false, 'error' => 'Access denied']);
+            return;
+        }
+        
         list($year, $month, $day) = explode('-', $date);
         
-        $dataDir = DOKU_INC . 'data/meta/';
+        $dataDir = $this->metaDir();
         if ($namespace) {
             $dataDir .= str_replace(':', '/', $namespace) . '/';
         }
@@ -765,6 +820,8 @@ class action_plugin_calendar extends DokuWiki_Action_Plugin {
         $namespace = $INPUT->str('namespace', '');
         $year = $INPUT->int('year');
         $month = $INPUT->int('month');
+        $exclude = $INPUT->str('exclude', '');
+        $excludeList = $this->parseExcludeList($exclude);
         
         // Validate year (reasonable range: 1970-2100)
         if ($year < 1970 || $year > 2100) {
@@ -782,16 +839,22 @@ class action_plugin_calendar extends DokuWiki_Action_Plugin {
             return;
         }
         
+        // ACL check: for single namespace, verify read access
+        $isMultiNamespace = !empty($namespace) && (strpos($namespace, ';') !== false || strpos($namespace, '*') !== false);
+        if (!$isMultiNamespace && !$this->checkNamespaceRead($namespace)) {
+            echo json_encode(['success' => false, 'error' => 'Access denied']);
+            return;
+        }
+        
         $this->debugLog("=== Calendar loadMonth DEBUG ===");
-        $this->debugLog("Requested: year=$year, month=$month, namespace='$namespace'");
+        $this->debugLog("Requested: year=$year, month=$month, namespace='$namespace', exclude='$exclude'");
         
         // Check if multi-namespace or wildcard
-        $isMultiNamespace = !empty($namespace) && (strpos($namespace, ';') !== false || strpos($namespace, '*') !== false);
         
         $this->debugLog("isMultiNamespace: " . ($isMultiNamespace ? 'true' : 'false'));
         
         if ($isMultiNamespace) {
-            $events = $this->loadEventsMultiNamespace($namespace, $year, $month);
+            $events = $this->loadEventsMultiNamespace($namespace, $year, $month, $excludeList);
         } else {
             $events = $this->loadEventsSingleNamespace($namespace, $year, $month);
         }
@@ -827,6 +890,13 @@ class action_plugin_calendar extends DokuWiki_Action_Plugin {
             $month = (int)date('n');
         }
         
+        // ACL check: verify read access for single namespace
+        $isMulti = !empty($namespace) && (strpos($namespace, ';') !== false || strpos($namespace, '*') !== false);
+        if (!$isMulti && !$this->checkNamespaceRead($namespace)) {
+            echo json_encode(['success' => false, 'error' => 'Access denied']);
+            return;
+        }
+        
         // Get syntax plugin to render the static calendar
         $syntax = plugin_load('syntax', 'calendar');
         if (!$syntax) {
@@ -855,7 +925,7 @@ class action_plugin_calendar extends DokuWiki_Action_Plugin {
     }
     
     private function loadEventsSingleNamespace($namespace, $year, $month) {
-        $dataDir = DOKU_INC . 'data/meta/';
+        $dataDir = $this->metaDir();
         if ($namespace) {
             $dataDir .= str_replace(':', '/', $namespace) . '/';
         }
@@ -875,16 +945,16 @@ class action_plugin_calendar extends DokuWiki_Action_Plugin {
         return $events;
     }
     
-    private function loadEventsMultiNamespace($namespaces, $year, $month) {
+    private function loadEventsMultiNamespace($namespaces, $year, $month, $excludeList = []) {
         // Check for wildcard pattern
         if (preg_match('/^(.+):\*$/', $namespaces, $matches)) {
             $baseNamespace = $matches[1];
-            return $this->loadEventsWildcard($baseNamespace, $year, $month);
+            return $this->loadEventsWildcard($baseNamespace, $year, $month, $excludeList);
         }
         
         // Check for root wildcard
         if ($namespaces === '*') {
-            return $this->loadEventsWildcard('', $year, $month);
+            return $this->loadEventsWildcard('', $year, $month, $excludeList);
         }
         
         // Parse namespace list (semicolon separated)
@@ -895,6 +965,12 @@ class action_plugin_calendar extends DokuWiki_Action_Plugin {
         foreach ($namespaceList as $ns) {
             $ns = trim($ns);
             if (empty($ns)) continue;
+            
+            // Skip excluded namespaces
+            if ($this->isNamespaceExcluded($ns, $excludeList)) continue;
+            
+            // ACL check: skip namespaces user cannot read
+            if (!$this->checkNamespaceRead($ns)) continue;
             
             $events = $this->loadEventsSingleNamespace($ns, $year, $month);
             
@@ -913,46 +989,65 @@ class action_plugin_calendar extends DokuWiki_Action_Plugin {
         return $allEvents;
     }
     
-    private function loadEventsWildcard($baseNamespace, $year, $month) {
-        $dataDir = DOKU_INC . 'data/meta/';
+    private function loadEventsWildcard($baseNamespace, $year, $month, $excludeList = []) {
+        $metaDir = $this->metaDir();
+        $dataDir = $metaDir;
         if ($baseNamespace) {
             $dataDir .= str_replace(':', '/', $baseNamespace) . '/';
         }
         
         $allEvents = [];
         
-        // First, load events from the base namespace itself
-        $events = $this->loadEventsSingleNamespace($baseNamespace, $year, $month);
-        
-        foreach ($events as $dateKey => $dayEvents) {
-            if (!isset($allEvents[$dateKey])) {
-                $allEvents[$dateKey] = [];
-            }
-            foreach ($dayEvents as $event) {
-                $event['_namespace'] = $baseNamespace;
-                $allEvents[$dateKey][] = $event;
+        // Load events from the base namespace itself
+        if (!$this->isNamespaceExcluded($baseNamespace, $excludeList) && $this->checkNamespaceRead($baseNamespace)) {
+            $events = $this->loadEventsSingleNamespace($baseNamespace, $year, $month);
+            
+            foreach ($events as $dateKey => $dayEvents) {
+                if (!isset($allEvents[$dateKey])) {
+                    $allEvents[$dateKey] = [];
+                }
+                foreach ($dayEvents as $event) {
+                    $event['_namespace'] = $baseNamespace;
+                    $allEvents[$dateKey][] = $event;
+                }
             }
         }
         
-        // Recursively find all subdirectories
-        $this->findSubNamespaces($dataDir, $baseNamespace, $year, $month, $allEvents);
+        // Find all calendar directories efficiently using iterative glob
+        $this->findCalendarNamespaces($dataDir, $metaDir, $year, $month, $allEvents, $excludeList);
         
         return $allEvents;
     }
     
-    private function findSubNamespaces($dir, $baseNamespace, $year, $month, &$allEvents) {
-        if (!is_dir($dir)) return;
+    /**
+     * Find namespaces with calendar data using iterative glob
+     * Searches for 'calendar/' directories at increasing depth without
+     * scanning every directory in data/meta
+     */
+    private function findCalendarNamespaces($baseDir, $metaDir, $year, $month, &$allEvents, $excludeList = []) {
+        if (!is_dir($baseDir)) return;
         
-        $items = scandir($dir);
-        foreach ($items as $item) {
-            if ($item === '.' || $item === '..') continue;
+        $maxDepth = 10;
+        $metaDirLen = strlen($metaDir);
+        
+        for ($depth = 1; $depth <= $maxDepth; $depth++) {
+            $pattern = $baseDir . str_repeat('*/', $depth) . 'calendar';
+            $calDirs = glob($pattern, GLOB_ONLYDIR);
             
-            $path = $dir . $item;
-            if (is_dir($path) && $item !== 'calendar') {
-                // This is a namespace directory
-                $namespace = $baseNamespace ? $baseNamespace . ':' . $item : $item;
+            if (empty($calDirs)) {
+                if ($depth > 3) break;
+                continue;
+            }
+            
+            foreach ($calDirs as $calDir) {
+                $nsDir = dirname($calDir);
+                $relPath = substr($nsDir, $metaDirLen);
+                $namespace = str_replace('/', ':', trim($relPath, '/'));
                 
-                // Load events from this namespace
+                if (empty($namespace)) continue;
+                if ($this->isNamespaceExcluded($namespace, $excludeList)) continue;
+                if (!$this->checkNamespaceRead($namespace)) continue;
+                
                 $events = $this->loadEventsSingleNamespace($namespace, $year, $month);
                 foreach ($events as $dateKey => $dayEvents) {
                     if (!isset($allEvents[$dateKey])) {
@@ -963,9 +1058,6 @@ class action_plugin_calendar extends DokuWiki_Action_Plugin {
                         $allEvents[$dateKey][] = $event;
                     }
                 }
-                
-                // Recurse into subdirectories
-                $this->findSubNamespaces($path . '/', $namespace, $year, $month, $allEvents);
             }
         }
     }
@@ -978,6 +1070,8 @@ class action_plugin_calendar extends DokuWiki_Action_Plugin {
         
         $searchTerm = strtolower(trim($INPUT->str('search', '')));
         $namespace = $INPUT->str('namespace', '');
+        $exclude = $INPUT->str('exclude', '');
+        $excludeList = $this->parseExcludeList($exclude);
         
         if (strlen($searchTerm) < 2) {
             echo json_encode(['success' => false, 'error' => 'Search term too short']);
@@ -988,11 +1082,17 @@ class action_plugin_calendar extends DokuWiki_Action_Plugin {
         $normalizedSearch = $this->normalizeForSearch($searchTerm);
         
         $results = [];
-        $dataDir = DOKU_INC . 'data/meta/';
+        $dataDir = $this->metaDir();
         
         // Helper to search calendar directory
-        $searchCalendarDir = function($calDir, $eventNamespace) use ($normalizedSearch, &$results) {
+        $searchCalendarDir = function($calDir, $eventNamespace) use ($normalizedSearch, &$results, $excludeList) {
             if (!is_dir($calDir)) return;
+            
+            // Skip excluded namespaces
+            if ($this->isNamespaceExcluded($eventNamespace, $excludeList)) return;
+            
+            // ACL check: skip namespaces user cannot read
+            if (!$this->checkNamespaceRead($eventNamespace)) return;
             
             foreach (glob($calDir . '/*.json') as $file) {
                 $data = @json_decode(file_get_contents($file), true);
@@ -1104,6 +1204,30 @@ class action_plugin_calendar extends DokuWiki_Action_Plugin {
     }
     
     /**
+     * Parse exclude parameter into an array of namespace strings
+     * Supports semicolon-separated list: "journal;drafts;personal:private"
+     */
+    private function parseExcludeList($exclude) {
+        if (empty($exclude)) return [];
+        return array_filter(array_map('trim', explode(';', $exclude)), function($v) {
+            return $v !== '';
+        });
+    }
+    
+    /**
+     * Check if a namespace should be excluded
+     * Matches exact names and prefixes (e.g., exclude "journal" also excludes "journal:sub")
+     */
+    private function isNamespaceExcluded($namespace, $excludeList) {
+        if (empty($excludeList) || $namespace === '') return false;
+        foreach ($excludeList as $excluded) {
+            if ($namespace === $excluded) return true;
+            if (strpos($namespace, $excluded . ':') === 0) return true;
+        }
+        return false;
+    }
+    
+    /**
      * Recursively search namespace directories for calendar data
      */
     private function searchNamespaceDirs($baseDir, $callback) {
@@ -1113,7 +1237,7 @@ class action_plugin_calendar extends DokuWiki_Action_Plugin {
             
             $calDir = $nsDir . '/calendar';
             if (is_dir($calDir)) {
-                $relPath = str_replace(DOKU_INC . 'data/meta/', '', $nsDir);
+                $relPath = str_replace($this->metaDir(), '', $nsDir);
                 $namespace = str_replace('/', ':', $relPath);
                 $callback($calDir, $namespace);
             }
@@ -1142,9 +1266,15 @@ class action_plugin_calendar extends DokuWiki_Action_Plugin {
         // Use the found namespace
         $namespace = $storedNamespace;
         
+        // ACL check: verify edit access to toggle tasks
+        if (!$this->checkNamespaceEdit($namespace)) {
+            echo json_encode(['success' => false, 'error' => 'You do not have permission to edit events in this namespace']);
+            return;
+        }
+        
         list($year, $month, $day) = explode('-', $date);
         
-        $dataDir = DOKU_INC . 'data/meta/';
+        $dataDir = $this->metaDir();
         if ($namespace) {
             $dataDir .= str_replace(':', '/', $namespace) . '/';
         }
@@ -1370,7 +1500,7 @@ class action_plugin_calendar extends DokuWiki_Action_Plugin {
                                           $description, $color, $isTask, $recurrenceType, $recurrenceInterval,
                                           $recurrenceEnd, $weekDays, $monthlyType, $monthDay, 
                                           $ordinalWeek, $ordinalDay, $baseId) {
-        $dataDir = DOKU_INC . 'data/meta/';
+        $dataDir = $this->metaDir();
         if ($namespace) {
             $dataDir .= str_replace(':', '/', $namespace) . '/';
         }
@@ -1623,7 +1753,7 @@ class action_plugin_calendar extends DokuWiki_Action_Plugin {
         
         // Search for the event in all possible namespaces
         foreach ($namespacesToCheck as $ns) {
-            $dataDir = DOKU_INC . 'data/meta/';
+            $dataDir = $this->metaDir();
             if ($ns) {
                 $dataDir .= str_replace(':', '/', $ns) . '/';
             }
@@ -1652,7 +1782,7 @@ class action_plugin_calendar extends DokuWiki_Action_Plugin {
     
     // Helper to find all namespaces under a base namespace
     private function findAllNamespaces($baseNamespace) {
-        $dataDir = DOKU_INC . 'data/meta/';
+        $dataDir = $this->metaDir();
         if ($baseNamespace) {
             $dataDir .= str_replace(':', '/', $baseNamespace) . '/';
         }
@@ -1731,7 +1861,7 @@ class action_plugin_calendar extends DokuWiki_Action_Plugin {
     private function getExistingEventData($eventId, $date, $namespace) {
         list($year, $month, $day) = explode('-', $date);
         
-        $dataDir = DOKU_INC . 'data/meta/';
+        $dataDir = $this->metaDir();
         if ($namespace) {
             $dataDir .= str_replace(':', '/', $namespace) . '/';
         }

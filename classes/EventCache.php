@@ -7,7 +7,7 @@
  * 
  * @license GPL 2 http://www.gnu.org/licenses/gpl-2.0.html
  * @author  DokuWiki Community
- * @version 7.0.8
+ * @version 7.2.6
  */
 
 if (!defined('DOKU_INC')) die();
@@ -33,7 +33,8 @@ class CalendarEventCache {
      */
     private static function getCacheDir() {
         if (self::$cacheDir === null) {
-            self::$cacheDir = DOKU_INC . 'data/' . self::CACHE_DIR;
+            global $conf;
+            self::$cacheDir = rtrim($conf['cachedir'], '/') . '/calendar/';
             if (!is_dir(self::$cacheDir)) {
                 @mkdir(self::$cacheDir, 0755, true);
             }
