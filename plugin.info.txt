@@ -5,4 +5,4 @@ date     2026-04-03
 name     Calendar Plugin
 desc     Feature-rich calendar with multiple themes, Outlook sync, Google Calendar sync, recurring events, and static presentation mode
 url      https://www.dokuwiki.org/plugin:calendar
-version  7.2.6
+version  7.5.1

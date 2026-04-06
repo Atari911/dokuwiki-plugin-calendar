@@ -4,7 +4,7 @@
  * 
  * @license GPL 2 http://www.gnu.org/licenses/gpl-2.0.html
  * @author  DokuWiki Community
- * @version 7.2.6
+ * @version 7.5.1
  */
 
 if(!defined('DOKU_INC')) die();
@@ -6930,7 +6930,7 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
         function googleDisconnect() {
             if (!confirm("Disconnect from Google Calendar?")) return;
             
-            fetch(DOKU_BASE + "lib/exe/ajax.php?call=plugin_calendar&action=google_disconnect", {
+            fetch(DOKU_BASE + "lib/exe/ajax.php?call=plugin_calendar&action=google_disconnect&sectok=" + JSINFO.sectok, {
                 method: "POST",
                 headers: {"Content-Type": "application/x-www-form-urlencoded"}
             })
@@ -6985,7 +6985,8 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
             var params = new URLSearchParams({
                 call: "plugin_calendar",
                 action: "google_import",
-                namespace: namespace
+                namespace: namespace,
+                sectok: JSINFO.sectok
             });
             
             fetch(DOKU_BASE + "lib/exe/ajax.php", {
@@ -7015,7 +7016,8 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
             var params = new URLSearchParams({
                 call: "plugin_calendar",
                 action: "google_export",
-                namespace: namespace
+                namespace: namespace,
+                sectok: JSINFO.sectok
             });
             
             fetch(DOKU_BASE + "lib/exe/ajax.php", {

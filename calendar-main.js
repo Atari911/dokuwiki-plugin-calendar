@@ -416,6 +416,95 @@ window.rebuildCalendar = function(calId, year, month, events, namespace) {
         }
     }
     
+    // Assign stable row slots to multi-day events so bars line up across days
+    // Each multi-day event gets a consistent slot index across all days it spans
+    const slotAssignments = {}; // dateKey -> array of {event, slot}
+    const eventSlots = {};      // eventId -> assigned slot number
+    
+    // First pass: identify all multi-day events and assign them stable slots
+    // Process dates in order so slots are assigned left-to-right
+    const allDates = Object.keys(eventRanges).sort();
+    
+    for (const dateKey of allDates) {
+        const dayEvents = eventRanges[dateKey];
+        if (!dayEvents) continue;
+        
+        for (const evt of dayEvents) {
+            const eid = evt.id || evt.title;
+            const isMultiDay = evt._span_start !== evt._span_end;
+            
+            if (isMultiDay && !(eid in eventSlots)) {
+                // Find the lowest available slot across ALL days this event spans
+                let slot = 0;
+                let slotFree = false;
+                while (!slotFree) {
+                    slotFree = true;
+                    // Check every day this event spans to see if this slot is taken
+                    const checkStart = new Date(evt._span_start + 'T00:00:00');
+                    const checkEnd = new Date(evt._span_end + 'T00:00:00');
+                    const checkCurrent = new Date(checkStart);
+                    while (checkCurrent <= checkEnd) {
+                        const checkKey = formatLocalDate(checkCurrent);
+                        if (slotAssignments[checkKey]) {
+                            for (const assigned of slotAssignments[checkKey]) {
+                                if (assigned.slot === slot) {
+                                    slotFree = false;
+                                    break;
+                                }
+                            }
+                        }
+                        if (!slotFree) break;
+                        checkCurrent.setDate(checkCurrent.getDate() + 1);
+                    }
+                    if (!slotFree) slot++;
+                }
+                eventSlots[eid] = slot;
+                
+                // Reserve this slot on all days the event spans
+                const resStart = new Date(evt._span_start + 'T00:00:00');
+                const resEnd = new Date(evt._span_end + 'T00:00:00');
+                const resCurrent = new Date(resStart);
+                while (resCurrent <= resEnd) {
+                    const resKey = formatLocalDate(resCurrent);
+                    if (!slotAssignments[resKey]) slotAssignments[resKey] = [];
+                    slotAssignments[resKey].push({ id: eid, slot: slot });
+                    resCurrent.setDate(resCurrent.getDate() + 1);
+                }
+            }
+        }
+    }
+    
+    // Second pass: assign slots to single-day events
+    for (const dateKey of allDates) {
+        const dayEvents = eventRanges[dateKey];
+        if (!dayEvents) continue;
+        
+        // Sort single-day events by time
+        const singleDay = dayEvents.filter(e => {
+            const eid = e.id || e.title;
+            return !(eid in eventSlots);
+        }).sort((a, b) => {
+            const timeA = a.time || '';
+            const timeB = b.time || '';
+            if (!timeA && timeB) return -1;
+            if (timeA && !timeB) return 1;
+            return timeA.localeCompare(timeB);
+        });
+        
+        for (const evt of singleDay) {
+            const eid = evt.id || evt.title;
+            let slot = 0;
+            while (true) {
+                const taken = (slotAssignments[dateKey] || []).some(a => a.slot === slot);
+                if (!taken) break;
+                slot++;
+            }
+            eventSlots[eid] = slot;
+            if (!slotAssignments[dateKey]) slotAssignments[dateKey] = [];
+            slotAssignments[dateKey].push({ id: eid, slot: slot });
+        }
+    }
+    
     let html = '';
     let currentDay = 1;
     const rowCount = Math.ceil((daysInMonth + dayOfWeek) / 7);
@@ -445,16 +534,6 @@ window.rebuildCalendar = function(calId, year, month, events, namespace) {
                 html += `<span class="${dayNumClass}">${currentDay}</span>`;
                 
                 if (hasEvents) {
-                    // Sort events by time (no time first, then by time)
-                    const sortedEvents = [...eventRanges[dateKey]].sort((a, b) => {
-                        const timeA = a.time || '';
-                        const timeB = b.time || '';
-                        if (!timeA && timeB) return -1;
-                        if (timeA && !timeB) return 1;
-                        if (!timeA && !timeB) return 0;
-                        return timeA.localeCompare(timeB);
-                    });
-                    
                     // Get important namespaces
                     let importantNamespaces = ['important'];
                     if (container.dataset.importantNamespaces) {
@@ -463,9 +542,28 @@ window.rebuildCalendar = function(calId, year, month, events, namespace) {
                         } catch (e) {}
                     }
                     
-                    // Show colored stacked bars for each event
+                    // Build slot-ordered event list with placeholders for gaps
+                    const daySlots = (slotAssignments[dateKey] || []).slice().sort((a, b) => a.slot - b.slot);
+                    const maxSlot = daySlots.length > 0 ? daySlots[daySlots.length - 1].slot : -1;
+                    
+                    // Create a map from slot -> event
+                    const slotMap = {};
+                    for (const evt of eventRanges[dateKey]) {
+                        const eid = evt.id || evt.title;
+                        const slot = eventSlots[eid];
+                        if (slot !== undefined) slotMap[slot] = evt;
+                    }
+                    
+                    // Show colored stacked bars for each slot (with spacers for empty slots)
                     html += '<div class="event-indicators">';
-                    for (const evt of sortedEvents) {
+                    for (let s = 0; s <= maxSlot; s++) {
+                        const evt = slotMap[s];
+                        if (!evt) {
+                            // Empty spacer to maintain alignment
+                            html += '<span style="display:block;width:100%;height:6px;min-height:6px;flex-shrink:0;"></span>';
+                            continue;
+                        }
+                        
                         const eventId = evt.id || '';
                         const eventColor = evt.color || '#3498db';
                         const eventTitle = evt.title || 'Event';
@@ -571,22 +669,26 @@ window.renderEventListFromData = function(events, calId, namespace, year, month)
     const todayStr = formatLocalDate(today);
     
     // Helper function to check if event is past (with 15-minute grace period)
-    const isEventPast = function(dateKey, time) {
-        // If event is on a past date, it's definitely past
-        if (dateKey < todayStr) {
+    // For multi-day events, uses the end date instead of start date
+    const isEventPast = function(dateKey, time, endDate) {
+        // For multi-day events, use the end date to determine if past
+        const effectiveDate = endDate || dateKey;
+        
+        // If the effective end date is past, the event is past
+        if (effectiveDate < todayStr) {
             return true;
         }
         
-        // If event is on a future date, it's definitely not past
-        if (dateKey > todayStr) {
+        // If the effective end date is in the future, event is still ongoing
+        if (effectiveDate > todayStr) {
             return false;
         }
         
-        // Event is today - check time with grace period
+        // Event ends today - check time with grace period
         if (time && time.trim() !== '') {
             try {
                 const now = new Date();
-                const eventDateTime = new Date(dateKey + 'T' + time);
+                const eventDateTime = new Date(effectiveDate + 'T' + time);
                 
                 // Add 15-minute grace period
                 const gracePeriodEnd = new Date(eventDateTime.getTime() + 15 * 60 * 1000);
@@ -637,7 +739,7 @@ window.renderEventListFromData = function(events, calId, namespace, year, month)
             const completed = event.completed || false;
             
             // Use helper function to determine if event is past (with grace period)
-            const isPast = isEventPast(dateKey, event.time);
+            const isPast = isEventPast(dateKey, event.time, event.endDate);
             const isPastDue = isPast && isTask && !completed;
             
             // Determine if this goes in past section
@@ -1022,23 +1124,25 @@ window.renderEventItem = function(event, date, calId, namespace) {
     }
     
     // Check if this event is in the past or today (with 15-minute grace period)
+    // For multi-day events, use the end date instead of start date
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     const todayStr = formatLocalDate(today);
+    const effectiveEndDate = event.endDate || date;
     const eventDate = new Date(date + 'T00:00:00');
     
     // Helper to determine if event is past with grace period
     let isPast;
-    if (date < todayStr) {
-        isPast = true; // Past date
-    } else if (date > todayStr) {
-        isPast = false; // Future date
+    if (effectiveEndDate < todayStr) {
+        isPast = true; // End date is past
+    } else if (effectiveEndDate > todayStr) {
+        isPast = false; // End date is future, event still ongoing
     } else {
-        // Today - check time with grace period
+        // Event ends today - check time with grace period
         if (event.time && event.time.trim() !== '') {
             try {
                 const now = new Date();
-                const eventDateTime = new Date(date + 'T' + event.time);
+                const eventDateTime = new Date(effectiveEndDate + 'T' + event.time);
                 const gracePeriodEnd = new Date(eventDateTime.getTime() + 15 * 60 * 1000);
                 isPast = now > gracePeriodEnd;
             } catch (e) {

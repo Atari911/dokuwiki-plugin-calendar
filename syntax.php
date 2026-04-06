@@ -315,6 +315,93 @@ class syntax_plugin_calendar extends DokuWiki_Syntax_Plugin {
             }
         }
         
+        // Assign stable row slots to multi-day events (same algorithm as JS rebuildCalendar)
+        $slotAssignments = array(); // dateKey -> array of {id, slot}
+        $eventSlots = array();      // eventId -> slot number
+        
+        $allDates = array_keys($eventRanges);
+        sort($allDates);
+        
+        // First pass: multi-day events get stable slots across all days they span
+        foreach ($allDates as $dk) {
+            foreach ($eventRanges[$dk] as $evt) {
+                $eid = isset($evt['id']) ? $evt['id'] : $evt['title'];
+                $isMultiDay = (isset($evt['_span_start']) && isset($evt['_span_end']) && $evt['_span_start'] !== $evt['_span_end']);
+                
+                if ($isMultiDay && !isset($eventSlots[$eid])) {
+                    // Find lowest slot free across all days this event spans
+                    $slot = 0;
+                    $found = false;
+                    while (!$found) {
+                        $found = true;
+                        $checkCurrent = new DateTime($evt['_span_start']);
+                        $checkEnd = new DateTime($evt['_span_end']);
+                        while ($checkCurrent <= $checkEnd) {
+                            $checkKey = $checkCurrent->format('Y-m-d');
+                            if (isset($slotAssignments[$checkKey])) {
+                                foreach ($slotAssignments[$checkKey] as $assigned) {
+                                    if ($assigned['slot'] === $slot) {
+                                        $found = false;
+                                        break;
+                                    }
+                                }
+                            }
+                            if (!$found) break;
+                            $checkCurrent->modify('+1 day');
+                        }
+                        if (!$found) $slot++;
+                    }
+                    $eventSlots[$eid] = $slot;
+                    
+                    // Reserve on all days
+                    $resCurrent = new DateTime($evt['_span_start']);
+                    $resEnd = new DateTime($evt['_span_end']);
+                    while ($resCurrent <= $resEnd) {
+                        $resKey = $resCurrent->format('Y-m-d');
+                        if (!isset($slotAssignments[$resKey])) $slotAssignments[$resKey] = array();
+                        $slotAssignments[$resKey][] = array('id' => $eid, 'slot' => $slot);
+                        $resCurrent->modify('+1 day');
+                    }
+                }
+            }
+        }
+        
+        // Second pass: single-day events fill remaining slots
+        foreach ($allDates as $dk) {
+            $singleDay = array();
+            foreach ($eventRanges[$dk] as $evt) {
+                $eid = isset($evt['id']) ? $evt['id'] : $evt['title'];
+                if (!isset($eventSlots[$eid])) {
+                    $singleDay[] = $evt;
+                }
+            }
+            // Sort single-day by time
+            usort($singleDay, function($a, $b) {
+                $timeA = isset($a['time']) ? $a['time'] : '';
+                $timeB = isset($b['time']) ? $b['time'] : '';
+                if (empty($timeA) && !empty($timeB)) return -1;
+                if (!empty($timeA) && empty($timeB)) return 1;
+                return strcmp($timeA, $timeB);
+            });
+            foreach ($singleDay as $evt) {
+                $eid = isset($evt['id']) ? $evt['id'] : $evt['title'];
+                $slot = 0;
+                while (true) {
+                    $taken = false;
+                    if (isset($slotAssignments[$dk])) {
+                        foreach ($slotAssignments[$dk] as $a) {
+                            if ($a['slot'] === $slot) { $taken = true; break; }
+                        }
+                    }
+                    if (!$taken) break;
+                    $slot++;
+                }
+                $eventSlots[$eid] = $slot;
+                if (!isset($slotAssignments[$dk])) $slotAssignments[$dk] = array();
+                $slotAssignments[$dk][] = array('id' => $eid, 'slot' => $slot);
+            }
+        }
+        
         $currentDay = 1;
         $rowCount = ceil(($daysInMonth + $dayOfWeek) / 7);
         
@@ -338,37 +425,40 @@ class syntax_plugin_calendar extends DokuWiki_Syntax_Plugin {
                     $html .= '<span class="' . $dayNumClass . '">' . $currentDay . '</span>';
                     
                     if ($hasEvents) {
-                        // Sort events by time (no time first, then by time)
-                        $sortedEvents = $eventRanges[$dateKey];
-                        usort($sortedEvents, function($a, $b) {
-                            $timeA = isset($a['time']) ? $a['time'] : '';
-                            $timeB = isset($b['time']) ? $b['time'] : '';
-                            
-                            // Events without time go first
-                            if (empty($timeA) && !empty($timeB)) return -1;
-                            if (!empty($timeA) && empty($timeB)) return 1;
-                            if (empty($timeA) && empty($timeB)) return 0;
-                            
-                            // Sort by time
-                            return strcmp($timeA, $timeB);
-                        });
+                        // Build slot map for this day
+                        $daySlotList = isset($slotAssignments[$dateKey]) ? $slotAssignments[$dateKey] : array();
+                        $maxSlot = -1;
+                        foreach ($daySlotList as $ds) {
+                            if ($ds['slot'] > $maxSlot) $maxSlot = $ds['slot'];
+                        }
                         
-                        // Show colored stacked bars for each event
+                        $slotMap = array();
+                        foreach ($eventRanges[$dateKey] as $evt) {
+                            $eid = isset($evt['id']) ? $evt['id'] : $evt['title'];
+                            if (isset($eventSlots[$eid])) {
+                                $slotMap[$eventSlots[$eid]] = $evt;
+                            }
+                        }
+                        
                         $html .= '<div class="event-indicators">';
-                        foreach ($sortedEvents as $evt) {
+                        for ($s = 0; $s <= $maxSlot; $s++) {
+                            if (!isset($slotMap[$s])) {
+                                // Spacer
+                                $html .= '<span style="display:block;width:100%;height:6px;min-height:6px;flex-shrink:0;"></span>';
+                                continue;
+                            }
+                            
+                            $evt = $slotMap[$s];
                             $eventId = isset($evt['id']) ? $evt['id'] : '';
-                            $eventColor = isset($evt['color']) ? htmlspecialchars($evt['color']) : '#3498db';
+                            $eventColor = isset($evt['color']) ? hsc($evt['color']) : '#3498db';
                             $eventTime = isset($evt['time']) ? $evt['time'] : '';
-                            $eventTitle = isset($evt['title']) ? htmlspecialchars($evt['title']) : 'Event';
+                            $eventTitle = isset($evt['title']) ? hsc($evt['title']) : 'Event';
                             $originalDate = isset($evt['_original_date']) ? $evt['_original_date'] : $dateKey;
                             $isFirstDay = isset($evt['_is_first_day']) ? $evt['_is_first_day'] : true;
                             $isLastDay = isset($evt['_is_last_day']) ? $evt['_is_last_day'] : true;
                             
-                            // Check if this event is from an important namespace
                             $evtNs = isset($evt['namespace']) ? $evt['namespace'] : '';
-                            if (!$evtNs && isset($evt['_namespace'])) {
-                                $evtNs = $evt['_namespace'];
-                            }
+                            if (!$evtNs && isset($evt['_namespace'])) $evtNs = $evt['_namespace'];
                             $isImportantEvent = false;
                             foreach ($importantNsList as $impNs) {
                                 if ($evtNs === $impNs || strpos($evtNs, $impNs . ':') === 0) {
@@ -378,15 +468,11 @@ class syntax_plugin_calendar extends DokuWiki_Syntax_Plugin {
                             }
                             
                             $barClass = empty($eventTime) ? 'event-bar-no-time' : 'event-bar-timed';
-                            
-                            // Add classes for multi-day spanning
                             if (!$isFirstDay) $barClass .= ' event-bar-continues';
                             if (!$isLastDay) $barClass .= ' event-bar-continuing';
                             if ($isImportantEvent) {
                                 $barClass .= ' event-bar-important';
-                                if ($isFirstDay) {
-                                    $barClass .= ' event-bar-has-star';
-                                }
+                                if ($isFirstDay) $barClass .= ' event-bar-has-star';
                             }
                             
                             $titlePrefix = $isImportantEvent ? '⭐ ' : '';

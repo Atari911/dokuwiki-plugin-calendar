@@ -498,6 +498,14 @@
     overflow: visible;
 }
 
+.event-bar-spacer {
+    /* Invisible placeholder to maintain vertical slot alignment */
+    background: transparent !important;
+    box-shadow: none !important;
+    pointer-events: none;
+    cursor: default;
+}
+
 .event-bar:hover {
     transform: scaleY(1.3);
     box-shadow: 0 2px 4px rgba(0,0,0,0.2);
@@ -505,31 +513,30 @@
 }
 
 .event-bar-no-time {
-    /* Events without time appear at top */
-    order: -1;
+    /* Slot ordering handles position */
     opacity: 0.9;
 }
 
 .event-bar-timed {
-    /* Events with time are sorted by time */
+    /* Slot ordering handles position */
     opacity: 0.95;
 }
 
-/* Multi-day event styling - creates visual continuity */
+/* Multi-day event styling - creates visual continuity across days */
 .event-bar-continues {
-    /* Event continues from previous day - extend left to cell edge */
+    /* Event continues from previous day - extend left to cell edge past padding and border */
     border-top-left-radius: 0;
     border-bottom-left-radius: 0;
-    margin-left: -20px;
-    padding-left: 20px;
+    margin-left: -24px;
+    padding-left: 24px;
 }
 
 .event-bar-continuing {
-    /* Event continues to next day - extend right to cell edge */
+    /* Event continues to next day - extend right to cell edge past padding and border */
     border-top-right-radius: 0;
     border-bottom-right-radius: 0;
-    margin-right: -2px;
-    padding-right: 2px;
+    margin-right: -4px;
+    padding-right: 4px;
 }
 
 .event-bar-continues.event-bar-continuing {

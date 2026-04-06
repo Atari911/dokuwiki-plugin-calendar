@@ -4,7 +4,7 @@
  *
  * @license GPL 2 http://www.gnu.org/licenses/gpl-2.0.html
  * @author  DokuWiki Community
- * @version 7.2.6
+ * @version 7.5.1
  */
 
 if (!defined('DOKU_INC')) die();
@@ -133,7 +133,8 @@ class action_plugin_calendar extends DokuWiki_Action_Plugin {
         $writeActions = ['save_event', 'delete_event', 'toggle_task', 'cleanup_empty_namespaces',
                          'trim_all_past_recurring', 'rescan_recurring', 'extend_recurring',
                          'trim_recurring', 'pause_recurring', 'resume_recurring',
-                         'change_start_recurring', 'change_pattern_recurring'];
+                         'change_start_recurring', 'change_pattern_recurring',
+                         'google_disconnect', 'google_import', 'google_export'];
         
         $isWriteAction = in_array($action, $writeActions);
         
