@@ -194,42 +194,98 @@ All operations are AJAX-powered with inline status messages.
 
 ---
 
+## v7.0.0–v7.0.8: Stability & Architecture
+
+### Class-Based Architecture (v7.0.0)
+- Introduced modular PHP classes: `FileHandler` (atomic file I/O with locking), `EventCache` (5-min TTL caching), `RateLimiter` (60/30 req/min read/write), `EventManager` (consolidated CRUD), `AuditLogger` (admin audit trail)
+- Custom date/time pickers replacing native browser inputs
+- Accessibility improvements (ARIA labels, keyboard navigation, focus management)
+
+### Google Calendar Sync (v7.0.7)
+- `GoogleCalendarSync.php` class — OAuth 2.0 flow, import/export, calendar selection
+- Admin panel Google Sync tab
+
+### Timezone Fix (v7.0.8)
+- Fixed timezone-related date rendering issues
+
+---
+
+## v7.1.0–v7.2.x: Features & Farm Compatibility
+
+### New Features
+- **Default Search Scope** (v7.1.0) — Admin setting for "This Month" vs "All Dates" default
+- **Namespace Exclude** (v7.1.1) — `exclude=` parameter for wildcard/multi-namespace views
+- **Sunday Recurring Fix** (v7.1.0) — PHP falsy `'0'` caused Sunday-only recurring events to generate 365 daily events
+
+### DokuWiki Farm Compatibility (v7.1.3–v7.2.1)
+- Replaced 77 hardcoded `DOKU_INC . 'data/meta/'` paths with `$conf['metadir']` via `metaDir()` helper
+- Cache/rate-limit paths use `$conf['cachedir']`
+- Per-animal sync credentials with `syncConfigPath()` fallback
+- CLI-safe `sync_outlook.php` with regex-based `local.php` parsing (no `init.php` bootstrap)
+- Temp files (`.event_stats_cache`, `.sync_abort`) moved from shared plugin dir to per-animal data dir
+
+### Security Hardening (v7.1.4–v7.2.6)
+- ACL enforcement on all AJAX read (`AUTH_READ`) and write (`AUTH_EDIT`) operations
+- CSRF token validation on admin `handle()` method
+- `formSecurityToken()` on all 12 HTML forms and `JSINFO.sectok` on all JS dynamic forms/fetch calls
+- Google sync AJAX actions (`google_disconnect`, `google_import`, `google_export`) added to `$writeActions`
+- Removed `get_system_stats.php` endpoint (exposed server internals via `shell_exec`)
+- Removed all system stats inline JS, HTML bars, CSS, and admin UI
+
+### Performance (v7.1.7–v7.1.8)
+- Replaced recursive `findSubNamespaces` (scanned every dir in `data/meta/`) with `findCalendarNamespaces` using iterative `glob()` — orders of magnitude faster on large wikis
+
+---
+
+## v7.3.0–v7.5.1: Multi-Day Events & Bar Alignment
+
+### Multi-Day Past Detection Fix (v7.3.0)
+- Events spanning multiple days now check `endDate` instead of start date when determining if past
+- A March 4–6 event is no longer marked past on March 5
+
+### Multi-Day Bar Alignment (v7.5.0–v7.5.1)
+- Stable slot assignment algorithm: multi-day events reserve a consistent vertical row across all days they span
+- Single-day events fill remaining slots, sorted by time
+- Invisible spacer elements maintain alignment on days where a slot is occupied by a spanning event on neighboring days but not the current day
+- Removed CSS `order: -1` on `.event-bar-no-time` which was overriding the slot-based DOM order
+- Algorithm implemented in both JS (`rebuildCalendar`) and PHP (initial page render) for consistency
+
+---
+
 ## Architecture Summary
 
 ### Files
 | File | Purpose |
 |------|---------|
 | `plugin.info.txt` | DokuWiki plugin metadata |
-| `syntax.php` | Wiki markup parser — renders `{{calendar}}`, `{{eventlist}}`, `{{eventpanel}}` |
-| `action.php` | AJAX handlers for event CRUD, month loading, task toggling, admin action routing |
-| `admin.php` | Full admin panel — settings, namespace management, recurring events, statistics, import/export, version history |
+| `syntax.php` | Wiki markup parser — renders `{{calendar}}`, `{{eventlist}}`, `{{eventpanel}}` with slot-based bar alignment |
+| `action.php` | AJAX handlers for event CRUD, month loading, task toggling, admin action routing, ACL enforcement |
+| `admin.php` | Full admin panel — settings, namespace management, recurring events, sync, backup, themes, CSRF-protected |
 | `style.css` | All CSS with theme-aware custom properties, Dark Reader protection, responsive design |
-| `calendar-main.js` | Client-side calendar rendering, event dialogs, drag-and-drop, month navigation |
-| `script.js` | Minimal bootstrap loader |
-| `sync_outlook.php` | Outlook calendar sync via Microsoft Graph API |
-| `sync_config.php` | Sync configuration management |
-| `get_system_stats.php` | System statistics endpoint |
-| `check_syntax.sh` | PHP syntax validation helper |
+| `calendar-main.js` | Client-side calendar rendering, slot-based multi-day bar alignment, event dialogs, month navigation |
+| `script.js` | Bootstrap loader with version-based cache key |
+| `sync_outlook.php` | CLI Outlook calendar sync via Microsoft Graph API (cron-safe) |
+| `classes/FileHandler.php` | Atomic file operations with locking |
+| `classes/EventCache.php` | Caching layer with TTL, uses `$conf['cachedir']` |
+| `classes/EventManager.php` | Consolidated event CRUD operations |
+| `classes/RateLimiter.php` | AJAX rate limiting, uses `$conf['cachedir']` |
+| `classes/AuditLogger.php` | Admin operation audit trail |
+| `classes/GoogleCalendarSync.php` | Google Calendar OAuth 2.0 integration |
 
-### Data Storage
-- Events stored as JSON in `data/meta/[namespace]/calendar/YYYY-MM.json`
-- Theme setting in `data/meta/calendar_theme.txt`
-- Sync credentials in `data/meta/calendar_sync_config.json`
+### Data Storage (Farm-Safe)
+- Events: `$conf['metadir']/[namespace]/calendar/YYYY-MM.json`
+- Theme: `$conf['metadir']/calendar_theme.txt`
+- Search default: `$conf['metadir']/calendar_search_default.txt`
+- Sync credentials: `$conf['metadir']/calendar/sync_config.php` (per-animal) or `DOKU_PLUGIN/calendar/sync_config.php` (shared fallback)
+- Cache: `$conf['cachedir']/calendar/`
+- Rate limits: `$conf['cachedir']/calendar/ratelimit/`
 
-### Theme System
-- 5 themes: Matrix, Purple, Pink, Professional, Wiki
-- Colors defined in `getThemeStyles()` PHP method
-- Injected as CSS custom properties at render time
-- Wiki theme reads from DokuWiki template's `style.ini`
-- Dark Reader compatibility via targeted `!important` overrides
-
-### Admin Panel Capabilities
-- **Overview**: Event statistics, calendar health, system info
-- **Settings**: Theme selection, display options, sync configuration
-- **Manage**: Namespace explorer (drag-and-drop event moving, bulk actions), recurring event management (edit, manage, delete, extend, trim, pause, change pattern/start date, bulk trim past, rescan), namespace cleanup
-- **Sync**: Outlook sync status, manual sync trigger, log viewer
-- **About**: Version history viewer with changelog browser
+### Security
+- ACL: `checkNamespaceRead()` / `checkNamespaceEdit()` on all AJAX endpoints
+- CSRF: `checkSecurityToken()` in admin `handle()`, `formSecurityToken()` on forms, `JSINFO.sectok` on fetch calls
+- Rate limiting: 60 req/min reads, 30 req/min writes
+- Path traversal: regex validation on namespace names
 
 ---
 
-*This document covers the complete development from initial creation through version 6.6.0.*
+*This document covers the complete development from initial creation through version 7.5.1.*
