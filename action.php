@@ -4,7 +4,7 @@
  *
  * @license GPL 2 http://www.gnu.org/licenses/gpl-2.0.html
  * @author  DokuWiki Community
- * @version 7.5.1
+ * @version 7.5.2
  */
 
 if (!defined('DOKU_INC')) die();
@@ -1716,6 +1716,13 @@ class action_plugin_calendar extends DokuWiki_Action_Plugin {
             'type' => 'text/css',
             'rel' => 'stylesheet',
             'href' => DOKU_BASE . 'lib/plugins/calendar/style.css'
+        );
+        
+        // Ensure JSINFO.sectok is available for CSRF protection
+        // Not all DokuWiki versions/templates populate this automatically
+        $event->data['script'][] = array(
+            'type' => 'text/javascript',
+            '_data' => 'if(typeof JSINFO !== "undefined"){ JSINFO.sectok = "' . getSecurityToken() . '"; }'
         );
         
         // Load the main calendar JavaScript
