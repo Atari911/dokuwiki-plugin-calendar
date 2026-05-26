@@ -2,9 +2,25 @@
 
 ## Version 7.6.0 (2026-04-05)
 
-Major release focused on DokuWiki farm compatibility, security hardening, and new features.
+Major release: multi-day event bar alignment, extended range parameter, CSRF compatibility fix, farm compatibility, and security hardening.
 
 ### New Features
+
+**Extended Range Parameter for Event Lists**
+- `{{eventlist range=>3m}}` — show events for the next 3 months
+- `{{eventlist range=>100d}}` — next 100 days
+- `{{eventlist range=>2w}}` — next 2 weeks
+- `{{eventlist range=>1y}}` — next 1 year
+- Supports units: `d` (days), `w` (weeks), `m` (months), `y` (years)
+- Headers are localized (EN/DE/CS)
+- All extended ranges include a 30-day lookback for past-due tasks
+
+**Multi-Day Event Bar Alignment**
+- Events spanning multiple days now display as continuous bars at consistent vertical positions across the calendar grid
+- Stable slot assignment algorithm: multi-day events reserve a row across all days they span
+- Single-day events fill remaining slots, sorted by time
+- Invisible spacer elements maintain alignment on days where a slot is unused
+- Algorithm runs in both PHP (initial page load) and JS (AJAX navigation)
 
 **Namespace Exclude Parameter**
 - `{{calendar namespace=* exclude=journal}}` — hide specific namespaces from wildcard views
@@ -48,6 +64,11 @@ Major release focused on DokuWiki farm compatibility, security hardening, and ne
 - Added `checkSecurityToken()` validation to the admin `handle()` method
 - Added `formSecurityToken()` to all 12 HTML forms
 - Added `JSINFO.sectok` hidden input to all 11 JavaScript-generated forms
+
+**JSINFO.sectok Compatibility**
+- Fixed CSRF token failures on DokuWiki "Librarian" and other versions that don't auto-populate `JSINFO.sectok`
+- `addAssets()` now injects the security token via inline script before `calendar-main.js` loads
+- Ensures `getSecurityToken()` always has a valid token regardless of DokuWiki version or template
 
 **Removed System Stats Endpoint**
 - Deleted `get_system_stats.php` — exposed CPU, memory, load averages, uptime, and top processes via `shell_exec('ps aux')` and `/proc/meminfo` through a directly-accessible PHP endpoint

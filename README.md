@@ -103,6 +103,10 @@ A feature-rich calendar plugin for DokuWiki with multiple themes, namespace mana
 {{eventlist range=week}}
 {{eventlist range=month namespace=meetings}}
 {{eventlist namespace=* exclude="personal;drafts"}}
+{{eventlist range=>3m}}
+{{eventlist range=>100d}}
+{{eventlist range=>2w namespace=work}}
+{{eventlist range=>1y}}
 ```
 
 ### Sidebar Widget
@@ -126,10 +130,36 @@ A feature-rich calendar plugin for DokuWiki with multiple themes, namespace mana
 | `title="X"` | Custom title | `title="Team Events"` |
 | `theme=X` | Override theme | `theme=professional` |
 | `height=X` | Panel height (eventpanel only) | `height=500px` |
-| `range=X` | Date range (eventlist only) | `range=week` |
+| `range=X` | Date range (eventlist only) | `range=week`, `range=>3m` |
 | `noprint` | Hide print button (static only) | `noprint` |
 | `noheader` | Hide header (eventlist only) | `noheader` |
 | `sidebar` | Sidebar widget mode | `{{eventlist sidebar}}` |
+
+## Extended Date Ranges
+
+The `range` parameter supports extended formats for showing events over longer periods:
+
+| Format | Description | Example |
+|--------|-------------|---------|
+| `range=>Nd` | Next N days | `range=>100d` |
+| `range=>Nw` | Next N weeks | `range=>2w` |
+| `range=>Nm` | Next N months | `range=>3m` |
+| `range=>Ny` | Next N years | `range=>1y` |
+
+All extended ranges include a 30-day lookback for past-due tasks. Headers are automatically localized (EN/DE/CS).
+
+```
+{{eventlist range=>3m}}                     → Next 3 Months
+{{eventlist range=>100d namespace=work}}     → Next 100 Days (work only)
+{{eventlist range=>2w}}                     → Next 2 Weeks
+{{eventlist range=>1y namespace=*}}         → Next 1 Year (all namespaces)
+```
+
+## Multi-Day Event Bars
+
+Events spanning multiple days display as continuous colored bars across the calendar grid. Bars maintain consistent vertical positions across all days they span — if two multi-day events overlap, each keeps its own row, just like Google Calendar.
+
+The alignment uses a stable slot assignment algorithm that runs in both PHP (initial page load) and JS (AJAX month navigation), ensuring bars line up correctly at all times.
 
 ## Admin Features
 
@@ -199,7 +229,7 @@ Descriptions support DokuWiki-style formatting:
 
 ## Requirements
 
-- DokuWiki (Hogfather or later)
+- DokuWiki (Hogfather or later, including Librarian)
 - PHP 7.4+
 - Modern browser (Chrome, Firefox, Edge, Safari)
 
