@@ -1,6 +1,6 @@
 # Calendar Plugin Changelog
 
-## Version 7.5.2 (2026-04-05)
+## Version 7.6.0 (2026-04-05)
 
 Major release focused on DokuWiki farm compatibility, security hardening, and new features.
 

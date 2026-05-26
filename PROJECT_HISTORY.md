@@ -288,4 +288,4 @@ All operations are AJAX-powered with inline status messages.
 
 ---
 
-*This document covers the complete development from initial creation through version 7.5.2.*
+*This document covers the complete development from initial creation through version 7.6.0.*

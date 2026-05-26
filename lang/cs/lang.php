@@ -495,3 +495,14 @@ $lang['search_default_all_desc'] = 'Prohledávat všechny události v celém kal
 
 // Exclude Namespaces
 $lang['exclude_desc'] = 'Vyloučené jmenné prostory jsou v tomto zobrazení kalendáře skryty';
+
+// Extended Range
+$lang['next'] = 'Příštích';
+$lang['range_day'] = 'den';
+$lang['range_days'] = 'dní';
+$lang['range_week'] = 'týden';
+$lang['range_weeks'] = 'týdnů';
+$lang['range_month'] = 'měsíc';
+$lang['range_months'] = 'měsíců';
+$lang['range_year'] = 'rok';
+$lang['range_years'] = 'let';

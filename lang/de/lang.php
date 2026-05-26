@@ -506,3 +506,14 @@ $lang['search_default_all_desc'] = 'Über alle Termine im gesamten Kalender such
 
 // Exclude Namespaces
 $lang['exclude_desc'] = 'Ausgeschlossene Namensräume werden in dieser Kalenderansicht ausgeblendet';
+
+// Extended Range
+$lang['next'] = 'Nächste';
+$lang['range_day'] = 'Tag';
+$lang['range_days'] = 'Tage';
+$lang['range_week'] = 'Woche';
+$lang['range_weeks'] = 'Wochen';
+$lang['range_month'] = 'Monat';
+$lang['range_months'] = 'Monate';
+$lang['range_year'] = 'Jahr';
+$lang['range_years'] = 'Jahre';

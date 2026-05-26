@@ -1448,7 +1448,7 @@ class syntax_plugin_calendar extends DokuWiki_Syntax_Plugin {
         $showchecked = isset($data['showchecked']) ? true : false; // New parameter
         $noheader = isset($data['noheader']) ? true : false; // New parameter to hide header
         
-        // Handle "range" parameter - day, week, or month
+        // Handle "range" parameter - day, week, month, or extended format (>3m, >100d, >2w, >1y)
         if ($range === 'day') {
             $startDate = date('Y-m-d', strtotime('-30 days')); // Include past 30 days for past due tasks
             $endDate = date('Y-m-d');
@@ -1464,6 +1464,33 @@ class syntax_plugin_calendar extends DokuWiki_Syntax_Plugin {
             $endDate = date('Y-m-t'); // Last of current month
             $dt = new DateTime();
             $headerText = $dt->format('F Y');
+        } elseif (preg_match('/^>(\d+)(d|w|m|y)$/i', $range, $rangeMatch)) {
+            // Extended range: >3m = next 3 months, >100d = next 100 days, >2w = next 2 weeks, >1y = next 1 year
+            $rangeNum = (int)$rangeMatch[1];
+            $rangeUnit = strtolower($rangeMatch[2]);
+            
+            $startDate = date('Y-m-d', strtotime('-30 days')); // Include past 30 days for past due tasks
+            $endDateTime = new DateTime();
+            
+            switch ($rangeUnit) {
+                case 'd':
+                    $endDateTime->modify('+' . $rangeNum . ' days');
+                    $headerText = $this->getLang('next') . ' ' . $rangeNum . ' ' . ($rangeNum === 1 ? $this->getLang('range_day') : $this->getLang('range_days'));
+                    break;
+                case 'w':
+                    $endDateTime->modify('+' . $rangeNum . ' weeks');
+                    $headerText = $this->getLang('next') . ' ' . $rangeNum . ' ' . ($rangeNum === 1 ? $this->getLang('range_week') : $this->getLang('range_weeks'));
+                    break;
+                case 'm':
+                    $endDateTime->modify('+' . $rangeNum . ' months');
+                    $headerText = $this->getLang('next') . ' ' . $rangeNum . ' ' . ($rangeNum === 1 ? $this->getLang('range_month') : $this->getLang('range_months'));
+                    break;
+                case 'y':
+                    $endDateTime->modify('+' . $rangeNum . ' years');
+                    $headerText = $this->getLang('next') . ' ' . $rangeNum . ' ' . ($rangeNum === 1 ? $this->getLang('range_year') : $this->getLang('range_years'));
+                    break;
+            }
+            $endDate = $endDateTime->format('Y-m-d');
         } elseif ($sidebar) {
             // NEW: Sidebar widget - load current week's events
             $weekStartDay = $this->getWeekStartDay(); // Get saved preference  

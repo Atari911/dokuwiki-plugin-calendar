@@ -505,3 +505,14 @@ $lang['search_default_all_desc'] = 'Search across all events in the entire calen
 
 // Exclude Namespaces
 $lang['exclude_desc'] = 'Excluded namespaces are hidden from this calendar view';
+
+// Extended Range
+$lang['next'] = 'Next';
+$lang['range_day'] = 'Day';
+$lang['range_days'] = 'Days';
+$lang['range_week'] = 'Week';
+$lang['range_weeks'] = 'Weeks';
+$lang['range_month'] = 'Month';
+$lang['range_months'] = 'Months';
+$lang['range_year'] = 'Year';
+$lang['range_years'] = 'Years';
