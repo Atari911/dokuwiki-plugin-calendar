@@ -1,6 +1,6 @@
 # Calendar Plugin Changelog
 
-## Version 7.6.0 (2026-04-05)
+## Version 7.6.1 (2026-04-05)
 
 Major release: multi-day event bar alignment, extended range parameter, CSRF compatibility fix, farm compatibility, and security hardening.
 

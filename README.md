@@ -249,4 +249,4 @@ atari911 (atari911@gmail.com)
 
 ## Version
 
-7.6.0
+7.6.1

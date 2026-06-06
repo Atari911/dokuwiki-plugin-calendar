@@ -149,6 +149,12 @@ class syntax_plugin_calendar extends DokuWiki_Syntax_Plugin {
     }
     
     private function renderCompactCalendar($data) {
+        // Use current date at render time, not the cached parse-time date
+        // Unless the user explicitly locked a month/year via syntax parameters
+        if (empty($data['locked'])) {
+            $data['year'] = (int)date('Y');
+            $data['month'] = (int)date('n');
+        }
         $year = (int)$data['year'];
         $month = (int)$data['month'];
         $namespace = $data['namespace'];
@@ -543,6 +549,11 @@ class syntax_plugin_calendar extends DokuWiki_Syntax_Plugin {
      * No edit buttons, clean layout, print-friendly itinerary
      */
     private function renderStaticCalendar($data) {
+        // Use current date at render time unless user locked a specific month/year
+        if (empty($data['locked'])) {
+            $data['year'] = (int)date('Y');
+            $data['month'] = (int)date('n');
+        }
         $year = (int)$data['year'];
         $month = (int)$data['month'];
         $namespace = isset($data['namespace']) ? $data['namespace'] : '';
@@ -1274,6 +1285,11 @@ class syntax_plugin_calendar extends DokuWiki_Syntax_Plugin {
     }
     
     private function renderEventPanelOnly($data) {
+        // Use current date at render time, not cached parse-time date
+        if (empty($data['locked'])) {
+            $data['year'] = (int)date('Y');
+            $data['month'] = (int)date('n');
+        }
         $year = (int)$data['year'];
         $month = (int)$data['month'];
         $namespace = $data['namespace'];

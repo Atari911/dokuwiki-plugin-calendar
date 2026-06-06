@@ -4,7 +4,7 @@
  *
  * @license GPL 2 http://www.gnu.org/licenses/gpl-2.0.html
  * @author  DokuWiki Community
- * @version 7.6.0
+ * @version 7.6.1
  */
 
 if (!defined('DOKU_INC')) die();
