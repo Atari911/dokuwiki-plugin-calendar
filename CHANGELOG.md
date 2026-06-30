@@ -1,6 +1,6 @@
 # Calendar Plugin Changelog
 
-## Version 7.6.1 (2026-04-05)
+## Version 7.6.1 (2026-06-06)
 
 Major release: multi-day event bar alignment, extended range parameter, CSRF compatibility fix, farm compatibility, and security hardening.
 
@@ -76,6 +76,11 @@ Major release: multi-day event bar alignment, extended range parameter, CSRF com
 - System load inline JS remains but never executes (`getShowSystemLoad()` returns `false`)
 
 ### Bug Fixes
+
+**Calendar Shows Previous Month on Page Load**
+- DokuWiki caches the output of `handle()` (parse phase), so `date('n')` was frozen at parse time
+- If the page was first parsed in May, the calendar showed May even when loaded in June
+- Fixed: all three render functions now override cached month/year with `date('Y')`/`date('n')` at render time, unless the user explicitly locked a month/year via syntax parameters
 
 **Weekly Recurring Events on Sunday Created 365 Daily Events**
 - PHP's string `'0'` is falsy — when Sunday (day index 0) was the only selected weekday, the `$weekDays` array was empty, and every day matched
