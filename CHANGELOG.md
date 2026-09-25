@@ -2,6 +2,20 @@
 
 ## Version 7.6.4 (2026-09-25)
 
+### Bug Fix
+- Backup delete in admin panel was silently failing — the fetch call was missing `sectok` in the FormData, so the CSRF check rejected it. The JS removed the row from the DOM (appearing to work) but the file was never deleted on the server.
+
+---
+
+## Version 7.6.3 (2026-09-25)
+
+### Bug Fix
+- Fixed `sync_outlook.php` regex crash — `$conf` in double-quoted PHP string was being interpolated as a variable (undefined), producing invalid regex pattern. Changed to single-quoted strings.
+
+---
+
+## Version 7.6.2 (2026-09-25)
+
 ### Security
 - Replaced `unserialize()` with `json_decode()` in EventCache.php to eliminate PHP object injection risk (CWE-502)
 - Old serialized cache files are automatically discarded and regenerated as JSON
