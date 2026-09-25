@@ -4,7 +4,7 @@
  * 
  * @license GPL 2 http://www.gnu.org/licenses/gpl-2.0.html
  * @author  DokuWiki Community
- * @version 7.6.1
+ * @version 7.6.4
  */
 
 if(!defined('DOKU_INC')) die();
@@ -2771,6 +2771,7 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
                 const formData = new FormData();
                 formData.append(\'action\', \'delete_backup\');
                 formData.append(\'backup_file\', filename);
+                formData.append(\'sectok\', JSINFO.sectok);
                 
                 fetch(\'?do=admin&page=calendar&tab=update\', {
                     method: \'POST\',

@@ -1,8 +1,68 @@
 # Calendar Plugin Changelog
 
+## Version 7.6.4 (2026-09-25)
+
+### Security
+- Replaced `unserialize()` with `json_decode()` in EventCache.php to eliminate PHP object injection risk (CWE-502)
+- Old serialized cache files are automatically discarded and regenerated as JSON
+
+---
+
 ## Version 7.6.1 (2026-06-06)
 
-Major release: multi-day event bar alignment, extended range parameter, CSRF compatibility fix, farm compatibility, and security hardening.
+### Bug Fix
+- Fixed calendar showing previous month on page load due to DokuWiki parse-time caching
+- `handle()` cached `date('n')` at parse time; if parsed in May, it showed May forever
+- All three render functions now use current date at render time unless user locked a specific month/year
+
+---
+
+## Version 7.6.0 (2026-06-06)
+
+### New Features
+- **Extended Range Parameter** — `{{eventlist range=>3m}}`, `range=>100d`, `range=>2w`, `range=>1y`
+- Supports units: d (days), w (weeks), m (months), y (years); headers localized (EN/DE/CS)
+
+---
+
+## Version 7.5.2 (2026-04-05)
+
+### Bug Fix
+- Fixed CSRF token failures on DokuWiki "Librarian" — `addAssets()` now injects `JSINFO.sectok` before calendar-main.js loads
+
+---
+
+## Version 7.5.1 (2026-04-05)
+
+### Bug Fix
+- Multi-day event bar alignment now works on initial page load (PHP-side slot assignment added to match JS)
+
+---
+
+## Version 7.5.0 (2026-04-05)
+
+### New Feature
+- Multi-day event bars maintain consistent vertical positions across all days they span (like Google Calendar)
+- Stable slot assignment algorithm with spacer elements for alignment
+- Removed CSS `order: -1` that was overriding slot-based DOM ordering
+
+---
+
+## Version 7.3.0 (2026-04-03)
+
+### Security
+- Google sync AJAX actions (`google_disconnect`, `google_import`, `google_export`) now require CSRF tokens
+- Added sectok to all 6 admin panel fetch() calls
+
+### Bug Fixes
+- Multi-day events no longer marked as past before their end date
+- Removed ~370 lines of dead system stats code (HTML bars, JS polling, CSS, admin UI)
+
+---
+
+## Version 7.2.5 (2026-04-03)
+
+Major release: farm compatibility, security hardening, and new features.
 
 ### New Features
 

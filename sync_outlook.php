@@ -46,9 +46,9 @@ $localConf = $dokuwikiRoot . '/conf/local.php';
 if (file_exists($localConf)) {
     $localContent = file_get_contents($localConf);
     // Look for $conf['metadir'] = '...';
-    if (preg_match("/\\$conf\['metadir'\]\s*=\s*'([^']+)'/", $localContent, $m)) {
+    if (preg_match('/\$conf\[\'metadir\'\]\s*=\s*\'([^\']+)\'/', $localContent, $m)) {
         $metaDir = rtrim($m[1], '/');
-    } elseif (preg_match("/\\$conf\['savedir'\]\s*=\s*'([^']+)'/", $localContent, $m)) {
+    } elseif (preg_match('/\$conf\[\'savedir\'\]\s*=\s*\'([^\']+)\'/', $localContent, $m)) {
         $candidateMetaDir = rtrim($m[1], '/') . '/meta';
         if (is_dir($candidateMetaDir)) {
             $metaDir = $candidateMetaDir;

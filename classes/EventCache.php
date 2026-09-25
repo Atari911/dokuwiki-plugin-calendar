@@ -7,7 +7,7 @@
  * 
  * @license GPL 2 http://www.gnu.org/licenses/gpl-2.0.html
  * @author  DokuWiki Community
- * @version 7.6.1
+ * @version 7.6.4
  */
 
 if (!defined('DOKU_INC')) die();
@@ -100,8 +100,9 @@ class CalendarEventCache {
             return null;
         }
         
-        $data = @unserialize($contents);
-        if ($data === false) {
+        $data = @json_decode($contents, true);
+        if ($data === null && $contents !== 'null') {
+            // Invalid JSON — may be old serialized format, discard it
             @unlink($cacheFile);
             return null;
         }
@@ -128,11 +129,11 @@ class CalendarEventCache {
         self::$memoryCache[$key] = $events;
         
         $cacheFile = self::getCacheFile($key);
-        $serialized = serialize($events);
+        $encoded = json_encode($events, JSON_UNESCAPED_UNICODE);
         
         // Use temp file for atomic write
         $tempFile = $cacheFile . '.tmp';
-        if (@file_put_contents($tempFile, $serialized) === false) {
+        if (@file_put_contents($tempFile, $encoded) === false) {
             return false;
         }
         

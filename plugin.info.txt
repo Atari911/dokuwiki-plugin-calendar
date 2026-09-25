@@ -1,8 +1,8 @@
 base     calendar
 author   atari911
 email    atari911@gmail.com
-date     2026-06-06
+date     2026-09-25
 name     Calendar Plugin
 desc     Feature-rich calendar with multiple themes, multi-day event bars, extended date ranges, Outlook/Google sync, recurring events, farm compatibility, and ACL-enforced security
 url      https://www.dokuwiki.org/plugin:calendar
-version  7.6.1
+version  7.6.4
