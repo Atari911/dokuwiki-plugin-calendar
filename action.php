@@ -4,7 +4,7 @@
  *
  * @license GPL 2 http://www.gnu.org/licenses/gpl-2.0.html
  * @author  DokuWiki Community
- * @version 7.6.4
+ * @version 7.6.6
  */
 
 if (!defined('DOKU_INC')) die();
@@ -127,7 +127,8 @@ class action_plugin_calendar extends DokuWiki_Action_Plugin {
         $event->preventDefault();
         $event->stopPropagation();
 
-        $action = $_REQUEST['action'] ?? '';
+        global $INPUT;
+        $action = $INPUT->str('action');
         
         // Actions that modify data require authentication and CSRF token verification
         $writeActions = ['save_event', 'delete_event', 'toggle_task', 'cleanup_empty_namespaces',
@@ -165,7 +166,7 @@ class action_plugin_calendar extends DokuWiki_Action_Plugin {
             // Check for valid security token - try multiple sources
             $sectok = $INPUT->str('sectok', '');
             if (empty($sectok)) {
-                $sectok = $_REQUEST['sectok'] ?? '';
+                $sectok = $INPUT->str('sectok');
             }
             
             // Use DokuWiki's built-in check
@@ -388,7 +389,7 @@ class action_plugin_calendar extends DokuWiki_Action_Plugin {
         }
         
         // Generate event ID if new
-        $generatedId = $eventId ?: uniqid();
+        $generatedId = $eventId ?: bin2hex(random_bytes(7));
         
         // If editing a recurring event, load existing data to preserve unchanged fields
         $existingEventData = null;
@@ -459,7 +460,7 @@ class action_plugin_calendar extends DokuWiki_Action_Plugin {
         
         $events = [];
         if (file_exists($eventFile)) {
-            $events = json_decode(file_get_contents($eventFile), true);
+            $events = json_decode(file_get_contents($eventFile), true) ?: [];
             $this->debugLog("Calendar saveEvent: Loaded " . count($events) . " dates from new location");
         } else {
             $this->debugLog("Calendar saveEvent: New location file does not exist yet");
@@ -487,7 +488,7 @@ class action_plugin_calendar extends DokuWiki_Action_Plugin {
             $this->debugLog("Calendar saveEvent: Attempting to delete from OLD eventFile='$oldEventFile', deleteDate='$deleteDate'");
             
             if (file_exists($oldEventFile)) {
-                $oldEvents = json_decode(file_get_contents($oldEventFile), true);
+                $oldEvents = json_decode(file_get_contents($oldEventFile), true) ?: [];
                 $this->debugLog("Calendar saveEvent: OLD file exists, has " . count($oldEvents) . " dates");
                 
                 if (isset($oldEvents[$deleteDate])) {
@@ -684,7 +685,7 @@ class action_plugin_calendar extends DokuWiki_Action_Plugin {
         $recurringId = null;
         
         if (file_exists($eventFile)) {
-            $events = json_decode(file_get_contents($eventFile), true);
+            $events = json_decode(file_get_contents($eventFile), true) ?: [];
             
             if (isset($events[$date])) {
                 foreach ($events[$date] as $event) {
@@ -730,7 +731,7 @@ class action_plugin_calendar extends DokuWiki_Action_Plugin {
                 $currentEventFile = $dataDir . sprintf('%04d-%02d.json', $currentYear, $currentMonth);
                 
                 if (file_exists($currentEventFile)) {
-                    $currentEvents = json_decode(file_get_contents($currentEventFile), true);
+                    $currentEvents = json_decode(file_get_contents($currentEventFile), true) ?: [];
                     
                     if (isset($currentEvents[$firstDayOfMonth])) {
                         $currentEvents[$firstDayOfMonth] = array_values(array_filter($currentEvents[$firstDayOfMonth], function($event) use ($eventId) {
@@ -793,7 +794,7 @@ class action_plugin_calendar extends DokuWiki_Action_Plugin {
         $eventFile = $dataDir . sprintf('%04d-%02d.json', $year, $month);
         
         if (file_exists($eventFile)) {
-            $events = json_decode(file_get_contents($eventFile), true);
+            $events = json_decode(file_get_contents($eventFile), true) ?: [];
             
             if (isset($events[$date])) {
                 foreach ($events[$date] as $event) {
@@ -1284,7 +1285,7 @@ class action_plugin_calendar extends DokuWiki_Action_Plugin {
         $eventFile = $dataDir . sprintf('%04d-%02d.json', $year, $month);
         
         if (file_exists($eventFile)) {
-            $events = json_decode(file_get_contents($eventFile), true);
+            $events = json_decode(file_get_contents($eventFile), true) ?: [];
             
             if (isset($events[$date])) {
                 $eventTitle = '';

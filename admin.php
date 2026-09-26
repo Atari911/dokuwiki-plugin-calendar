@@ -4,7 +4,7 @@
  * 
  * @license GPL 2 http://www.gnu.org/licenses/gpl-2.0.html
  * @author  DokuWiki Community
- * @version 7.6.4
+ * @version 7.6.6
  */
 
 if(!defined('DOKU_INC')) die();
@@ -4367,7 +4367,7 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
         $ordinalDay = $INPUT->int('ordinal_day', 0);
         
         // Use old namespace if new namespace is empty (keep current)
-        if (empty($newNamespace) && !isset($_POST['new_namespace'])) {
+        if (empty($newNamespace) && !$INPUT->has('new_namespace')) {
             $newNamespace = $oldNamespace;
         }
         
@@ -5349,11 +5349,23 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
             $command = sprintf(
                 'cd %s && %s sync_outlook.php 2>&1',
                 escapeshellarg($pluginDir),
-                $phpPath
+                escapeshellarg($phpPath)
             );
             
-            // Log that we're starting
-            $tz = new DateTimeZone('America/Los_Angeles');
+            // Log that we're starting - use configured timezone from sync config
+            $tzName = 'UTC';
+            $syncConfigFile = $this->syncConfigPath();
+            if (file_exists($syncConfigFile)) {
+                $syncCfg = @require $syncConfigFile;
+                if (is_array($syncCfg) && !empty($syncCfg['timezone'])) {
+                    $tzName = $syncCfg['timezone'];
+                }
+            }
+            try {
+                $tz = new DateTimeZone($tzName);
+            } catch (Exception $e) {
+                $tz = new DateTimeZone('UTC');
+            }
             $now = new DateTime('now', $tz);
             $timestamp = $now->format('Y-m-d H:i:s');
             @file_put_contents($logFile, "[$timestamp] [ADMIN] Manual sync triggered via admin panel\n", FILE_APPEND);
@@ -5422,7 +5434,7 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
         
         $uploadedFile = $_FILES['plugin_zip']['tmp_name'];
         $pluginDir = DOKU_PLUGIN . 'calendar/';
-        $backupFirst = isset($_POST['backup_first']);
+        $backupFirst = $INPUT->has('backup_first');
         
         // Check if plugin directory is writable
         if (!is_writable($pluginDir)) {
@@ -5513,12 +5525,27 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
             }
         }
         
-        // Extract to temp directory first
+        // Extract to temp directory first, with ZIP Slip protection
         $tempDir = DOKU_PLUGIN . 'calendar_update_temp/';
         if (is_dir($tempDir)) {
             $this->deleteDirectory($tempDir);
         }
         mkdir($tempDir);
+        
+        // Validate all paths before extraction to prevent directory traversal (ZIP Slip)
+        $realTempDir = realpath($tempDir) . DIRECTORY_SEPARATOR;
+        for ($i = 0; $i < $zip->numFiles; $i++) {
+            $entryName = $zip->getNameIndex($i);
+            // Reject entries with path traversal sequences
+            if (strpos($entryName, '..') !== false || 
+                strpos($entryName, '\\') !== false ||
+                substr($entryName, 0, 1) === '/') {
+                $zip->close();
+                $this->deleteDirectory($tempDir);
+                $this->redirect('ZIP file contains unsafe path: ' . basename($entryName), 'error', 'update');
+                return;
+            }
+        }
         
         $zip->extractTo($tempDir);
         $zip->close();
@@ -6049,7 +6076,7 @@ class admin_plugin_calendar extends DokuWiki_Admin_Plugin {
             header('Content-Type: application/json');
             
             try {
-                $encrypted = $_POST['encrypted_config'] ?? '';
+                $encrypted = $INPUT->str('encrypted_config');
                 
                 if (empty($encrypted)) {
                     echo json_encode([

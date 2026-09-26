@@ -1,5 +1,25 @@
 # Calendar Plugin Changelog
 
+## Version 7.6.6 (2026-09-25)
+
+### Security
+- ZIP Slip protection — uploaded plugin ZIPs are now validated for path traversal (`..`, absolute paths, backslashes) before extraction
+- Event IDs now use `bin2hex(random_bytes(7))` instead of predictable `uniqid()`
+- Replaced all raw `$_REQUEST`/`$_POST` usage with DokuWiki's `$INPUT` helper for consistent input filtering
+
+### Bug Fixes
+- Added null-safety (`?: []`) to all `json_decode` calls on event files — prevents `count(null)` TypeError in PHP 8.x if a JSON file is corrupted
+
+---
+
+## Version 7.6.5 (2026-09-25)
+
+### Security
+- Fixed potential command injection in sync trigger — `$phpPath` was not passed through `escapeshellarg()`, allowing paths with spaces or special characters to break or inject commands
+- Sync trigger log now uses configured timezone from sync_config.php instead of hardcoded America/Los_Angeles
+
+---
+
 ## Version 7.6.4 (2026-09-25)
 
 ### Bug Fix

@@ -7,7 +7,7 @@
  * 
  * @license GPL 2 http://www.gnu.org/licenses/gpl-2.0.html
  * @author  DokuWiki Community
- * @version 7.6.4
+ * @version 7.6.6
  */
 
 if (!defined('DOKU_INC')) die();
@@ -207,7 +207,7 @@ class CalendarEventManager {
         
         $date = $eventData['date'];
         $namespace = $eventData['namespace'] ?? '';
-        $eventId = $eventData['id'] ?? uniqid();
+        $eventId = $eventData['id'] ?? bin2hex(random_bytes(7));
         
         // Parse date
         if (!preg_match('/^(\d{4})-(\d{2})-(\d{2})$/', $date, $matches)) {
